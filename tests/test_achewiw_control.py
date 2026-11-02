@@ -46,20 +46,36 @@ case "${1:-}" in
 esac
 '''
 
+FAKE_SYSTEMCTL = r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TEST_SYSTEMCTL_LOG"
+case "$*" in
+  *'-p LoadState --value'*) printf '%s\n' "${TEST_UNIT_STATE:-not-found}" ;;
+  *'-p FragmentPath --value'*) printf '%s\n' "${TEST_UNIT_FRAGMENT:-/1tbdisk/achewiw/ops/achewiw-host-monitor.service}" ;;
+  *'-p WorkingDirectory --value'*) printf '%s\n' "${TEST_UNIT_WORKDIR:-/1tbdisk/achewiw}" ;;
+  *'-p ExecStart --value'*) printf '%s\n' "argv[]=/usr/bin/python3 /1tbdisk/achewiw/scripts/achewiw_host_monitor.py --watch --interval 5" ;;
+  *'--user stop achewiw-host-monitor.service'*) printf 'stopped' > "$TEST_UNIT_STOPPED" ;;
+  *) exit 56 ;;
+esac
+'''
+
 class ShutdownTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
-        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nexit 0\n")):
+        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nexit 0\n"), ("systemctl", FAKE_SYSTEMCTL)):
             file = root / name
             file.write_text(script, encoding="utf-8")
             file.chmod(0o755)
         self.log = root / "docker.log"
+        self.systemctl_log = root / "systemctl.log"
+        self.unit_stopped = root / "unit.stopped"
         self.state = root / "state"
         self.state.write_text("running")
         self.env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
-                        TEST_LOG=str(self.log), TEST_STATE=str(self.state))
+                        TEST_LOG=str(self.log), TEST_STATE=str(self.state),
+                        TEST_SYSTEMCTL_LOG=str(self.systemctl_log), TEST_UNIT_STOPPED=str(self.unit_stopped))
 
     def run_switch(self, action="stop", **env):
         return subprocess.run(["bash", str(SCRIPT), action], env={**self.env, **env},
@@ -100,6 +116,20 @@ class ShutdownTests(unittest.TestCase):
 
     def test_no_docker_access_fails_closed(self):
         self.assertNotEqual(self.run_switch(TEST_NO_DOCKER="1").returncode, 0)
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_owned_host_unit_is_stopped_along_with_studio(self):
+        result = self.run_switch(TEST_UNIT_STATE="loaded")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.unit_stopped.read_text(), "stopped")
+        self.assertEqual(self.state.read_text(), "stopped")
+
+    def test_foreign_host_unit_blocks_all_docker_stops(self):
+        result = self.run_switch(TEST_UNIT_STATE="loaded",
+                                 TEST_UNIT_FRAGMENT="/other/project/monitor.service")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.state.read_text(), "running")
+        self.assertFalse(self.unit_stopped.exists())
         self.assertNotIn("stop --time", self.commands())
 
     def test_start_not_supported(self):
