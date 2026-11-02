@@ -18,6 +18,8 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
+from monitoring_core import load_snapshot, summarize_ollama_running
+
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -314,6 +316,28 @@ def export_markdown(project_id: str):
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="story.md"'},
     )
+
+
+@api.get("/monitoring")
+async def monitor_status():
+    """Authenticated, read-only dashboard; no Docker/NVIDIA command execution."""
+    host = load_snapshot(DATA_DIR / "monitor" / "host.json")
+    ollama = {
+        "status": "unavailable",
+        "configured_default_model": DEFAULT_MODEL,
+        "loaded_models": [],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(2.5, connect=1.0)) as client:
+            result = await client.get(OLLAMA_BASE_URL + "/api/ps")
+            result.raise_for_status()
+            loaded = result.json()
+        ollama["status"] = "ok"
+        ollama["loaded_models"] = summarize_ollama_running(loaded)
+    except (httpx.HTTPError, ValueError, KeyError):
+        # Do not expose host paths, prompts, tokens or upstream error details.
+        pass
+    return {"host": host, "ollama": ollama}
 
 
 @api.get("/models")
