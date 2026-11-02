@@ -54,6 +54,21 @@ class PublishingGraphTests(unittest.TestCase):
             graph.mark_stale("cover")
         self.assertEqual(graph.nodes[-2].status, "done")
 
+    def test_publication_gate_guards(self):
+        from pathlib import Path
+        fixture = Path(__file__).resolve().parents[1] / "examples" / "publishing-pipeline.json"
+        graph = ProductionGraph.from_json_file(fixture)
+        self.assertTrue(graph.validate_release_gate_structure())
+        export = next(node for node in graph.nodes if node.id == "ebook")
+        export.depends_on = ["literaryqa"]
+        with self.assertRaisesRegex(GraphError, "bypasses editorial gate"):
+            graph.validate_release_gate_structure()
+        export.depends_on = ["editorialgate"]
+        gate = next(node for node in graph.nodes if node.id == "editorialgate")
+        gate.depends_on = ["canonqa", "originality", "rights"]
+        with self.assertRaisesRegex(GraphError, "qa.jurisdictional_content"):
+            graph.validate_release_gate_structure()
+
     def test_mermaid(self):
         graph = self.sample()
         diagram = graph.to_mermaid()
