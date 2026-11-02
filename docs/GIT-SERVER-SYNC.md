@@ -44,29 +44,29 @@ git -C /1tbdisk/achewiw status -sb
 Следующий блок сохраняет `feature/server-edits` со всеми её коммитами, только переключает активную рабочую ветку и делает **fast-forward** обновление. Он останавливается, если есть незафиксированные изменения. Не требует `sudo`, не запускает приложение, Docker или Ollama.
 
 ```bash
-cd /1tbdisk/achewiw || exit 1
+bash <<'BASH'
+set -euo pipefail
+cd /1tbdisk/achewiw
 
-# ВАЖНО: если есть локальные изменения — ничего не переключать:
-if [ -n "$(git status --porcelain)" ]; then
-  echo "ОСТАНОВКА: есть локальные изменения; сначала сохраните их."
+# Любые незакоммиченные изменения — повод остановиться, не перезаписывать:
+if [[ -n "$(git status --porcelain)" ]]; then
   git status --short
-else
-  git fetch origin
-
-  # Уже существующую локальную ветку используем, новую — создаём:
-  if git show-ref --verify --quiet refs/heads/feature/technical-epub-first; then
-    git switch feature/technical-epub-first
-  else
-    git switch --track -c feature/technical-epub-first origin/feature/technical-epub-first
-  fi
-
-  # Только безопасное fast-forward, без перезаписи своих коммитов:
-  git merge --ff-only origin/feature/technical-epub-first
-
-  git status -sb
-  git log -1 --oneline
-  test -f compose.yaml && echo "Код приложения на месте"
+  echo "ОСТАНОВЛЕНО: сохраните локальные изменения перед переключением."
+  exit 1
 fi
+
+git fetch origin
+if git show-ref --verify --quiet refs/heads/feature/technical-epub-first; then
+  git switch feature/technical-epub-first
+else
+  git switch --track -c feature/technical-epub-first origin/feature/technical-epub-first
+fi
+
+git merge --ff-only origin/feature/technical-epub-first
+git status -sb
+git log -1 --oneline
+test -f compose.yaml && echo "Исходники приложения загружены. Запуска не было."
+BASH
 ```
 
 Если `git merge --ff-only` сообщает, что ветки разошлись, остановитесь и проверьте локальные коммиты, не сбрасывайте их. Чтобы вернуться к прежнему коду без удаления новых файлов: `git switch feature/server-edits` (при условии, что нет мешающих локальных изменений).
