@@ -1,10 +1,8 @@
-"""Safeguards for the project-only ACHEWIW command-line switch.
+"""Safety checks for ACHEWIW shutdown; Docker and ss are replaced by fake commands.
 
 Run: python3 -m unittest discover -s tests -p 'test_achewiw_control.py'
-Docker and ss are faked; these tests never touch the real Docker daemon.
 """
 from __future__ import annotations
-
 import os
 import subprocess
 import tempfile
@@ -13,101 +11,100 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/achewiw-control.sh"
 
-FAKE_DOCKER = r"""#!/usr/bin/env bash
+FAKE_DOCKER = r'''#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$*" >> "$ACHEWIW_TEST_LOG"
-case "$1" in
+printf '%s\n' "$*" >> "$TEST_LOG"
+case "${1:-}" in
   info)
-    [[ "${ACHEWIW_TEST_DENY:-}" == "1" ]] && exit 1
-    echo "28.0"
+    [[ "${TEST_NO_DOCKER:-}" == 1 ]] && exit 50
+    echo 28.0
     ;;
   ps)
-    [[ " $* " == *" --filter label=com.docker.compose.project=achewiw "* ]] || exit 41
-    if [[ " $* " == *" -a "* ]]; then
-      echo "achewiw-studio — Up 10 minutes"
-    elif [[ "$(cat "$ACHEWIW_TEST_STATE")" == "running" ]]; then
-      echo "a11c0ffee"
+    [[ "$*" == *'label=com.docker.compose.project=achewiw'* ]] || exit 52
+    [[ "$(cat "$TEST_STATE")" == running ]] || exit 0
+    printf 'a11c0ffee\n'
+    if [[ "${TEST_ROGUE:-}" == 1 ]]; then printf 'r0gue\n'; fi
+    ;;
+  inspect)
+    id="${@: -1}"
+    if [[ "$id" == r0gue ]]; then
+      printf 'achewiw|/other/workspace|studio|managed|/other/workspace\n'
+    elif [[ "${TEST_LEGACY:-}" == 1 ]]; then
+      printf 'achewiw|/1tbdisk/achewiw|studio|<no value>|<no value>\n'
+    elif [[ "${TEST_WRONG_ROLE:-}" == 1 ]]; then
+      printf 'achewiw|/1tbdisk/achewiw|unregistered|managed|/1tbdisk/achewiw\n'
+    else
+      printf 'achewiw|/1tbdisk/achewiw|studio|managed|/1tbdisk/achewiw\n'
     fi
     ;;
   stop)
-    [[ " $* " == *" --time 60 "* ]] || exit 42
-    [[ "${*: -1}" == "a11c0ffee" ]] || exit 43
-    printf 'stopped' > "$ACHEWIW_TEST_STATE"
-    echo "a11c0ffee"
+    [[ " $* " == *' --time 60 '* ]] || exit 51
+    [[ "${@: -1}" == a11c0ffee ]] || exit 53
+    printf stopped > "$TEST_STATE"
     ;;
-  *)
-    exit 44
-    ;;
+  *) exit 54 ;;
 esac
-"""
+'''
 
-FAKE_SS = "#!/usr/bin/env bash\nexit 0\n"
-
-
-class ProjectShutdownTests(unittest.TestCase):
+class ShutdownTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.tmp = Path(self.directory.name)
-        for filename, content in (("docker", FAKE_DOCKER), ("ss", FAKE_SS)):
-            target = self.tmp / filename
-            target.write_text(content, encoding="utf-8")
-            target.chmod(0o755)
-        self.state = self.tmp / "state"
-        self.state.write_text("running", encoding="utf-8")
-        self.log = self.tmp / "docker.log"
-        self.environment = os.environ.copy()
-        self.environment.update({
-            "PATH": str(self.tmp) + os.pathsep + os.environ["PATH"],
-            "ACHEWIW_TEST_LOG": str(self.log),
-            "ACHEWIW_TEST_STATE": str(self.state),
-        })
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nexit 0\n")):
+            file = root / name
+            file.write_text(script, encoding="utf-8")
+            file.chmod(0o755)
+        self.log = root / "docker.log"
+        self.state = root / "state"
+        self.state.write_text("running")
+        self.env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
+                        TEST_LOG=str(self.log), TEST_STATE=str(self.state))
 
-    def run_control(self, action, **extra_env):
-        env = {**self.environment, **extra_env}
-        return subprocess.run(["bash", str(SCRIPT), action], capture_output=True,
-                              text=True, check=False, env=env)
+    def run_switch(self, action="stop", **env):
+        return subprocess.run(["bash", str(SCRIPT), action], env={**self.env, **env},
+                              capture_output=True, text=True)
 
-    def test_stop_uses_compose_project_label_and_only_expected_container(self):
-        result = self.run_control("stop")
+    def commands(self):
+        return self.log.read_text() if self.log.exists() else ""
+
+    def test_managed_container_stops(self):
+        result = self.run_switch()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("a11c0ffee", result.stdout)
         self.assertEqual(self.state.read_text(), "stopped")
-        self.assertIn("--filter label=com.docker.compose.project=achewiw",
-                      self.log.read_text())
-        self.assertIn("stop --time 60 a11c0ffee", self.log.read_text())
+        self.assertEqual(self.commands().count("stop --time 60 a11c0ffee"), 1)
 
-    def test_second_stop_is_idempotent(self):
-        first = self.run_control("stop")
-        self.assertEqual(first.returncode, 0)
-        second = self.run_control("stop")
-        self.assertEqual(second.returncode, 0)
-        self.assertEqual(self.log.read_text().count("stop --time"), 1)
+    def test_repeated_stop_is_safe(self):
+        self.assertEqual(self.run_switch().returncode, 0)
+        self.assertEqual(self.run_switch().returncode, 0)
+        self.assertEqual(self.commands().count("stop --time"), 1)
 
-    def test_status_is_readonly(self):
-        result = self.run_control("status")
+    def test_foreign_container_blocks_all(self):
+        self.assertNotEqual(self.run_switch(TEST_ROGUE="1").returncode, 0)
+        self.assertEqual(self.state.read_text(), "running")
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_unmarked_container_is_protected(self):
+        self.assertNotEqual(self.run_switch(TEST_LEGACY="1").returncode, 0)
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_unauthorized_service_is_protected(self):
+        self.assertNotEqual(self.run_switch(TEST_WRONG_ROLE="1").returncode, 0)
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_status_readonly(self):
+        result = self.run_switch("status", TEST_ROGUE="1")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("achewiw", result.stdout)
-        self.assertNotIn("stop --time", self.log.read_text())
+        self.assertIn("НЕ подтверждён", result.stdout)
+        self.assertNotIn("stop --time", self.commands())
 
-    def test_no_docker_access_refuses_stop(self):
-        result = self.run_control("stop", ACHEWIW_TEST_DENY="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Нет доступа", result.stderr)
-        self.assertNotIn("stop --time", self.log.read_text())
+    def test_no_docker_access_fails_closed(self):
+        self.assertNotEqual(self.run_switch(TEST_NO_DOCKER="1").returncode, 0)
+        self.assertNotIn("stop --time", self.commands())
 
-    def test_start_command_is_not_implemented(self):
-        result = self.run_control("start")
-        self.assertNotEqual(result.returncode, 0)
+    def test_start_not_supported(self):
+        self.assertNotEqual(self.run_switch("start").returncode, 0)
         self.assertFalse(self.log.exists())
-
-    def test_no_running_project_container_does_not_stop_anything(self):
-        self.state.write_text("stopped")
-        result = self.run_control("stop")
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("уже остановлены", result.stdout)
-        self.assertNotIn("stop --time", self.log.read_text())
-
 
 if __name__ == "__main__":
     unittest.main()
