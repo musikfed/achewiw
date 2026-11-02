@@ -22,3 +22,11 @@ jobs:
         run: |
           grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
           grep -Fq 'org.achewiw.workspace: "/1tbdisk/achewiw"' compose.yaml
+      - name: Validate Python monitor syntax
+        run: python3 -m py_compile scripts/achewiw_host_monitor.py app/monitoring_core.py app/main.py
+      - name: Read-only host metrics parsing tests
+        run: python3 -m unittest discover -v -s tests -p 'test_*monitor*.py'
+      - name: Check user systemd telemetry ownership
+        run: |
+          grep -Fq 'WorkingDirectory=/1tbdisk/achewiw' ops/achewiw-host-monitor.service
+          grep -Fq '/1tbdisk/achewiw/scripts/achewiw_host_monitor.py' ops/achewiw-host-monitor.service
