@@ -3,6 +3,9 @@ services:
   studio:
     build: .
     container_name: achewiw-studio
+    labels:
+      org.achewiw.lifecycle: "managed"
+      org.achewiw.workspace: "/1tbdisk/achewiw"
     restart: unless-stopped
     network_mode: host
     user: "${ACHEWIW_UID:-1000}:${ACHEWIW_GID:-1000}"
