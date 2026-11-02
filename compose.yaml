@@ -1,0 +1,27 @@
+name: achewiw
+services:
+  studio:
+    build: .
+    container_name: achewiw-studio
+    restart: unless-stopped
+    network_mode: host
+    user: "${ACHEWIW_UID:-1000}:${ACHEWIW_GID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      ACHEWIW_USERNAME: "${ACHEWIW_USERNAME:-author}"
+      ACHEWIW_PASSWORD: "${ACHEWIW_PASSWORD:?Set ACHEWIW_PASSWORD in .env}"
+      ACHEWIW_DATA_DIR: /data
+      ACHEWIW_MODEL: "${ACHEWIW_MODEL:-qwen3:8b}"
+      OLLAMA_BASE_URL: http://127.0.0.1:11434
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7080/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
