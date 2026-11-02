@@ -103,6 +103,47 @@ class ProductionGraph(BaseModel):
                 nodes[id].status = "stale"
         return affected
 
+    def validate_release_gate_structure(self) -> bool:
+        """Validate required editorial QA ancestry for final publishing outputs.
+
+        A structural safeguard only: statuses and legal judgements must be
+        verified separately by an approved snapshot-bound ReleaseGate.
+        """
+        nodes = self._indexed()
+        self.topology()
+        kinds = {node.kind: node.id for node in self.nodes}
+        gate_nodes = [node for node in self.nodes
+                      if node.kind == "release.editorial_gate"]
+        if len(gate_nodes) != 1 or gate_nodes[0].resource != "author":
+            raise GraphError("Expected exactly one author-approved editorial gate")
+        gate = gate_nodes[0]
+        required_kinds = {
+            "qa.canon", "qa.originality",
+            "qa.jurisdictional_content", "qa.rights"
+        }
+        def ancestors(node_id: str) -> set[str]:
+            found: set[str] = set()
+            frontier = list(nodes[node_id].depends_on)
+            while frontier:
+                candidate = frontier.pop()
+                if candidate in found:
+                    continue
+                found.add(candidate)
+                frontier.extend(nodes[candidate].depends_on)
+            return found
+        qa_ancestors = ancestors(gate.id)
+        for kind in required_kinds:
+            if not any(nodes[ancestor].kind == kind for ancestor in qa_ancestors):
+                raise GraphError(f"Missing upstream editorial check: {kind}")
+        published_kinds = {
+            "publish.pdfx", "publish.ebook",
+            "marketing.package", "release.approve"
+        }
+        for node in self.nodes:
+            if node.kind in published_kinds and gate.id not in ancestors(node.id):
+                raise GraphError(f"Final exporter {node.id} bypasses editorial gate")
+        return True
+
     def to_mermaid(self) -> str:
         """Render a safe text-based overview suitable for GitHub Markdown."""
         self.topology()
