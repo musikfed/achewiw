@@ -42,3 +42,12 @@ bash scripts/achewiw-control.sh stop
 ```
 
 Команда `stop` сохраняет проектные данные. Проверка порта 7080 лишь **сообщает** о слушателе; она никогда не убивает процессы по порту. Веб-кнопка выключения пока остаётся отдельной задачей [#14](https://github.com/musikfed/achewiw/issues/14), а не внедрённой функцией.
+
+## Дополнительно: host-monitor — зарегистрированная служба ACHEWIW
+
+В ветке `feature/technical-epub-first` реализован **непривилегированный сборщик метрик** `scripts/achewiw_host_monitor.py` и user-systemd unit `ops/achewiw-host-monitor.service`. Сборщик CPU/RAM/`nvidia-smi` не делает запросов к чужим приложениям и не управляет ими; он пишет в `/1tbdisk/achewiw/data/monitor/host.json`. Все показатели GPU относятся к **всей видеокарте**, не исключительно к ACHEWIW.
+
+Текущий `achewiw-control.sh stop` управляет таким host-unit **только** если одновременно подтверждены путь исходного unit в `/1tbdisk/achewiw/ops/`, `WorkingDirectory=/1tbdisk/achewiw` и `ExecStart`, указывающий на сборщик в `/1tbdisk/achewiw/scripts/`. Если хотя бы одно условие неверно, выключатель не останавливает unit или Docker. Службы `ollama.service`, `docker.service`, чужие units и произвольные GPU-процессы вне области управления. [Инструкция мониторинга](https://github.com/musikfed/achewiw/blob/feature/technical-epub-first/docs/MONITORING.md).
+
+Режим `--watch` допускается **только** под зарегистрированным user-systemd unit при будущем согласованном запуске, иначе вручную завершать его с `Ctrl+C`; авто-поиска/kill по именам процесса нет.
+
