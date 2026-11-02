@@ -1,0 +1,24 @@
+name: ACHEWIW lifecycle isolation
+
+on:
+  push:
+    branches:
+      - feature/technical-epub-first
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shutdown script syntax
+        run: bash -n scripts/achewiw-control.sh
+      - name: Simulated Docker isolation tests
+        run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
+      - name: Check compose ownership markers
+        run: |
+          grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
+          grep -Fq 'org.achewiw.workspace: "/1tbdisk/achewiw"' compose.yaml
