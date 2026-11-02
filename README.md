@@ -2,6 +2,8 @@
 
 **Название продукта:** «Закулисная мастерская» — закулисное пространство автора для построения канона, томов, глав, сцен и абзацев. Рассказ, книга, выступление, сценарий и другие повествовательные формы.
 
+**Каталог проекта на Ubuntu:** `/1tbdisk/achewiw` — **вне** `/1tbdisk/PegineLab/projects`. Остальные проекты (`wificam_T23N`, `YadroKreator`) не затрагивать. [Инструкция GitHub ↔ сервер и безопасный скрипт переноса](https://github.com/musikfed/achewiw/blob/main/docs/GIT-SERVER-SYNC.md). Перенос не запускает Docker или Ollama.
+
 **A cherished word is a wondrous treasure.** «Слово чтимое — ценность дивная».
 
 Самостоятельная русскоязычная студия для проектирования фантастики, рассказов, романов, сценариев и выступлений.
@@ -44,7 +46,7 @@
 ## Запуск на Ubuntu 24.04
 
 ```bash
-cd /1tbdisk/PegineLab/projects
+cd /1tbdisk
 git clone https://github.com/musikfed/achewiw.git
 cd achewiw
 git checkout feature/storyengine-mvp
