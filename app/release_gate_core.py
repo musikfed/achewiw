@@ -42,7 +42,7 @@ class PublicationProfile(BaseModel):
     audience: str = Field(min_length=1)
     medium: Literal["print", "digital", "both"] = "both"
     policy_version: str = Field(min_length=1)
-    required_checks: list[CheckKind]
+    required_checks: list[CheckKind] = Field(min_length=1)
 
     @classmethod
     def default(cls, kind: PublicationType,
@@ -72,17 +72,20 @@ class ReviewCheck(BaseModel):
     status: CheckStatus = "pending"
     manuscript_hash: str = ""
     assets_hash: str = ""
+    policy_version: str = ""
     evidence_refs: list[str] = Field(default_factory=list)
     reviewer: str | None = None
     reviewed_at: str | None = None
     note: str = ""
 
     def approve(self, *, manuscript_hash: str, assets_hash: str,
-                reviewer: str, evidence_refs: list[str], note: str) -> None:
+                reviewer: str, evidence_refs: list[str], note: str,
+                policy_version: str = "") -> None:
         if not reviewer.strip() or not note.strip() or not evidence_refs:
             raise ReleaseError("Approval needs identified reviewer, evidence and note")
         self.manuscript_hash = manuscript_hash
         self.assets_hash = assets_hash
+        self.policy_version = policy_version
         self.status = "passed"
         self.evidence_refs = evidence_refs
         self.reviewer = reviewer
@@ -111,14 +114,18 @@ class ReleasePacket(BaseModel):
     def unresolved(self) -> list[str]:
         checks = self.index()
         problems: list[str] = []
+        if len(self.profile.required_checks) != len(set(self.profile.required_checks)):
+            problems.append("duplicate policy checks")
         for kind in self.profile.required_checks:
             check = checks.get(kind)
             if check is None:
                 problems.append(f"{kind}: missing review")
             elif check.status != "passed":
                 problems.append(f"{kind}: {check.status}")
-            elif check.manuscript_hash != self.manuscript_hash or check.assets_hash != self.assets_hash:
-                problems.append(f"{kind}: stale snapshot")
+            elif (check.manuscript_hash != self.manuscript_hash
+                  or check.assets_hash != self.assets_hash
+                  or check.policy_version != self.profile.policy_version):
+                problems.append(f"{kind}: stale snapshot or policy")
             elif not check.reviewer or not check.reviewed_at or not check.evidence_refs or not check.note:
                 problems.append(f"{kind}: no human review evidence")
         if not self.profile.country_codes:
