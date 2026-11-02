@@ -97,6 +97,46 @@ git log -1 --oneline
 
 Если `git pull --ff-only` сообщает о конфликте / разошедшейся истории, **не сбрасывайте** коммиты; разберите локальные изменения вручную.
 
+## Мониторинг CPU, видеопамяти NVIDIA и моделей Ollama
+
+**Код находится в ветке `feature/technical-epub-first`, не в документационной `main`.** Панель встроена в существующий веб-интерфейс ACHEWIW на 7080 и через авторизованный `/api/monitoring` показывает CPU, RAM, GPU/VRAM, выбранную LLM и реально загруженные модели Ollama. GPU-снимки делает отдельный **read-only сборщик на Ubuntu-хосте**, а не контейнер с Docker-доступом. Состояние `stale` означает старые показания, а не нулевую загрузку.
+
+Полная инструкция: [docs/MONITORING.md в рабочей ветке](https://github.com/musikfed/achewiw/blob/feature/technical-epub-first/docs/MONITORING.md).
+
+### Как скачать последние изменения без запуска проекта
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+cd /1tbdisk/achewiw
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  git status --short
+  echo "ОСТАНОВКА: есть незакоммиченные файлы, сначала сохраните их."
+  exit 1
+fi
+
+git fetch origin
+BRANCH="feature/technical-epub-first"
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git switch "$BRANCH"
+else
+  git switch --track -c "$BRANCH" "origin/$BRANCH"
+fi
+git merge --ff-only "origin/$BRANCH"
+
+git status -sb
+git log -1 --oneline
+test -f scripts/achewiw_host_monitor.py
+test -f app/monitoring_core.py
+test -f app/static/monitor.js
+test -f docs/MONITORING.md
+echo "Мониторинг скачан. Проект НЕ запускался."
+BASH
+```
+
+Команды **не требуют sudo**, не меняют `/1tbdisk/PegineLab/projects`, не запускают Docker/Ollama и не запускают мониторинг. Разовый сбор показаний и будущий user-systemd монитор приведены в `docs/MONITORING.md`, но их запуск — **позднее**. Новых портов нет. Если монитор ещё не включён, веб-панель честно покажет отсутствие данных или устаревший снимок.
+
 ## 2. Сервер → GitHub: сохранить изменения
 
 ```bash
