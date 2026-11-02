@@ -59,7 +59,7 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertIn("technical_verification", packet.profile.required_checks)
         self.assertIn("print_preflight", packet.profile.required_checks)
         with self.assertRaises(ReleaseError):
-            packet.checks[0].approve(
+            ReviewCheck(kind="technical_verification").approve(
                 manuscript_hash="a", assets_hash="b", reviewer="",
                 evidence_refs=[], note="")
 
