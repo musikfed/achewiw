@@ -2,7 +2,7 @@
   "schema_version": 1,
   "work_id": "demo-theatre",
   "edition_id": "demo-vol1",
-  "description": "Проект процесса; DAG без вызовов LLM и без запуска GPU",
+  "description": "Иллюстрации могут быть черновыми; финальный выпуск требует проверок канона, оригинальности, применимого законодательства, прав и подписи редактора. Этот DAG не запускает задачи.",
   "nodes": [
     {
       "id": "canon",
@@ -89,7 +89,7 @@
       "label": "Вёрстка книги + обложка",
       "kind": "layout.compose",
       "depends_on": [
-        "literaryqa",
+        "editorialgate",
         "artapproval"
       ],
       "resource": "cpu",
@@ -120,7 +120,7 @@
       "label": "EPUB + PDF для чтения",
       "kind": "publish.ebook",
       "depends_on": [
-        "literaryqa",
+        "editorialgate",
         "artapproval"
       ],
       "resource": "cpu",
@@ -131,7 +131,7 @@
       "label": "Краткая версия для редактора",
       "kind": "editor.synopsis",
       "depends_on": [
-        "literaryqa"
+        "editorialgate"
       ],
       "resource": "cpu",
       "status": "pending"
@@ -141,7 +141,7 @@
       "label": "Тизеры, флаеры, QR, мерч",
       "kind": "marketing.package",
       "depends_on": [
-        "literaryqa",
+        "editorialgate",
         "artapproval"
       ],
       "resource": "cpu",
@@ -155,7 +155,64 @@
         "print",
         "ebook",
         "editor",
-        "marketing"
+        "marketing",
+        "editorialgate"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "canonqa",
+      "label": "Проверка канона, событий и POV",
+      "kind": "qa.canon",
+      "depends_on": [
+        "literaryqa",
+        "canon"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "originality",
+      "label": "Оригинальность и проверка заимствований",
+      "kind": "qa.originality",
+      "depends_on": [
+        "text"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "legal",
+      "label": "Применимые законы, возрастные нормы, контент",
+      "kind": "qa.jurisdictional_content",
+      "depends_on": [
+        "literaryqa",
+        "artapproval"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "rights",
+      "label": "Права: текст, иллюстрации, лицензии, шрифты",
+      "kind": "qa.rights",
+      "depends_on": [
+        "text",
+        "artapproval"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "editorialgate",
+      "label": "Редакционное утверждение снимка издания",
+      "kind": "release.editorial_gate",
+      "depends_on": [
+        "canonqa",
+        "originality",
+        "legal",
+        "rights"
       ],
       "resource": "author",
       "status": "pending"
