@@ -60,6 +60,30 @@ verify_owned() {
   [[ "$allowed" == true ]]
 }
 
+# Optional user-systemd telemetry is part of ACHEWIW only when the exact
+# repository-owned unit is linked. Do not stop a unit on its NAME alone.
+UNIT="achewiw-host-monitor.service"
+unit_owned=false
+if command -v systemctl >/dev/null 2>&1; then
+  load_state="$(systemctl --user show "$UNIT" -p LoadState --value 2>/dev/null || true)"
+  if [[ "$load_state" == loaded ]]; then
+    fragment="$(systemctl --user show "$UNIT" -p FragmentPath --value 2>/dev/null || true)"
+    working_dir="$(systemctl --user show "$UNIT" -p WorkingDirectory --value 2>/dev/null || true)"
+    run_cmd="$(systemctl --user show "$UNIT" -p ExecStart --value 2>/dev/null || true)"
+    if [[ "$fragment" != "$WORKSPACE/ops/$UNIT" ||
+          "$working_dir" != "$WORKSPACE" ||
+          "$run_cmd" != *"$WORKSPACE/scripts/achewiw_host_monitor.py"* ]]; then
+      # For read-only 'status', show the mismatch, not a false ownership claim.
+      if [[ "$ACTION" == stop ]]; then
+        die "Обнаружен одноимённый, но неподтверждённый user-unit. Не останавливаем НИЧЕГО."
+      fi
+      echo "ВНИМАНИЕ: одноимённый user-unit не принадлежит ACHEWIW; не управляем им."
+    else
+      unit_owned=true
+    fi
+  fi
+fi
+
 printf 'ACHEWIW: %s (только %s; Ollama и другие проекты не управляются)\n' "$ACTION" "$WORKSPACE"
 if [[ "$ACTION" == status ]]; then
   ids="$(containers true)" || die "Не удалось прочитать Docker containers"
@@ -81,28 +105,30 @@ fi
 
 ids="$(containers false)" || die "Не удалось получить список контейнеров — выключение отменено"
 if [[ -z "$ids" ]]; then
-  echo "Управляемые контейнеры ACHEWIW уже остановлены или ещё не созданы."
-  port_status
-  exit 0
+  echo "Управляемые Docker-контейнеры ACHEWIW уже остановлены или ещё не созданы."
+else
+  # Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
+  owned=()
+  while IFS= read -r id; do
+    [[ -z "$id" ]] && continue
+    verify_owned "$id" || die "Контейнер $id не имеет ВСЕХ разрешающих меток ACHEWIW. НИЧЕГО не останавливаем."
+    owned+=("$id")
+  done <<< "$ids"
+
+  printf 'Проверено %d контейнер(ов) ACHEWIW. Остановка только их.\n' "${#owned[@]}"
+  for id in "${owned[@]}"; do
+    verify_owned "$id" || die "Метки контейнера $id изменились. Остановка прервана."
+    docker stop --time 60 "$id"
+  done
 fi
-
-# Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
-owned=()
-while IFS= read -r id; do
-  [[ -z "$id" ]] && continue
-  verify_owned "$id" || die "Контейнер $id не имеет ВСЕХ разрешающих меток ACHEWIW. НИЧЕГО не останавливаем."
-  owned+=("$id")
-done <<< "$ids"
-
-printf 'Проверено %d контейнер(ов) ACHEWIW. Остановка только их.\n' "${#owned[@]}"
-for id in "${owned[@]}"; do
-  # Verify again immediately before acting, in case the container was replaced.
-  verify_owned "$id" || die "Метки контейнера $id изменились. Остановка прервана."
-  docker stop --time 60 "$id"
-done
 
 remaining="$(containers false)" || die "Не удалось проверить результат выключения"
 [[ -z "$remaining" ]] || die "Есть запущенные контейнеры с проектным именем ACHEWIW. Проверьте вручную."
+if [[ "$unit_owned" == true ]]; then
+  # This unit is explicitly linked from /1tbdisk/achewiw/ops.
+  systemctl --user stop "$UNIT" || die "ACHEWIW Docker остановлен, но собственный монитор не удалось остановить."
+  echo "Остановлен собственный хостовый монитор ACHEWIW."
+fi
 echo "Управляемые контейнеры ACHEWIW остановлены; база, образы и файлы не удалены."
 port_status
 echo "Запуска и управления другими службами этот скрипт не выполняет."
