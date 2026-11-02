@@ -10,6 +10,7 @@
 
 - [RFC-0003: издательский pipeline от StoryGraph до PDF/X, EPUB, SVG и маркетинга](docs/ARCHITECTURE-v3-PUBLISHING.md)
 - [Визуальная карта трёх графов и GPU-планировщика (Mermaid)](docs/PIPELINE-MAP.md)
+- [RFC-0004: ReleaseGate — канон, оригинальность, применимые законы, права и утверждение редактора до финальной публикации](docs/RELEASE-GATES.md)
 - [Пример машиночитаемого DAG](examples/publishing-pipeline.json); [ядро валидации графа](app/production_graph_core.py)
 
 Эти документы и экспериментальный код **не означают, что виртуальная типография, RAG, GPU-планировщик или генератор изображений подключены к веб-приложению**. Хостовую Ollama и Docker на сервере пока не меняем.
