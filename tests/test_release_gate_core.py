@@ -22,7 +22,8 @@ class ReleaseGateTests(unittest.TestCase):
         for check in packet.checks:
             check.approve(manuscript_hash=packet.manuscript_hash,
                           assets_hash=packet.assets_hash, reviewer="human editor",
-                          evidence_refs=["review-report-1"], note="Reviewed scope")
+                          evidence_refs=["review-report-1"], note="Reviewed scope",
+                          policy_version=packet.profile.policy_version)
 
     def test_release_blocked_by_default(self):
         packet = self.make_packet()
@@ -46,6 +47,14 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(packet.status(), "blocked")
         self.assertTrue(any(check.status == "stale" for check in packet.checks))
         self.assertFalse(packet.author_approved)
+
+    def test_changed_policy_invalidates_signoff(self):
+        packet = self.make_packet()
+        self.sign_checks(packet)
+        packet.approve_author("author")
+        packet.profile.policy_version = "new-review-policy"
+        self.assertEqual(packet.status(), "blocked")
+        self.assertIn("stale", "; ".join(packet.unresolved()))
 
     def test_tampered_check_not_accepted(self):
         packet = self.make_packet()
