@@ -2,7 +2,7 @@
   "schema_version": 1,
   "work_id": "demo-theatre",
   "edition_id": "demo-vol1",
-  "description": "Иллюстрации могут быть черновыми; финальный выпуск требует проверок канона, оригинальности, применимого законодательства, прав и подписи редактора. Этот DAG не запускает задачи.",
+  "description": "Только схема. Preflight и proof возможны до Release Gate; финальная публикация — только после всех подписанных проверок, с привязкой к хешам издания.",
   "nodes": [
     {
       "id": "canon",
@@ -150,13 +150,9 @@
     {
       "id": "release",
       "label": "Автор утверждает публикацию",
-      "kind": "release.approve",
+      "kind": "release.finalize",
       "depends_on": [
-        "print",
-        "ebook",
-        "editor",
-        "marketing",
-        "editorialgate"
+        "gate"
       ],
       "resource": "author",
       "status": "pending"
@@ -213,6 +209,64 @@
         "originality",
         "legal",
         "rights"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "canon_review",
+      "label": "Канон и логика: подтверждённая версия",
+      "kind": "qa.canon_review",
+      "depends_on": [
+        "literaryqa"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "originality_review",
+      "label": "Отчёт о совпадениях и права цитирования",
+      "kind": "qa.originality_review",
+      "depends_on": [
+        "literaryqa"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "jurisdiction_review",
+      "label": "Правовой обзор целевой юрисдикции",
+      "kind": "qa.jurisdiction_review",
+      "depends_on": [
+        "literaryqa"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "rights_review",
+      "label": "Лицензии текста, обложки, изображений",
+      "kind": "qa.rights_review",
+      "depends_on": [
+        "artapproval",
+        "literaryqa"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "gate",
+      "label": "Release Gate: signed, versioned, no stale checks",
+      "kind": "release.gate",
+      "depends_on": [
+        "print",
+        "ebook",
+        "editor",
+        "marketing",
+        "canon_review",
+        "originality_review",
+        "jurisdiction_review",
+        "rights_review"
       ],
       "resource": "author",
       "status": "pending"
