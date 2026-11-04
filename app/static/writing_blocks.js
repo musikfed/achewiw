@@ -235,8 +235,8 @@
     renderBlockPlanner();stored();
   };
   el('saveBlockPlans').onclick=saveBlockPlan;
-  el('polishScene').onclick=()=>ai('polish');
+  el('polishScene').onclick=()=>ai('polish',{instructions:el('polishInstructions').value.trim()});
   el('loadSceneRevisions').onclick=revisions;
-  el('runContinuity').onclick=()=>ai('continuity',{scene_id:el('continuityScene').value||null});
+  el('runContinuity').onclick=()=>ai('continuity',{scene_id:el('continuityScene').value||null,instructions:el('continuityInstructions').value.trim()});
   document.querySelector('[data-tab="audit"]')?.addEventListener('click',renderContinuity);
 })();
