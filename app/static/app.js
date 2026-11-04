@@ -3,6 +3,33 @@ let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, pre
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
+// Browser UI state is separate from SQLite manuscript data.
+const safeGet=(storage,key)=>{try{return storage.getItem(key)}catch{return null}};
+const safeSet=(storage,key,value)=>{try{storage.setItem(key,value)}catch{}};
+const uiKey=(name,id)=>'achewiw.v8.'+name+'.'+(id||project?.id||'none');
+function stashUnsavedProject(){
+  if(!project)return;
+  updateBrief();collectScenes();collectText();
+  const data={version:1,server_updated_at:project.updated_at,project};
+  try{sessionStorage.setItem(uiKey('manuscriptDraft'),JSON.stringify(data))}catch{}
+}
+function recoverUnsavedProject(serverProject){
+  const raw=safeGet(sessionStorage,uiKey('manuscriptDraft',serverProject.id));
+  if(!raw)return serverProject;
+  try{
+    const item=JSON.parse(raw);
+    if(item.version!==1||item.project?.id!==serverProject.id)return serverProject;
+    if(item.server_updated_at!==serverProject.updated_at){
+      toast('В серверной рукописи появились новые правки; старый черновик из этой вкладки не применён.');
+      return serverProject;
+    }
+    if(JSON.stringify(item.project)!==JSON.stringify(serverProject)){
+      toast('Восстановлены несохранённые изменения из этой вкладки. Нажми «Сохранить».');
+      return item.project;
+    }
+  }catch{}
+  return serverProject;
+}
 const workModes={
  fiction:{name:'Фантастика и проза',part:'Сцена',eyebrow:'СТУДИЯ ФАНТАСТИКИ / РОМАН / ПРОЗА',intro:'Канон мира, повороты сюжета, последовательность сцен и литературная редактура.',structure:'Сюжет и главы',write:'Редактор художественного текста',audit:'Редакторская проверка истории'},
  technical:{name:'Техническая книга',part:'Раздел',eyebrow:'НАУКА / ТЕХНИКА / ИНЖЕНЕРНАЯ КНИГА',intro:'Тезисы, проверяемые источники, терминология, технические разделы и полноценное издание.',structure:'Разделы и доказательства',write:'Редактор технических глав',audit:'Проверка фактов и источников'},
@@ -25,7 +52,7 @@ function recommendModel(choose=false){
 }
 function setKindFilter(kind){
  if(kind!=='all'&&!workModes[kind])return;
- activeKind=kind;
+ activeKind=kind;safeSet(localStorage,'achewiw.v8.kindFilter',kind);
  document.querySelectorAll('[data-kind-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.kindFilter===kind));
  renderProjects();
 }
@@ -93,8 +120,8 @@ function render(){
  updateWorkCopy();recommendModel();renderProjects();renderScenes();renderWriting();
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
-async function save(){if(!project)return;updateBrief();project=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;project=await api('/projects/'+id);try{localStorage.setItem('achewiw.activeProjectId',id)}catch{}pending=null;render();recommendModel(true);await restoreLatestGeneration()}
+async function save(){if(!project)return;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
+async function loadProject(id){if(isBusy)return;if(project&&project.id!==id)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -118,7 +145,7 @@ async function deleteCurrentProject(){
   toast('Работа удалена. Резервная копия SQLite сохранена.');
  }catch(e){toast('Удаление не выполнено: '+e.message)}
 }
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
 async function renderAuditHistory(){
   if(!project)return;
   const target=$('#auditHistory');
@@ -280,8 +307,8 @@ function renderScenes(){
  });
 }
 function collectScenes(){document.querySelectorAll('.scene').forEach(card=>{const s=project.scenes[Number(card.dataset.index)];card.querySelectorAll('[data-scene-field]').forEach(el=>{s[el.dataset.sceneField]=el.dataset.sceneField==='active_objects'?el.value.split(',').map(x=>x.trim()).filter(Boolean):el.value})})}
-function renderWriting(){const select=$('#writingScene'),old=select.value;select.innerHTML=project.scenes.map(s=>'<option value="'+escaped(s.id)+'">'+escaped(s.title)+'</option>').join('');if(project.scenes.some(s=>s.id===old))select.value=old;switchWriting()}
-function switchWriting(){const s=project.scenes.find(s=>s.id===$('#writingScene').value);$('#storyText').value=s?.text??'';previousSceneId=s?.id??null}
+function renderWriting(){const select=$('#writingScene'),old=select.value;select.innerHTML=project.scenes.map(s=>'<option value="'+escaped(s.id)+'">'+escaped(s.title)+'</option>').join('');const stored=safeGet(localStorage,uiKey('writingScene'));const chosen=[old,stored].find(id=>project.scenes.some(s=>s.id===id));if(chosen)select.value=chosen;switchWriting()}
+function switchWriting(){const s=project.scenes.find(s=>s.id===$('#writingScene').value);$('#storyText').value=s?.text??'';previousSceneId=s?.id??null;if(s)safeSet(localStorage,uiKey('writingScene'),s.id)}
 function collectText(){const s=project.scenes.find(s=>s.id===previousSceneId);if(s)s.text=$('#storyText').value}
 async function renderStats(){
  if(!project)return;
@@ -467,7 +494,7 @@ async function applyAI(){
  $('#aiPanel').hidden=true;
  toast('Предложение принято. Нажмите «Сохранить» для записи в базу.');
 }
-async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}if(data.models.includes(model))select.value=model;else if(data.models.length)model=select.value;recommendModel(true);$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
+async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}const saved=safeGet(localStorage,'achewiw.v8.selectedModel');if(saved&&data.models.includes(saved))model=saved;else if(!data.models.includes(model))model=(data.models.includes(modelPicks[project?.work_type||'fiction']?.name)?modelPicks[project?.work_type||'fiction'].name:data.models[0]);if(model)select.value=model;recommendModel(false);$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
 $('#newProject').onclick=$('#startProject').onclick=()=>createProject();
 document.querySelectorAll('[data-create-kind]').forEach(b=>b.onclick=()=>createProject(b.dataset.createKind));
@@ -497,8 +524,21 @@ $('#openBookFromEditor').onclick=saveAndReadBook;
 $('#bookEdit').onclick=()=>gotoTab('write');
 $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
 $('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
-$('#model').onchange=e=>model=e.target.value;
+$('#model').onchange=e=>{model=e.target.value;safeSet(localStorage,'achewiw.v8.selectedModel',model)};
 $('#unloadModel').onclick=releaseSelectedModel;
 setInterval(()=>{if(!document.hidden)refreshGeneration()},1500);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshGeneration()});
-(async()=>{try{await refreshProjects();$('#status').textContent='Студия готова';if(projects.length){let previous=null;try{previous=localStorage.getItem('achewiw.activeProjectId')}catch{}await loadProject(projects.find(p=>p.id===previous)?.id||projects[0].id)}detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
+// Keep unsaved editor fields in this browser tab across refresh without
+// pushing drafts to the server. Revision matching prevents stale overwrite.
+document.addEventListener('input',event=>{
+  if(!project)return;
+  if(event.target.closest('#editor'))stashUnsavedProject();
+});
+window.addEventListener('beforeunload',()=>{if(project)stashUnsavedProject()});
+let lastScrollAt=0;
+window.addEventListener('scroll',()=>{
+  if(!project)return;
+  const now=Date.now();if(now-lastScrollAt<300)return;lastScrollAt=now;
+  safeSet(sessionStorage,uiKey('scroll'),String(window.scrollY));
+},{passive:true});
+(async()=>{try{const kind=safeGet(localStorage,'achewiw.v8.kindFilter');if(kind&&workModes[kind]||kind==='all')activeKind=kind;await refreshProjects();$('#status').textContent='Студия готова';if(projects.length){let previous=null;try{previous=localStorage.getItem('achewiw.activeProjectId')}catch{}await loadProject(projects.find(p=>p.id===previous)?.id||projects[0].id)}await detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
