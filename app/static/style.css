@@ -681,3 +681,63 @@ header{
 .illustration-input .illustration-vram-option input[type=checkbox]{
   width:19px;min-width:19px;height:19px;min-height:0;flex:0 0 19px;
   margin:2px 0 0;padding:0;accent-color:#966c3f}
+
+
+/* v0.4.1 — small telemetry ribbon, instead of a full-screen dashboard. */
+.host-monitor{
+  margin:clamp(12px,1.7vw,22px) 0 clamp(15px,2vw,27px);
+  padding:clamp(13px,1.35vw,20px);
+  border-radius:10px;
+  box-shadow:0 3px 12px #493c2705;
+}
+.monitor-head{align-items:center;gap:15px;margin:0 0 12px}
+.monitor-head h2{font:400 clamp(19px,1.5vw,24px)/1.25 var(--book)}
+.monitor-head p{margin:3px 0 0;font-size:11px;line-height:1.45}
+.monitor-controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center}
+.monitor-head .monitor-controls button{
+  flex:0 0 auto;margin:0;padding:7px 13px;min-height:36px;
+  font-size:12px;border-radius:7px
+}
+.monitor-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;align-items:stretch
+}
+.monitor-item{
+  min-height:0;padding:11px 13px;
+  border-radius:8px;background:#f9f7f3
+}
+.monitor-item small{font-size:10px;letter-spacing:.07em}
+.monitor-item strong{
+  display:block;font:600 clamp(15px,1.14vw,19px)/1.3 var(--ui);
+  margin:6px 0 2px
+}
+.monitor-item span{font-size:11px;line-height:1.35;margin:2px 0 0}
+.monitor-help{
+  margin-top:10px;
+  padding-top:7px;
+  border-top:1px solid #ede7df
+}
+.monitor-help summary{
+  cursor:pointer;
+  display:list-item;
+  margin-left:15px;
+  font-size:11px;color:#8d795e;line-height:1.5;
+}
+.monitor-help summary:hover{color:#665038}
+.monitor-help .monitor-note{margin:8px 0 0;font-size:11px;line-height:1.55}
+.host-monitor.monitor-collapsed{padding-block:13px}
+.host-monitor.monitor-collapsed .monitor-head{margin-bottom:0}
+.host-monitor.monitor-collapsed .monitor-grid,
+.host-monitor.monitor-collapsed .monitor-help{display:none}
+@media(max-width:1180px){
+  .monitor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+  .monitor-head{align-items:flex-start;flex-direction:column;gap:9px}
+  .monitor-controls{width:100%;justify-content:flex-start}
+  .monitor-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .monitor-item{padding:10px}
+}
+@media(max-width:390px){
+  .monitor-grid{grid-template-columns:minmax(0,1fr)}
+}
