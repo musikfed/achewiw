@@ -121,12 +121,21 @@ verify_legacy_studio() {
   local id="$1" labels project directory service managed scope runtime
   labels="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.project.working_dir" }}|{{ index .Config.Labels "com.docker.compose.service" }}|{{ index .Config.Labels "org.achewiw.lifecycle" }}|{{ index .Config.Labels "org.achewiw.workspace" }}' "$id")" || return 1
   IFS='|' read -r project directory service managed scope <<< "$labels"
-  [[ "$project" == "$PROJECT" && "$directory" == "$WORKSPACE" &&
-     "$service" == studio ]] || return 1
+  [[ "$project" == "$PROJECT" && "$service" == studio ]] || return 1
   # A partially labeled container is ambiguous, not a legacy candidate.
   [[ "$managed" == "<no value>" && "$scope" == "<no value>" ]] || return 1
   runtime="$(docker inspect --format '{{.Name}}|{{.HostConfig.NetworkMode}}|{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$id")" || return 1
-  [[ "$runtime" == "/achewiw-studio|host|$WORKSPACE/data" ]]
+  if [[ "$directory" == "$WORKSPACE" &&
+        "$runtime" == "/achewiw-studio|host|$WORKSPACE/data" ]]; then
+    return 0
+  fi
+  # Only a verified orphan from the previous ACHEWIW location may be
+  # migrated. The old directory itself must no longer exist. We never
+  # delete or alter its parent (which hosts other independent projects).
+  local old_workspace="/1tbdisk/PegineLab/projects/achewiw"
+  [[ "$directory" == "$old_workspace" &&
+     ! -e "$old_workspace" && ! -L "$old_workspace" &&
+     "$runtime" == "/achewiw-studio|host|$old_workspace/data" ]]
 }
 
 preflight_all() {
