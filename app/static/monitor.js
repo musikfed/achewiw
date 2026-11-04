@@ -74,6 +74,24 @@
     }
   }
 
+  const shell = document.querySelector('.host-monitor');
+  const toggle = byId('monitorToggle');
+  function setCollapsed(collapsed) {
+    if (!shell || !toggle) return;
+    shell.classList.toggle('monitor-collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.textContent = collapsed ? 'Развернуть показатели' : 'Свернуть';
+    try { localStorage.setItem('achewiw.monitorCollapsed', collapsed ? '1' : '0'); } catch {}
+  }
+  if (shell && toggle) {
+    let collapsed = false;
+    try { collapsed = localStorage.getItem('achewiw.monitorCollapsed') === '1'; } catch {}
+    setCollapsed(collapsed);
+    toggle.addEventListener('click', () => {
+      setCollapsed(!shell.classList.contains('monitor-collapsed'));
+    });
+  }
+
   byId('monitorRefresh')?.addEventListener('click', refreshMonitor);
   modelSelector?.addEventListener('change', refreshMonitor);
   document.addEventListener('visibilitychange', () => {
