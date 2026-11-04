@@ -9,7 +9,7 @@
 <button type="button" data-kind-filter="nonfiction">▤ Нонфикшн</button>
 <button type="button" class="nav-all selected" data-kind-filter="all">Все произведения</button>
 </div><div class="sidehead"><span>БИБЛИОТЕКА</span><button id="newProject">+ Проект</button></div><div id="projects"></div><div class="sidebottom">STORYENGINE <span>v0.1</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
-<main><div class="hero"><div><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small>
+<main><div class="hero"><div><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
 <button type="button" id="unloadModel" class="model-unload" title="Выгрузить только выбранную LLM из общей Ollama" disabled>Освободить VRAM модели</button>
 <small class="model-warning">Не сбрасывает RTX 3060. Выгрузка выбранной модели может затронуть другие приложения, использующие ту же Ollama.</small></div></div>
 <section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
@@ -53,7 +53,7 @@
     </div>
     <div class="actions"><button id="bookEdit" type="button">Вернуться в редактор</button></div>
   </div>
-  <p class="book-print-warning">PDF для типографии — реальный пагинированный файл с кириллическим шрифтом, но **не сертифицированный PDF/X**. Печатный выпуск требует согласования TrimBox, вылетов, ICC и предпечатной проверки.</p>
+  <p class="book-print-warning">PDF для типографии — реальный пагинированный файл с кириллическим шрифтом, но <strong>не сертифицированный PDF/X</strong>. Печатный выпуск требует согласования TrimBox, вылетов, ICC и предпечатной проверки.</p>
   <p id="bookWarning" class="book-warning"></p>
   <article id="bookPreview" class="book-reader" aria-live="polite"></article>
 </section>
