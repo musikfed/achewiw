@@ -29,6 +29,8 @@ from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epu
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter)
+from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
+                              suggested_plan, validate_plan)
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
@@ -96,6 +98,7 @@ def init_db() -> None:
         )
         init_jobs(connection)
         init_book_tables(connection)
+        init_plan_tables(connection)
         init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
@@ -1193,6 +1196,30 @@ class BookRequest(BaseModel):
     model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
 
 
+class BookPlanUpdate(BaseModel):
+    chapters: list[dict] = Field(min_length=1, max_length=100)
+
+
+@api.get("/projects/{project_id}/book-plan")
+def preview_chapter_plan(project_id: str):
+    project = get_project(project_id)
+    try:
+        with db() as connection:
+            return get_plan(connection, project)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@api.put("/projects/{project_id}/book-plan")
+def save_chapter_plan(project_id: str, request: BookPlanUpdate):
+    project = get_project(project_id)
+    try:
+        with db() as connection:
+            return store_plan(connection, project, request.chapters)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
     record = get_job(connection, job_id)
     if record is None or record["mode"] != "book":
@@ -1205,7 +1232,8 @@ def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
 
 def _book_prompt(project: Project, scene: Scene, chapter_index: int,
                  chapter_target: int, previous_chapter_tail: str,
-                 existing_text: str, requested_words: int) -> str:
+                 existing_text: str, requested_words: int,
+                 chapter_plan: dict | None = None) -> str:
     """Never feed the entire book back through the limited context window."""
     chapter_cards = [
         {"n": index + 1, "title": card.title, "anchor": card.anchor,
@@ -1222,6 +1250,15 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
         "план": chapter_cards, "текущая_глава": chapter_index + 1,
         "целевая_длина_главы": chapter_target, "карточка": scene.model_dump(exclude={"text", "blocks"})
     }
+    chapter_plan = chapter_plan or {}
+    disclosure = {
+        "none": "Не раскрывай главный секрет, работай с действиями и понятной локальной задачей.",
+        "hint": "Дай честные намёки через уже подготовленные предметы и наблюдения, без ответа на загадку.",
+        "partial": "Раскрой только часть причин и связей; оставь главный ответ и поздние последствия закрытыми.",
+        "full": "Здесь допустимо полное раскрытие только ранее подготовленной загадки; не меняй факты задним числом.",
+        "aftermath": "Главная загадка уже должна быть раскрыта: покажи последствия, не придумывай новый внезапный ответ.",
+    }.get(chapter_plan.get("reveal_level"), "Не раскрывай тайну без авторского разрешения.")
+    progress_phase = prose_phase(book_words(existing_text), chapter_target)
     if project.work_type == "technical":
         genre = ("Пиши содержательную техническую книгу, с точными объяснениями и примерами; "
                  "не выдумывай факты, DOI, нормативные документы и исследования.")
@@ -1241,6 +1278,24 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
         "отменять ранее произошедшие события или преждевременно раскрывать тайну. "
         f"\nНапиши СЛЕДУЮЩИЕ примерно {requested_words} слов полноценной прозы "
         "в рамках указанного плана. Не сокращай до аннотации. "
+        "\nРЕДАКТОРСКИЙ ПЛАН ЭТОЙ ГЛАВЫ (не меняет утверждённый каркас): "
+        + json.dumps({
+            "целевая_длина_слов": chapter_target,
+            "уже_написано_слов": book_words(existing_text),
+            "текущий_ритмический_этап": progress_phase,
+            "интенсивность_напряжения_0_5": chapter_plan.get("tension", 3),
+            "драматургическая_роль": chapter_plan.get("stage_name", "development"),
+            "цель_главы": chapter_plan.get("editorial_goal", ""),
+            "раскрытие_секрета": disclosure,
+        }, ensure_ascii=False)
+        + "\nСохраняй цель сцены и движение внимания: каждый фрагмент меняет "
+        "положение героя, его знание, конфликт или риск, а не пересказывает то же самое. "
+        "Не делай все фрагменты одинаковыми по ритму. "
+        "Причина должна предшествовать следствию в мире истории; "
+        "позднее раскрытие не может менять правду о прошлом. "
+        "Не повторяй мораль, общие рассуждения и одинаковые концовки. "
+        "Вместо растягивания текста углубляй действие, диалог, пространственные "
+        "детали и последствия в рамках согласованного сюжета. "
         "\nУтверждённый каркас и редакционное задание:\n" +
         json.dumps(brief, ensure_ascii=False)[:14500] +
         "\nФинал предыдущей главы (контекст, НЕ повторять):\n" + previous_chapter_tail[-1100:] +
@@ -1270,7 +1325,7 @@ async def execute_book(job_id: str) -> None:
                 remaining = chapter["target_words"] - book_words(text)
                 requested = chunk_size(remaining)
                 prompt = _book_prompt(project, scene, index, chapter["target_words"],
-                                      previous, text, requested)
+                                      previous, text, requested, chapter)
                 payload = {
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
@@ -1350,9 +1405,10 @@ def _start_book(job_id: str) -> None:
 async def start_full_book(request: BookRequest):
     project = get_project(request.project_id)
     try:
-        total = parse_book_target(project.target_length,
-                                  speech_minutes=project.duration_minutes if project.work_type == "speech" else None)
-        allocation = distribute_words(total, [scene.id for scene in project.scenes])
+        with db() as connection:
+            plan = get_plan(connection, project)
+        total = plan["target_words"]
+        allocation = [item["target_words"] for item in plan["chapters"]]
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     if any(not scene.id or not scene.title.strip() for scene in project.scenes):
@@ -1360,7 +1416,11 @@ async def start_full_book(request: BookRequest):
     # The job is intentionally not a replacement of the author's manuscript.
     chapters = [
         {"id": scene.id, "title": scene.title, "target_words": allocation[i],
-         "original_sha256": fingerprint(scene.text)}
+         "original_sha256": fingerprint(scene.text),
+         "stage": plan["chapters"][i]["stage"],
+         "tension": plan["chapters"][i]["tension"],
+         "reveal_level": plan["chapters"][i]["reveal_level"],
+         "editorial_goal": plan["chapters"][i]["editorial_goal"]}
         for i, scene in enumerate(project.scenes)
     ]
     job_id = uuid.uuid4().hex
@@ -1410,6 +1470,9 @@ def full_book_draft(job_id: str, response: Response):
                 "words": chapter["word_count"],
                 "target_words": chapter["target_words"],
                 "complete": bool(chapter["complete"]),
+                "tension": chapter["tension"],
+                "reveal_level": chapter["reveal_level"],
+                "editorial_goal": chapter["editorial_goal"],
                 "accepted": chapter["accepted_at"] is not None,
             }
             for chapter in chapters
