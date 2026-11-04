@@ -203,26 +203,24 @@ class ShutdownTests(unittest.TestCase):
         self.assertNotEqual(self.run_switch("start", TEST_PORT_BUSY="1").returncode, 0)
         self.assertNotIn("up -d", self.commands())
 
-    def test_start_requires_password_config_and_own_unit(self):
+    def test_missing_env_is_allowed_but_foreign_unit_is_not(self):
         (self.workspace / ".env").unlink()
-        self.assertNotEqual(self.run_switch("start").returncode, 0)
+        result = self.run_switch("start")
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("up -d", self.commands())
-        (self.workspace / ".env").write_text("ACHEWIW_PASSWORD=test-private\n")
         self.assertNotEqual(self.run_switch("start", TEST_UNIT_STATE="loaded",
                             TEST_UNIT_FRAGMENT="/other/unit").returncode, 0)
-        self.assertNotIn("up -d", self.commands())
 
-    def test_start_with_blank_template_password_explains_configuration(self):
+    def test_blank_legacy_password_does_not_block_private_studio(self):
         env_file = self.workspace / ".env"
         env_file.write_text(
             "ACHEWIW_USERNAME=author\nACHEWIW_PASSWORD=\nACHEWIW_MODEL=qwen3:8b\n"
         )
         self.state.write_text("stopped")
         result = self.run_switch("start")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ACHEWIW_PASSWORD пустой", result.stderr)
-        self.assertNotIn("up -d", self.commands())
-        self.assertEqual(self.state.read_text(), "stopped")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.state.read_text(), "running")
+        self.assertIn("up -d", self.commands())
         self.assertNotIn("test-private", result.stderr)
 
     def test_monitor_start_links_only_own_user_unit(self):
