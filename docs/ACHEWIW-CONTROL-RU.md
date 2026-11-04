@@ -5,6 +5,12 @@
 **Каталог на Ubuntu:** `/1tbdisk/achewiw` (не путать с PegineLab/YadroKreator)  
 **Адрес:** `http://192.168.0.100:7080` — исключительно через доверенную VPN или локальную сеть с защищённым доступом.
 
+## Исправление старого окна «Войти / author / пароль»
+
+В новых исходниках вход без пароля, но `docker restart` **не обновляет старый образ**. Для детерминированной пересборки только своего `achewiw-studio`, проверки HTTP `200`, отсутствия `WWW-Authenticate: Basic` и служебных заголовков идентичности используйте `bash scripts/achewiw-control.sh rebuild` и `bash scripts/achewiw-control.sh auth-check` **после Git fast-forward**.
+
+[Полные безопасные команды и диагностика порта 7080](NO-PASSWORD-RUNTIME-RU.md).
+
 ## Команды одного управляющего скрипта
 
 ```bash
@@ -12,7 +18,9 @@ cd /1tbdisk/achewiw
 bash scripts/achewiw-control.sh status     # только чтение, свежесть host CPU/RAM/GPU
 bash scripts/achewiw-control.sh start      # запуск studio и попытка включить собственный монитор
 bash scripts/achewiw-control.sh monitor-start # включить только user-systemd монитор CPU/RAM/NVIDIA
-bash scripts/achewiw-control.sh restart    # перезапуск только studio
+bash scripts/achewiw-control.sh restart    # перезапуск только studio (без новой сборки)
+bash scripts/achewiw-control.sh rebuild    # новая сборка только studio + проверка отсутствия Basic
+bash scripts/achewiw-control.sh auth-check # HTTP диагностика 7080 без пароля
 bash scripts/achewiw-control.sh stop       # остановка только подтверждённых контейнеров
 bash scripts/achewiw-control.sh update     # Git fetch + fast-forward; работающий studio пересобирается
 ```
