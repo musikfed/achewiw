@@ -2,6 +2,33 @@
 
 **Рабочая версия:** ветка `feature/technical-epub-first`, `/1tbdisk/achewiw` на Ubuntu, http://192.168.0.100:7080.
 
+## Почему пароль может продолжать появляться после Git update
+
+Причина не в браузерной HTML-форме: HTTP `401` + `WWW-Authenticate: Basic` выдаёт **старый процесс на порту 7080**. Новый FastAPI не содержит HTTP Basic.
+
+Для разовой диагностики без изменений или паролей:
+
+```bash
+cd /1tbdisk/achewiw
+bash scripts/diagnose-7080.sh
+```
+
+**Исправление в текущей рабочей ветке:** `achewiw-control.sh rebuild` и `update` теперь допускают **однократную замену проверенного старого контейнера** ACHEWIW, даже если у него ещё нет новых служебных меток. Это не универсальное выключение Docker: проверяются `com.docker.compose.project=achewiw`, `service=studio`, полный `working_dir=/1tbdisk/achewiw`, имя `/achewiw-studio`, `network_mode=host`, а также точный bind-mount `/1tbdisk/achewiw/data → /data`. Если любой признак не совпадает (например, контейнер остался от **старого каталога** `/1tbdisk/PegineLab/projects/achewiw`), скрипт **останавливается без удаления и остановки чужих процессов**.
+
+Сначала получить новые файлы через Git, затем принудительно пересобрать только свой контейнер:
+
+```bash
+cd /1tbdisk/achewiw
+git status -sb                        # рабочее дерево должно быть чистым
+git fetch origin
+git merge --ff-only origin/feature/technical-epub-first
+bash -n scripts/achewiw-control.sh
+bash scripts/achewiw-control.sh rebuild
+bash scripts/achewiw-control.sh auth-check
+```
+
+Если скрипт всё ещё показывает 401 или неподтверждённый контейнер, пришли результат `bash scripts/diagnose-7080.sh` — **не используй `killall`, `docker rm -f`, `docker compose down -v` или чистку соседних каталогов**. Во время rebuild `data/`, `.env`, `YadroKreator`, `wificam_T23N` и Ollama остаются на месте.
+
 ## Почему браузер может ещё спрашивать логин и пароль
 
 Окно «Войти», предлагающее пользователя `author`, **не является HTML-формой**. Браузер получил HTTP `401 Unauthorized` и заголовок `WWW-Authenticate: Basic` от какого-то процесса на порту 7080. В исходниках актуальной версии `app/main.py` **нет FastAPI HTTPBasic**. В `compose.yaml` уже нет обязательной переменной `ACHEWIW_PASSWORD`. Следовательно, старый запрос аутентификации может исходить из:
@@ -46,7 +73,7 @@ echo "ГОТОВО: новая ACHEWIW без пароля; data/ и .env сох
 BASH
 ```
 
-`rebuild` выполняет `docker compose ... up -d --build --force-recreate --no-deps studio` в каталоге `/1tbdisk/achewiw` **только после строгой проверки меток**. Если обнаружен чужой или старый неподтверждённый контейнер, команда откажется от изменений. Если ACHEWIW был остановлен, команда не включает его без отдельного `start`.
+`rebuild` выполняет `docker compose ... up -d --build --force-recreate --no-deps studio` в каталоге `/1tbdisk/achewiw` **только после строгой проверки меток**. Подтверждённый старый контейнер *из правильного каталога* автоматически переносится на новые метки при пересборке. Чужой контейнер, несовпавший каталог/mount или другой процесс на порту вызовут отказ без принудительного удаления. Если ACHEWIW был остановлен, команда не включает его без отдельного `start`.
 
 ## Проверить сервер при ошибке
 
