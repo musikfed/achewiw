@@ -55,6 +55,7 @@
   <h3>Локальная генерация изображений</h3>
   <p id="illustrationEngineStatus">Проверка локального генератора...</p>
   <label>Описание иллюстрации<textarea id="illustrationPrompt" rows="4" maxlength="2500" placeholder="Фотореализм или книжная гравюра, ракурс, композиция, свет..."></textarea></label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseLLM"> Перед генерацией запросить выгрузку выбранной текстовой модели из общей Ollama (только с моим подтверждением)</label>
   <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
   <p class="illustration-disclaimer">Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
  </div>
