@@ -361,6 +361,19 @@ def delete_project(project_id: str):
         ).fetchone()
         if running:
             raise HTTPException(409, "Нельзя удалить проект во время его генерации")
+        # Reversible by design: snapshot the entire SQLite before deleting.
+        # This stays inside the ignored ACHEWIW data/ directory, never on GitHub.
+        backups = DATA_DIR / "backups"
+        if backups.is_symlink():
+            raise HTTPException(409, "Небезопасный путь резервных копий")
+        backups.mkdir(mode=0o700, parents=True, exist_ok=True)
+        backup_path = backups / ("achewiw-before-delete-" + uuid.uuid4().hex + ".sqlite3")
+        try:
+            with sqlite3.connect(backup_path) as backup_connection:
+                connection.backup(backup_connection)
+            backup_path.chmod(0o600)
+        except (OSError, sqlite3.Error) as exc:
+            raise HTTPException(503, "Резервная копия не создана — удаление отменено") from exc
         connection.execute(
             "DELETE FROM ai_job_reviews WHERE job_id IN "
             "(SELECT id FROM ai_jobs WHERE project_id=?)", (project_id,)
