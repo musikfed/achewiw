@@ -102,6 +102,13 @@ compose() {
 prepare_compose() {
   [[ -f "$WORKSPACE/.env" && ! -L "$WORKSPACE/.env" ]] ||
     die "Сначала создайте .env из .env.example с непустым ACHEWIW_PASSWORD"
+  # The distributed .env.example intentionally has an EMPTY password.
+  # Never print or log the actual secret.
+  local password_value
+  password_value="$(sed -n 's/^[[:space:]]*ACHEWIW_PASSWORD[[:space:]]*=[[:space:]]*//p' "$WORKSPACE/.env" | tail -n 1)"
+  if [[ -z "$password_value" || "$password_value" == '""' || "$password_value" == "''" ]]; then
+    die "ACHEWIW_PASSWORD пустой в $WORKSPACE/.env. Откройте nano $WORKSPACE/.env и задайте свой секретный пароль. Шаблон .env.example оставляет его пустым намеренно. Ничего не запускалось."
+  fi
   [[ -d "$WORKSPACE/data" && ! -L "$WORKSPACE/data" ]] ||
     die "Создайте обычную папку data/ для книг и SQLite"
   compose config --quiet || die "Ошибка Compose/.env; ничего не запущено"
