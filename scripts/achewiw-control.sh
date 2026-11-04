@@ -73,11 +73,18 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$fragment" != "$WORKSPACE/ops/$UNIT" ||
           "$working_dir" != "$WORKSPACE" ||
           "$run_cmd" != *"$WORKSPACE/scripts/achewiw_host_monitor.py"* ]]; then
-      # For read-only 'status', show the mismatch, not a false ownership claim.
-      if [[ "$ACTION" != status ]]; then
-        die "Обнаружен одноимённый, но неподтверждённый user-unit. Не останавливаем НИЧЕГО."
-      fi
-      echo "ВНИМАНИЕ: одноимённый user-unit не принадлежит ACHEWIW; не управляем им."
+      # An unverified host user-unit is NEVER touched. It must not prevent
+      # an independent, verified Docker-only rebuild/update/auth-check.
+      # Only actions that explicitly manage the monitor or stop the full
+      # project fail closed instead of guessing its ownership.
+      case "$ACTION" in
+        stop|monitor-start)
+          die "Обнаружен одноимённый, но неподтверждённый user-unit. Не останавливаем и не запускаем службы."
+          ;;
+        *)
+          echo "ВНИМАНИЕ: user-unit $UNIT не подтверждён. Не трогаем его; действие '$ACTION' ограничено собственными контейнерами ACHEWIW."
+          ;;
+      esac
     else
       unit_owned=true
     fi
