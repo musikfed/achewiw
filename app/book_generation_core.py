@@ -156,3 +156,27 @@ def save_chapter(db: sqlite3.Connection, job_id: str, scene_id: str,
     """, (text, count_words(text), attempts, int(complete), now(), job_id, scene_id))
     if db.execute("SELECT changes()").fetchone()[0] != 1:
         raise ValueError("Глава не найдена или уже принята автором")
+
+
+def check_new_prose(existing: str, proposed: str) -> None:
+    """Reject gross repetition before persisting the next generated chapter chunk.
+
+    This is a narrow deterministic guard, NOT an automatic literary or factual
+    correctness assessment. The approved manuscript and partial draft survive
+    a failed chunk unchanged.
+    """
+    if count_words(proposed) < 35:
+        raise ValueError("Модель вернула слишком короткий отрывок")
+    normalize = lambda value: re.sub(r"\s+", " ", value).strip().casefold()
+    earlier = normalize(existing)
+    current = normalize(proposed)
+    if len(earlier) > 160 and len(current) > 160 and current[:160] in earlier:
+        raise ValueError("ИИ повторил ранее написанный отрывок: глава сохранена до повтора")
+    paragraphs = [normalize(value) for value in re.split(r"\n\s*\n", proposed)]
+    seen = set()
+    for paragraph in paragraphs:
+        if len(paragraph) < 180:
+            continue
+        if paragraph in seen or (earlier and paragraph in earlier):
+            raise ValueError("Обнаружен повтор длинного абзаца; черновик сохранён до повтора")
+        seen.add(paragraph)
