@@ -674,3 +674,10 @@ header{
 .book-reader figcaption{font:italic 13px/1.6 var(--book);color:#857465;margin-top:10px}
 @media(max-width:980px){.illustration-workflow{grid-template-columns:1fr}}
 @media(max-width:430px){.release-actions button{width:100%}}
+
+.illustration-input .illustration-vram-option{
+  display:flex;align-items:flex-start;gap:11px;margin:19px 0;
+  font-size:12px;line-height:1.65;font-weight:500;color:#806949}
+.illustration-input .illustration-vram-option input[type=checkbox]{
+  width:19px;min-width:19px;height:19px;min-height:0;flex:0 0 19px;
+  margin:2px 0 0;padding:0;accent-color:#966c3f}
