@@ -2,6 +2,30 @@
 
 **Рабочая версия:** ветка `feature/technical-epub-first`, `/1tbdisk/achewiw` на Ubuntu, http://192.168.0.100:7080.
 
+## Подтверждённая причина блокировки пересборки (04.11.2026)
+
+В диагностике на Ubuntu установлено:
+
+- `achewiw-studio` действительно слушает TCP `0.0.0.0:7080` через `uvicorn` и отвечает `401 Unauthorized` + `WWW-Authenticate: Basic`;
+- контейнер имеет **правильные метки** `com.docker.compose.project=achewiw`, `com.docker.compose.service=studio`, `com.docker.compose.project.working_dir=/1tbdisk/achewiw`, `org.achewiw.lifecycle=managed`, `org.achewiw.workspace=/1tbdisk/achewiw` и нужный bind-mount `/data`;
+- команда `rebuild` **не была выполнена**: её прервала проверка одноимённого, но неподтверждённого user-systemd unit `achewiw-host-monitor.service`.
+
+**Исправлено:** `rebuild`, `update` и `auth-check` при такой ситуации только выводят предупреждение и **НЕ трогают user-unit**. Они могут работать со строго проверенным Docker-контейнером ACHEWIW независимо от мониторинга. `stop` и `monitor-start` по-прежнему блокируют управление при неподтверждённом одноимённом unit — чужие службы не затрагиваются.
+
+После `git fetch`/`git merge --ff-only` необходимо запустить **именно `rebuild`**, а не `restart`, потому что старый образ с HTTP Basic не заменяется обычным `docker restart`:
+
+```bash
+cd /1tbdisk/achewiw
+git status -sb
+git fetch origin
+git merge --ff-only origin/feature/technical-epub-first
+bash -n scripts/achewiw-control.sh
+bash scripts/achewiw-control.sh rebuild
+bash scripts/achewiw-control.sh auth-check
+```
+
+Старые рукописи и SQLite остаются в `data/`, другие проекты не перезапускаются. Отдельный мониторинг CPU/GPU разберём после устранения HTTP Basic; его user-unit **не нужно** принудительно останавливать или удалять.
+
 ## Почему пароль может продолжать появляться после Git update
 
 Причина не в браузерной HTML-форме: HTTP `401` + `WWW-Authenticate: Basic` выдаёт **старый процесс на порту 7080**. Новый FastAPI не содержит HTTP Basic.
