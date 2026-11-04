@@ -1385,6 +1385,38 @@ def full_book_status(job_id: str):
         return _book_record(connection, job_id)
 
 
+@api.get("/books/jobs/{job_id}/draft")
+def full_book_draft(job_id: str, response: Response):
+    """Read unapproved prose, separately from the published manuscript.
+
+    The preview is a read-only SQLite snapshot. No file export or automatic
+    replacement of the author's chapters occurs here.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    with db() as connection:
+        job = _book_record(connection, job_id)
+        chapters = chapters_for_job(connection, job_id)
+    project = get_project(job["project_id"])
+    return {
+        "job_id": job_id, "project_id": job["project_id"],
+        "title": project.title, "status": job["status"],
+        "stage": job["stage"], "book": job["book"],
+        "chapters": [
+            {
+                "scene_id": chapter["scene_id"],
+                "index": chapter["scene_index"] + 1,
+                "title": chapter["title"],
+                "text": chapter["text"],
+                "words": chapter["word_count"],
+                "target_words": chapter["target_words"],
+                "complete": bool(chapter["complete"]),
+                "accepted": chapter["accepted_at"] is not None,
+            }
+            for chapter in chapters
+        ],
+    }
+
+
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
 async def resume_full_book(job_id: str):
     with db() as connection:
