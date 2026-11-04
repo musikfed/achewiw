@@ -96,6 +96,19 @@ async function createProject(kind){
  pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;
  await refreshProjects();render();showTab('brief');
 }
+async function deleteCurrentProject(){
+ if(!project || isBusy)return;
+ const current=project;
+ if(!confirm('Удалить только «'+current.title+'» из библиотеки? Перед удалением SQLite сохранится в data/backups/. Другие работы не затрагиваются.'))return;
+ const phrase=prompt('Для подтверждения точно введи название работы:', '');
+ if(phrase!==current.title){toast('Удаление отменено');return;}
+ try{
+  await api('/projects/'+current.id,{method:'DELETE'});
+  project=null;pending=null;activeGenerationJobId=null;
+  await refreshProjects();render();
+  toast('Работа удалена. Резервная копия SQLite сохранена.');
+ }catch(e){toast('Удаление не выполнено: '+e.message)}
+}
 function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
 async function renderAuditHistory(){
   if(!project)return;
@@ -389,6 +402,7 @@ document.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{
 });
 $('#workType').onchange=e=>{if(!project)return;project.work_type=e.target.value;updateWorkCopy();renderProjects()};
 $('#saveBrief').onclick=()=>save().catch(e=>toast(e.message));
+$('#deleteProject').onclick=deleteCurrentProject;
 $('#saveScenes').onclick=()=>{collectScenes();save().catch(e=>toast(e.message))};
 $('#saveText').onclick=()=>{collectText();save().catch(e=>toast(e.message))};
 $('#addScene').onclick=()=>{collectScenes();project.scenes.push({id:crypto.randomUUID().replaceAll('-',''),title:'Новая сцена',active_objects:[],anchor:'',tempo:'Ровный',reader_info:'',hook:'',text:''});renderScenes();renderWriting()};
