@@ -12,8 +12,8 @@ ACTION="${1:-status}"
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 
 case "$ACTION" in
-  start|status|stop|restart|update|monitor-start) ;;
-  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|monitor-start" ;;
+  start|status|stop|restart|update|rebuild|auth-check|monitor-start) ;;
+  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|rebuild|auth-check|monitor-start" ;;
 esac
 [[ $# -le 1 ]] || die "Допускается только одна команда"
 command -v docker >/dev/null 2>&1 || die "Docker CLI не найден"
@@ -225,6 +225,56 @@ run_restart() {
   echo "Перезапущен только ACHEWIW; Ollama не затронута"
   port_status
 }
+# Probe the actual HTTP listener without a username/password or browser cache.
+# This detects a stale image, external reverse proxy, or second HTTP service
+# still challenging with WWW-Authenticate: Basic. No other services are touched.
+auth_check() {
+  command -v curl >/dev/null 2>&1 || die "Нужен curl для проверки входа без пароля"
+  local host="192.168.0.100" url headers status label
+  for url in "http://127.0.0.1:$PORT/" "http://$host:$PORT/"; do
+    label="$url"
+    if ! headers="$(curl --silent --show-error --max-time 8 --noproxy '*' \
+        --header "Host: $host:$PORT" --dump-header - --output /dev/null "$url")"; then
+      die "Невозможно получить ответ от $label. Проверь docker compose ps и ss -ltnp."
+    fi
+    status="$(printf '%s\\n' "$headers" | awk '/^HTTP\\// {code=$2} END {print code}')"
+    if [[ "$status" == 401 ]] || printf '%s\\n' "$headers" | grep -Eiq '^WWW-Authenticate:[[:space:]]*Basic'; then
+      printf 'ACHEWIW: %s возвращает HTTP %s с запросом пароля!\\n' "$label" "$status" >&2
+      die "Это старая сборка либо другой HTTP-сервер/прокси на 7080. Не вводи пароль, проверь ss -ltnp и docker compose ps."
+    fi
+    if [[ "$status" != 200 ]]; then
+      die "HTTP $status на $label: отсутствие Basic ещё не означает рабочую страницу ACHEWIW."
+    fi
+    echo "ACHEWIW: $label отвечает HTTP 200 без HTTP Basic. Пароль не требуется."
+  done
+}
+
+# Unlike restart, rebuild explicitly creates a NEW image and recreates ONLY the
+# verified ACHEWIW studio container. No docker compose down, no pruning.
+run_rebuild() {
+  preflight_all
+  prepare_compose
+  local running current
+  running="$(containers false)" || die "Не удаётся прочитать собственные контейнеры"
+  if [[ -z "$running" ]]; then
+    port_free
+    die "ACHEWIW остановлен: rebuild не запускает ранее остановленный проект. Используй start отдельно."
+  fi
+  echo "Проверено: пересборка только собственного контейнера ACHEWIW Studio."
+  compose up -d --build --force-recreate --no-deps studio ||
+    die "Не удалось пересобрать ACHEWIW. Данные data/ и остальные контейнеры не тронуты."
+  preflight_all
+  [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW после пересборки не запущен"
+  auth_check || die "Новая сборка не прошла проверку отсутствия пароля"
+  current="$(git -C "$WORKSPACE" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ -n "$current" ]]; then
+    [[ ! -L "$WORKSPACE/data/.achewiw-deployed-commit" ]] ||
+      die "Недопустимый симлинк маркера развёртывания"
+    printf '%s\\n' "$current" > "$WORKSPACE/data/.achewiw-deployed-commit"
+  fi
+  echo "ACHEWIW: новая сборка подтверждена. Никаких паролей."
+}
+
 run_update() {
   command -v git >/dev/null 2>&1 || die "Git не установлен"
   [[ -d "$WORKSPACE/.git" && ! -L "$WORKSPACE/.git" ]] || die "Не найден Git checkout"
@@ -261,10 +311,11 @@ run_update() {
   if [[ -n "$running" && ( "$before" != "$after" || "$deployed" != "$after" ) ]]; then
     preflight_all
     prepare_compose
-    compose up -d --build --no-deps studio ||
+    compose up -d --build --force-recreate --no-deps studio ||
       die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
     preflight_all
     [[ -n "$(containers false)" ]] || die "После обновления studio не запущен"
+    auth_check || die "Studio не прошёл HTTP-проверку: возможно, порт 7080 обслуживает прежний сервер"
     printf '%s\n' "$after" > "$deployed_marker"
     echo "Обновлён только работающий ACHEWIW Studio"
   elif [[ -z "$running" ]]; then
@@ -278,6 +329,8 @@ case "$ACTION" in
   start) run_start; exit 0 ;;
   restart) run_restart; exit 0 ;;
   update) run_update; exit 0 ;;
+  rebuild) run_rebuild; exit 0 ;;
+  auth-check) auth_check; exit 0 ;;
   monitor-start) monitor_start || die "Не удалось включить собственный монитор; другие службы не изменены"; exit 0 ;;
 esac
 
