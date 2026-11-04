@@ -52,7 +52,9 @@
       const article = make('article', 'planned-block');
       const head = make('div', 'planned-block-head');
       head.append(make('strong', '', 'Фрагмент '+(index+1)));
-      const status = make('small', block.accepted_job_id ? '✓ принят автором' : 'ожидает генерации');
+      const status = make('small', block.accepted_job_id ?
+        (block.evidence_stale ? '⚠ Принят ранее · факты требуют повторной проверки' : '✓ принят автором') :
+        'ожидает генерации');
       head.append(status);
       const description = field('Что должно произойти в этом фрагменте?',
         block.description, v => block.description = v,
