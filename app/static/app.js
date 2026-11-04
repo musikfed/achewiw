@@ -125,8 +125,9 @@ async function renderAuditHistory(){
   const projectId=project.id;
   target.textContent='Получаем историю QA из SQLite…';
   try{
-    const allJobs=await api('/projects/'+projectId+'/ai/jobs?summary=true',{cache:'no-store'});
-    const jobs=allJobs.filter(j=>['audit','continuity'].includes(j.mode));
+    const reports=await Promise.all(['audit','continuity'].map(mode=>
+      api('/projects/'+projectId+'/ai/jobs?mode='+mode+'&summary=true',{cache:'no-store'})));
+    const jobs=reports.flat().sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at)).slice(0,30);
     if(!project || projectId!==project.id)return;
     target.replaceChildren();
     if(!jobs.length){target.textContent='Ещё нет QA-отчётов для этой истории.';return}
