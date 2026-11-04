@@ -68,7 +68,11 @@ def preflight(project: Any, scene_id: str | None = None) -> dict[str, Any]:
         for block_index, block in enumerate(getattr(scene, "blocks", []), 1):
             here = {"scene_id": scene.id, "block_id": block.id,
                     "scene_title": scene.title, "block_number": block_index}
-            if block.accepted_job_id:
+            if block.accepted_job_id and getattr(block, "evidence_stale", False):
+                issues.append({**here, "severity": "warning",
+                    "code": "stale_evidence", "subject": block.description[:100],
+                    "detail": "После принятия блока текст сцены редактировался. Введение фактов нужно подтвердить снова."})
+            if block.accepted_job_id and not getattr(block, "evidence_stale", False):
                 for item in block.requires:
                     if normalize(item) not in known:
                         issues.append({**here, "severity": "warning",
