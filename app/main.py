@@ -898,8 +898,17 @@ def stats(project_id: str):
          "minutes_read_aloud": round(count_words(scene.text) / 150, 1)}
         for scene in project.scenes
     ]
-    return {"scenes": rows, "total_words": sum(s["words"] for s in rows),
-            "minutes_read_aloud": round(sum(s["words"] for s in rows) / 150, 1)}
+    written = sum(s["words"] for s in rows)
+    try:
+        goal = parse_book_target(project.target_length,
+                                 speech_minutes=project.duration_minutes if project.work_type == "speech" else None)
+    except ValueError:
+        goal = None
+    return {"scenes": rows, "total_words": written,
+            "minutes_read_aloud": round(written / 150, 1),
+            "target_words": goal,
+            "remaining_words": max(0, goal - written) if goal is not None else None,
+            "completion_percent": round(100 * written / goal, 1) if goal else None}
 
 
 @api.get("/projects/{project_id}/export")
