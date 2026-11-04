@@ -387,6 +387,9 @@ def delete_project(project_id: str):
         )
         connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
+        # Files retained inside local data/ for recovery from SQLite backup.
+        # A deliberate project-scoped cleanup can remove illustrations later.
+        connection.execute("DELETE FROM illustrations WHERE project_id=?", (project_id,))
     return Response(status_code=204)
 
 
@@ -529,7 +532,7 @@ def download_manuscript_markdown(project_id: str):
 def download_manuscript_epub(project_id: str):
     project = get_project(project_id)
     try:
-        body = manuscript_epub(project)
+        body = manuscript_epub(project, illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
         raise HTTPException(
             409, "Для EPUB сначала сохрани текст хотя бы одной сцены в редакторе."
@@ -544,7 +547,7 @@ def download_manuscript_epub(project_id: str):
 @api.get("/projects/{project_id}/manuscript.docx")
 def download_manuscript_docx(project_id: str):
     try:
-        body = manuscript_docx(get_project(project_id))
+        body = manuscript_docx(get_project(project_id), illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     return Response(
@@ -570,7 +573,7 @@ def download_manuscript_fb2(project_id: str):
 @api.get("/projects/{project_id}/manuscript.pdf")
 def download_manuscript_pdf(project_id: str):
     try:
-        body = manuscript_pdf(get_project(project_id))
+        body = manuscript_pdf(get_project(project_id), illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     except RuntimeError as exc:
@@ -583,7 +586,7 @@ def download_manuscript_pdf(project_id: str):
 @api.get("/projects/{project_id}/manuscript.print.pdf")
 def download_print_proof_pdf(project_id: str):
     try:
-        body = manuscript_pdf(get_project(project_id), print_proof=True)
+        body = manuscript_pdf(get_project(project_id), print_proof=True, illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     except RuntimeError as exc:
