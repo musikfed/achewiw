@@ -105,7 +105,7 @@ async def lifespan(_app: FastAPI):
             await asyncio.gather(*_background_tasks, return_exceptions=True)
 
 
-app = FastAPI(title="ACHEWIW StoryEngine", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ACHEWIW StoryEngine", version="0.2.1", lifespan=lifespan)
 api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
 
 
@@ -306,12 +306,17 @@ def health():
 
 @app.get("/")
 def index(_=Depends(require_auth)):
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store",
+                 "X-ACHEWIW-App": "studio",
+                 "X-ACHEWIW-Auth": "private-vpn-no-password"},
+    )
 
 
 @app.get("/static/{filename}")
 def asset(filename: Literal["app.js", "style.css", "monitor.js"], _=Depends(require_auth)):
-    return FileResponse(STATIC_DIR / filename)
+    return FileResponse(STATIC_DIR / filename, headers={"Cache-Control": "no-store"})
 
 
 @api.get("/projects")
