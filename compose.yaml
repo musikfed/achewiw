@@ -16,6 +16,7 @@ services:
       - no-new-privileges:true
     environment:
       ACHEWIW_DATA_DIR: /data
+      ACHEWIW_ALLOWED_HOSTS: "${ACHEWIW_ALLOWED_HOSTS:-192.168.0.100,127.0.0.1,localhost}"
       ACHEWIW_MODEL: "${ACHEWIW_MODEL:-qwen3:8b}"
       OLLAMA_BASE_URL: http://127.0.0.1:11434
     volumes:
