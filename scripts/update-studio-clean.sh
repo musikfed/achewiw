@@ -83,7 +83,7 @@ for name in ('app/main.py', 'scripts/comfyui_control_agent.py'):
 PY
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
-grep -Fq '20261105-longbook-v11' app/static/index.html ||
+grep -Fq '20261105-narrative-v12' app/static/index.html ||
   die "Нет новых ассетов; отмена пересборки"
 msg "3/5 — удаляем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
