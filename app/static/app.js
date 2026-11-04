@@ -37,6 +37,15 @@ function updateWorkCopy(){
  $('#writingHeading').textContent=copy.write;
  $('#auditHeading').textContent=copy.audit;
  $('#writingSectionLabel').textContent=copy.part;
+ $('#addScene').textContent='+ Добавить: '+copy.part.toLowerCase();
+ $('#generateScene').textContent='✦ Предложить текст: '+copy.part.toLowerCase();
+ $('#buildOutline').textContent=kind==='speech'?'✦ Создать план выступления':'✦ Составить план';
+ $('#buildOutline2').textContent=kind==='speech'?'✦ Составить тайминг':'✦ Предложить структуру';
+ $('#runAudit').textContent=kind==='technical'?'✦ Проверить тезисы и источники':
+   kind==='speech'?'✦ Проверить речь и тайминг':
+   kind==='nonfiction'?'✦ Редакторский фактчекинг':'✦ Литературный аудит';
+ $('#aiGoStructure').textContent='02 · Исправить: '+copy.part.toLowerCase();
+
  $('#structureHint').textContent=kind==='technical'?'Каждый раздел содержит задачу, понятия, аргументацию и проверяемые источники.':kind==='speech'?'Каждый блок речи имеет переходы, тайминг и ясную задачу.':'Создавайте разделы; текст публикуется только после сохранения.';
  $('#writingHint').textContent=kind==='speech'?'Речь сохраняется блоками; ИИ предлагает текст, но автор принимает каждую правку.':'Сохранённый текст является рукописью, а предложения ИИ не подменяют книгу.';
  const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',audit:'04 · Проверка',book:'05 · Типография / Экспорт'};
@@ -154,9 +163,9 @@ async function renderBook(){
       ' частей написано · '+data.total_words+' слов';
     const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
     $('#bookWarning').textContent=missing.length?
-      'Ещё не написаны сцены: '+missing.join(' · ')+
+      'Ещё не написаны части: '+missing.join(' · ')+
       '. Открой 03 · Редактор, допиши и сохрани. Экспорт включает только готовые тексты.':
-      'Все сцены содержат текст. Проверь последовательность и скачай книгу.';
+      'Все части содержат текст. Проверь последовательность и скачай книгу.';
     const h=document.createElement('h2');
     h.textContent=data.title;
     container.append(h);
@@ -164,8 +173,8 @@ async function renderBook(){
       const p=document.createElement('p');
       p.className='book-empty';
       p.textContent=data.total_scenes?
-        'План сцен существует, но художественный текст ещё не написан. Начни со сцены 1 в редакторе или сгенерируй её текст и сохрани. QA-анализ не является книгой.':
-        'Пока нет ни одной сцены. Сначала открой 02 · Story.prj и создай каркас истории.';
+        'План существует, но текст разделов ещё не написан. Начни со сцены 1 в редакторе или сгенерируй её текст и сохрани. QA-анализ не является книгой.':
+        'Пока нет ни одного раздела. Сначала открой 02 · Story.prj и создай каркас истории.';
       container.append(p);
       return;
     }
@@ -274,8 +283,9 @@ function renderGeneration(job){
   setBusy(ongoing);
   $('#aiPanel').hidden=false;
   $('#aiHeading').textContent=job.mode==='audit'?
-    '✦ Редакторский отчёт QA · не текст книги':
-    job.mode==='outline'?'✦ Предложение структуры истории':'✦ Черновик художественной сцены';
+    '✦ Редакторская проверка · не текст издания':
+    job.mode==='outline'?'✦ Предложение структуры: '+(workModes[project.work_type]?.name||'книга'):
+    '✦ Черновик: '+(workModes[project.work_type]?.part||'глава');
   $('#aiStage').textContent=job.status==='ready'&&job.mode==='audit'?'QA-отчёт готов · выбери решение автора ниже':job.stage||'Ожидание генерации';
   $('#aiJobId').textContent='Задание '+job.id.slice(0,12)+' · '+job.model+' · '+new Date(job.updated_at).toLocaleTimeString();
   if(job.status==='ready' && job.result){
