@@ -18,6 +18,10 @@ jobs:
         run: bash -n scripts/achewiw-control.sh
       - name: Simulated Docker isolation tests
         run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
+      - name: Validate safe editorial-only update script
+        run: bash -n scripts/update-editorial.sh
+      - name: Editorial layout, responsive rules and versioned assets
+        run: python3 -m unittest discover -v -s tests -p 'test_editorial_layout.py'
       - name: Validate browser application and monitoring JS syntax
         run: |
           node --check app/static/app.js
