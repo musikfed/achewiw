@@ -159,6 +159,7 @@ async function renderBook(){
   for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=true;
   try{
     const data=await api('/projects/'+project.id+'/manuscript',{cache:'no-store'});
+    const artwork=await api('/projects/'+project.id+'/illustrations',{cache:'no-store'});
     $('#bookSummary').textContent=data.written_scenes+' из '+data.total_scenes+
       ' частей написано · '+data.total_words+' слов';
     const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
@@ -184,12 +185,28 @@ async function renderBook(){
       const title=document.createElement('h3');
       title.textContent=ch.index+'. '+ch.title;
       chapter.append(title);
+      const chapterArt=artwork.filter(a=>a.scene_id===ch.scene_id);
+      const appendFigures=(placement)=>{
+        for(const a of chapterArt.filter(x=>x.placement===placement)){
+          const figure=document.createElement('figure');
+          const img=document.createElement('img');
+          const caption=document.createElement('figcaption');
+          img.src='/api/projects/'+project.id+'/illustrations/'+a.id+'.png';
+          img.alt=a.caption||'Иллюстрация главы';
+          img.loading='lazy';
+          caption.textContent=a.caption;
+          figure.append(img,caption);
+          chapter.append(figure);
+        }
+      };
+      appendFigures('start');
       for(const paragraph of ch.text.split(/\n\s*\n/)){
         if(!paragraph.trim())continue;
         const p=document.createElement('p');
         p.textContent=paragraph.trim();
         chapter.append(p);
       }
+      appendFigures('end');
       container.append(chapter);
     }
     for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=false;
