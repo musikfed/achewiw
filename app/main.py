@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from monitoring_core import load_snapshot, summarize_ollama_running
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
-                             recent_jobs, get_job, active_job, estimate_progress,
+                             recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
                              LIMIT, MAX_OUTPUT)
 
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
@@ -294,6 +294,10 @@ def delete_project(project_id: str):
         ).fetchone()
         if running:
             raise HTTPException(409, "Нельзя удалить проект во время его генерации")
+        connection.execute(
+            "DELETE FROM ai_job_reviews WHERE job_id IN "
+            "(SELECT id FROM ai_jobs WHERE project_id=?)", (project_id,)
+        )
         connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
     return Response(status_code=204)
@@ -551,6 +555,40 @@ def generation_status(job_id: str):
     if result is None:
         raise HTTPException(404, "Задание генерации не найдено")
     return result
+
+
+class AuditDecisionRequest(BaseModel):
+    decision: Literal["unreviewed", "in_progress", "completed", "reference"]
+    notes: str = Field(default="", max_length=3000)
+
+
+@api.put("/ai/jobs/{job_id}/decision")
+def decide_audit(job_id: str, request: AuditDecisionRequest):
+    with db() as connection:
+        try:
+            return save_audit_decision(connection, job_id, request.decision, request.notes)
+        except ValueError as exc:
+            raise HTTPException(422, "Можно отмечать только завершённые редакторские аудиты") from exc
+
+
+@api.get("/ai/jobs/{job_id}/report.md")
+def download_audit_report(job_id: str):
+    with db() as connection:
+        record = get_job(connection, job_id)
+    if record is None or record["mode"] != "audit" or record["status"] != "ready":
+        raise HTTPException(404, "Готовый отчёт QA не найден")
+    text = (
+        f"# Редакторский аудит: {get_project(record['project_id']).title}\n\n"
+        f"**Модель:** {record['model']}\n\n"
+        f"**Решение автора:** {record['author_decision']}\n\n"
+        f"**Заметки автора:** {record['author_notes']}\n\n---\n\n"
+        f"{record['result']}\n"
+    )
+    return PlainTextResponse(
+        text, media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="achewiw-qa-report.md"',
+                 "Cache-Control": "no-store"},
+    )
 
 
 @api.get("/projects/{project_id}/ai/jobs")
