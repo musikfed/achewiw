@@ -1,18 +1,96 @@
 const $=s=>document.querySelector(s);
 let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, previousSceneId=null;
-let activeGenerationJobId=null, refreshGenerationBusy=false;
+let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(path,options={}){const r=await fetch('/api'+path,{headers:{'Content-Type':'application/json'},...options});if(!r.ok){let detail='Ошибка '+r.status;try{detail=(await r.json()).detail||detail}catch{}throw Error(detail)}if(r.status===204)return null;return r.json()}
 function toast(message){const t=$('#toast');t.textContent=message;t.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.style.display='none',5000)}
 function setBusy(value){isBusy=value;document.querySelectorAll('button').forEach(b=>{if(['generateScene','buildOutline','buildOutline2','runAudit','unloadModel'].includes(b.id))b.disabled=value});$('#status').textContent=value?'Идёт генерация StoryEngine · сохраняется на сервере':'Студия готова'}
 function renderProjects(){$('#projects').innerHTML=projects.map(p=>'<button class="projectItem '+(project?.id===p.id?'selected':'')+'" data-id="'+escaped(p.id)+'"><strong>'+escaped(p.title)+'</strong><small>'+escaped(p.genre)+'</small></button>').join('');document.querySelectorAll('.projectItem').forEach(b=>b.onclick=()=>loadProject(b.dataset.id))}
 async function refreshProjects(){projects=await api('/projects');renderProjects()}
-function render(){const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;$('#heading').textContent=active?project.title:'Ваши истории начинаются здесь.';if(!active)return;document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');$('#export').href='/api/projects/'+project.id+'/export';$('#meta').textContent=project.scenes.length+' сцен';renderProjects();renderScenes();renderWriting()}
+function render(){const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;$('#heading').textContent=active?project.title:'Ваши истории начинаются здесь.';if(!active)return;document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');$('#export').href='/api/projects/'+project.id+'/export';$('#bookMarkdown').href='/api/projects/'+project.id+'/manuscript.md';$('#bookEpub').href='/api/projects/'+project.id+'/manuscript.epub';$('#meta').textContent=project.scenes.length+' сцен';renderProjects();renderScenes();renderWriting()}
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;updateBrief();project=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
 async function loadProject(id){if(isBusy)return;project=await api('/projects/'+id);try{localStorage.setItem('achewiw.activeProjectId',id)}catch{}pending=null;render();await restoreLatestGeneration()}
 async function createProject(){if(isBusy)return;const title=prompt('Название произведения','Новая история');if(title===null||!title.trim())return;project=await api('/projects',{method:'POST',body:JSON.stringify({title:title.trim()})});pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;await refreshProjects();render();showTab('brief')}
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit')renderStats()}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit')renderStats();if(name==='book')renderBook()}
+async function renderBook(){
+  if(!project)return;
+  const container=$('#bookPreview');
+  container.replaceChildren();
+  $('#bookSummary').textContent='Читаем сохранённую рукопись…';
+  $('#bookMarkdown').hidden=true;
+  $('#bookEpub').hidden=true;
+  try{
+    const data=await api('/projects/'+project.id+'/manuscript',{cache:'no-store'});
+    $('#bookSummary').textContent=data.written_scenes+' из '+data.total_scenes+
+      ' сцен написано · '+data.total_words+' слов';
+    const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
+    $('#bookWarning').textContent=missing.length?
+      'Ещё не написаны сцены: '+missing.join(' · ')+
+      '. Открой 03 · Редактор, допиши и сохрани. Экспорт включает только готовые тексты.':
+      'Все сцены содержат текст. Проверь последовательность и скачай книгу.';
+    const h=document.createElement('h2');
+    h.textContent=data.title;
+    container.append(h);
+    if(!data.chapters.length){
+      const p=document.createElement('p');
+      p.className='book-empty';
+      p.textContent=data.total_scenes?
+        'План сцен существует, но художественный текст ещё не написан. Начни со сцены 1 в редакторе или сгенерируй её текст и сохрани. QA-анализ не является книгой.':
+        'Пока нет ни одной сцены. Сначала открой 02 · Story.prj и создай каркас истории.';
+      container.append(p);
+      return;
+    }
+    for(const ch of data.chapters){
+      const chapter=document.createElement('section');
+      chapter.className='book-chapter';
+      const title=document.createElement('h3');
+      title.textContent=ch.index+'. '+ch.title;
+      chapter.append(title);
+      for(const paragraph of ch.text.split(/\n\s*\n/)){
+        if(!paragraph.trim())continue;
+        const p=document.createElement('p');
+        p.textContent=paragraph.trim();
+        chapter.append(p);
+      }
+      container.append(chapter);
+    }
+    $('#bookMarkdown').hidden=false;
+    $('#bookEpub').hidden=false;
+  }catch(e){
+    $('#bookSummary').textContent='Не удалось загрузить рукопись';
+    $('#bookWarning').textContent=e.message;
+  }
+}
+function gotoTab(name){
+  if(!project)return;
+  updateBrief();collectScenes();collectText();
+  showTab(name);
+  document.querySelector('.tabs').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function saveAndReadBook(){
+  if(!project)return;
+  collectScenes();collectText();
+  try{await save();gotoTab('book')}catch(e){toast('Не удалось сохранить книгу: '+e.message)}
+}
+async function saveAuditDecision(){
+  if(!shownAuditJobId)return;
+  const button=$('#saveAuditDecision');
+  button.disabled=true;
+  try{
+    const result=await api('/ai/jobs/'+shownAuditJobId+'/decision',{
+      method:'PUT',
+      body:JSON.stringify({
+        decision:$('#auditDecision').value,
+        notes:$('#auditNotes').value
+      })
+    });
+    $('#auditDecisionStatus').textContent='Решение сохранено · '+new Date(result.reviewed_at).toLocaleString()+
+      '. Сцены и книга не изменены автоматически.';
+    toast('Решение по редакторскому отчёту сохранено в SQLite');
+  }catch(e){toast('Ошибка сохранения решения: '+e.message)}
+  finally{button.disabled=false}
+}
 function renderScenes(){$('#sceneCards').innerHTML=project.scenes.map((s,i)=>'<article class="scene" data-index="'+i+'"><div class="sceneTop"><strong>Сцена '+(i+1)+'</strong><button class="removeScene" data-index="'+i+'">Удалить</button></div><div class="sceneFields">'+[['title','Название'],['active_objects','Активные объекты (через запятую)'],['anchor','Якорь-напоминание'],['tempo','Темп'],['reader_info','Информация / подсказки'],['hook','Крючок в конце']].map(([field,label])=>'<label>'+label+(field==='reader_info'||field==='hook'?'<textarea data-scene-field="'+field+'" rows="2">'+escaped(s[field])+'</textarea>':'<input data-scene-field="'+field+'" value="'+escaped(Array.isArray(s[field])?s[field].join(', '):s[field])+'">')+'</label>').join('')+'</div></article>').join('');document.querySelectorAll('.removeScene').forEach(b=>b.onclick=()=>{collectScenes();if(confirm('Удалить сцену?')){project.scenes.splice(Number(b.dataset.index),1);renderScenes();renderWriting()}})}
 function collectScenes(){document.querySelectorAll('.scene').forEach(card=>{const s=project.scenes[Number(card.dataset.index)];card.querySelectorAll('[data-scene-field]').forEach(el=>{s[el.dataset.sceneField]=el.dataset.sceneField==='active_objects'?el.value.split(',').map(x=>x.trim()).filter(Boolean):el.value})})}
 function renderWriting(){const select=$('#writingScene'),old=select.value;select.innerHTML=project.scenes.map(s=>'<option value="'+escaped(s.id)+'">'+escaped(s.title)+'</option>').join('');if(project.scenes.some(s=>s.id===old))select.value=old;switchWriting()}
@@ -24,13 +102,16 @@ function renderGeneration(job){
   const ongoing=['queued','running'].includes(job.status);
   setBusy(ongoing);
   $('#aiPanel').hidden=false;
+  $('#aiHeading').textContent=job.mode==='audit'?
+    '✦ Редакторский отчёт QA · не текст книги':
+    job.mode==='outline'?'✦ Предложение структуры истории':'✦ Черновик художественной сцены';
   $('#aiStage').textContent=job.stage||'Ожидание генерации';
   $('#aiJobId').textContent='Задание '+job.id.slice(0,12)+' · '+job.model+' · '+new Date(job.updated_at).toLocaleTimeString();
   $('#aiOutput').textContent=job.result||'Ожидание первого фрагмента текста от Ollama…';
   const progress=$('#aiProgress');
   if(Number.isFinite(job.percent))progress.value=job.percent;
   else progress.removeAttribute('value');
-  $('#aiPercent').textContent=job.percent==null?'Ожидание токенов':job.percent+'% до лимита';
+  $('#aiPercent').textContent=job.status==='ready'?'100% · готово':job.percent==null?'Ожидание токенов':job.percent+'% к лимиту токенов';
   const secs=job.eta_seconds;
   $('#aiEta').textContent=ongoing?
     (secs!=null?'Ориентир до лимита ответа: ~'+Math.max(1,Math.ceil(secs/60))+' мин. ':'Время пока неизвестно. ')+
@@ -39,7 +120,9 @@ function renderGeneration(job){
   $('#aiNotice').textContent=ongoing?
     'Ответ поступает частями и сохраняется на сервере. Можно обновить страницу — запись не пропадёт.':
     job.status==='ready'?
-      (job.parse_error?'Ответ готов, но JSON-каркас не разобран: '+job.parse_error:
+      (job.mode==='audit'?
+        'QA-отчёт сохранён. Выбери решение по рекомендациям, затем исправляй нужные сцены. Сам отчёт НЕ является книгой.':
+        job.parse_error?'Ответ готов, но JSON-каркас не разобран: '+job.parse_error:
         'Черновик готов. Исходный проект не изменён до принятия предложения.'):
       'Генерация '+(job.status==='interrupted'?'прервана':'завершилась ошибкой')+
         '. Полученный текст сохранён. '+(job.error||'');
@@ -48,6 +131,18 @@ function renderGeneration(job){
     suggested_scenes:job.suggested_scenes,sceneId:job.scene_id
   }:null;
   $('#applyAI').hidden=!(pending&&(pending.mode==='scene'||(pending.mode==='outline'&&pending.suggested_scenes)));
+  $('#aiNextSteps').hidden=job.status!=='ready';
+  const review=job.status==='ready'&&job.mode==='audit';
+  $('#auditReview').hidden=!review;
+  shownAuditJobId=review?job.id:null;
+  if(review){
+    $('#auditDecision').value=job.author_decision||'unreviewed';
+    $('#auditNotes').value=job.author_notes||'';
+    $('#auditDecisionStatus').textContent=job.reviewed_at?
+      'Решение сохранено · '+new Date(job.reviewed_at).toLocaleString():
+      'Отчёт сохранён, но решение автора ещё не указано.';
+    $('#downloadAudit').href='/api/ai/jobs/'+job.id+'/report.md';
+  }
   if(!ongoing)activeGenerationJobId=null;
 }
 async function refreshGeneration(){
@@ -87,7 +182,7 @@ async function ai(mode){
   $('#aiPercent').textContent='—';
   $('#aiProgress').removeAttribute('value');
   $('#aiEta').textContent='Ожидание начала генерации.';
-  $('#applyAI').hidden=true;pending=null;
+  $('#applyAI').hidden=true;$('#auditReview').hidden=true;$('#aiNextSteps').hidden=true;shownAuditJobId=null;pending=null;
   try{
     const job=await api('/ai',{method:'POST',body:JSON.stringify({
       project_id:project.id,mode,model,scene_id:$('#writingScene').value||null
@@ -131,6 +226,13 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
 $('#generateScene').onclick=()=>ai('scene');
 $('#runAudit').onclick=()=>ai('audit');
 $('#applyAI').onclick=applyAI;
+$('#saveAuditDecision').onclick=saveAuditDecision;
+$('#aiGoStructure').onclick=()=>gotoTab('structure');
+$('#aiGoWriting').onclick=()=>gotoTab('write');
+$('#aiGoBook').onclick=()=>gotoTab('book');
+$('#openBookFromAudit').onclick=()=>gotoTab('book');
+$('#openBookFromEditor').onclick=saveAndReadBook;
+$('#bookEdit').onclick=()=>gotoTab('write');
 $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
 $('#copyAI').onclick=()=>navigator.clipboard.writeText($('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
 $('#model').onchange=e=>model=e.target.value;
