@@ -245,7 +245,287 @@ auth_check() {
     if [[ "$status" != 200 ]]; then
       die "HTTP $status на $label: отсутствие Basic ещё не означает рабочую страницу ACHEWIW."
     fi
-    echo "ACHEWIW: $label отвечает HTTP 200 без HTTP Basic. Пароль не требуется."
+    if ! printf '%s\n' "$headers" | grep -Eiq '^X-ACHEWIW-App:[[:space:]]*studio[[:space:]]*
+  done
+}
+
+# Unlike restart, rebuild explicitly creates a NEW image and recreates ONLY the
+# verified ACHEWIW studio container. No docker compose down, no pruning.
+run_rebuild() {
+  preflight_all
+  prepare_compose
+  local running current
+  running="$(containers false)" || die "Не удаётся прочитать собственные контейнеры"
+  if [[ -z "$running" ]]; then
+    port_free
+    die "ACHEWIW остановлен: rebuild не запускает ранее остановленный проект. Используй start отдельно."
+  fi
+  echo "Проверено: пересборка только собственного контейнера ACHEWIW Studio."
+  compose up -d --build --force-recreate --no-deps studio ||
+    die "Не удалось пересобрать ACHEWIW. Данные data/ и остальные контейнеры не тронуты."
+  preflight_all
+  [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW после пересборки не запущен"
+  auth_check || die "Новая сборка не прошла проверку отсутствия пароля"
+  current="$(git -C "$WORKSPACE" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ -n "$current" ]]; then
+    [[ ! -L "$WORKSPACE/data/.achewiw-deployed-commit" ]] ||
+      die "Недопустимый симлинк маркера развёртывания"
+    printf '%s\n' "$current" > "$WORKSPACE/data/.achewiw-deployed-commit"
+  fi
+  echo "ACHEWIW: новая сборка подтверждена. Никаких паролей."
+}
+
+run_update() {
+  command -v git >/dev/null 2>&1 || die "Git не установлен"
+  [[ -d "$WORKSPACE/.git" && ! -L "$WORKSPACE/.git" ]] || die "Не найден Git checkout"
+  preflight_all
+  local origin branch dirty running before after
+  origin="$(git -C "$WORKSPACE" remote get-url origin)" || die "Нет origin"
+  case "$origin" in
+    https://github.com/musikfed/achewiw|https://github.com/musikfed/achewiw.git|git@github.com:musikfed/achewiw|git@github.com:musikfed/achewiw.git) ;;
+    *) die "Чужой Git origin: $origin. Обновление отменено" ;;
+  esac
+  branch="$(git -C "$WORKSPACE" symbolic-ref --quiet --short HEAD)" ||
+    die "Detached HEAD; ветку автоматически не переключаем"
+  [[ "$branch" == feature/technical-epub-first ]] ||
+    die "Текущая ветка $branch; рабочая Compose-версия: feature/technical-epub-first. Автопереключения нет"
+  dirty="$(git -C "$WORKSPACE" status --porcelain --untracked-files=normal)" ||
+    die "Нельзя проверить Git status"
+  [[ -z "$dirty" ]] || die "Есть незакоммиченные/неотслеживаемые файлы; никакого reset/clean"
+  running="$(containers false)" || die "Нельзя проверить состояние контейнеров"
+  if [[ -n "$running" ]]; then prepare_compose; fi
+  before="$(git -C "$WORKSPACE" rev-parse --short HEAD)"
+  git -C "$WORKSPACE" fetch --no-tags origin \
+    "+refs/heads/$branch:refs/remotes/origin/$branch" || die "Git fetch не выполнен"
+  git -C "$WORKSPACE" merge-base --is-ancestor HEAD "refs/remotes/origin/$branch" ||
+    die "Ветки разошлись; fast-forward невозможен, файлы не сбрасываем"
+  git -C "$WORKSPACE" merge --ff-only "refs/remotes/origin/$branch" ||
+    die "Git fast-forward не выполнен"
+  after="$(git -C "$WORKSPACE" rev-parse --short HEAD)"
+  local deployed_marker="$WORKSPACE/data/.achewiw-deployed-commit" deployed=""
+  [[ ! -L "$deployed_marker" ]] || die "Маркер развёртывания не может быть ссылкой"
+  if [[ -f "$deployed_marker" ]]; then
+    deployed="$(cat "$deployed_marker")" || die "Нельзя прочитать локальный маркер сборки"
+  fi
+  echo "ACHEWIW: Git $before -> $after; .env, data/, Ollama не изменены"
+  if [[ -n "$running" && ( "$before" != "$after" || "$deployed" != "$after" ) ]]; then
+    preflight_all
+    prepare_compose
+    compose up -d --build --force-recreate --no-deps studio ||
+      die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
+    preflight_all
+    [[ -n "$(containers false)" ]] || die "После обновления studio не запущен"
+    auth_check || die "Studio не прошёл HTTP-проверку: возможно, порт 7080 обслуживает прежний сервер"
+    printf '%s\n' "$after" > "$deployed_marker"
+    echo "Обновлён только работающий ACHEWIW Studio"
+  elif [[ -z "$running" ]]; then
+    echo "ACHEWIW был остановлен и остался остановленным; для запуска: start"
+  else
+    echo "Git уже актуален, контейнер не перезапускался"
+  fi
+}
+
+case "$ACTION" in
+  start) run_start; exit 0 ;;
+  restart) run_restart; exit 0 ;;
+  update) run_update; exit 0 ;;
+  rebuild) run_rebuild; exit 0 ;;
+  auth-check) auth_check; exit 0 ;;
+  monitor-start) monitor_start || die "Не удалось включить собственный монитор; другие службы не изменены"; exit 0 ;;
+esac
+
+printf 'ACHEWIW: %s (только %s; Ollama и другие проекты не управляются)\n' "$ACTION" "$WORKSPACE"
+if [[ "$ACTION" == status ]]; then
+  ids="$(containers true)" || die "Не удалось прочитать Docker containers"
+  if [[ -z "$ids" ]]; then
+    echo "Контейнеров с Compose-проектом ACHEWIW не найдено."
+  else
+    while IFS= read -r id; do
+      [[ -z "$id" ]] && continue
+      if verify_owned "$id"; then
+        echo "Подтверждённый ACHEWIW-контейнер: $id"
+      else
+        echo "ВНИМАНИЕ: контейнер с похожим Compose-именем НЕ подтверждён: $id (не останавливать)"
+      fi
+    done <<< "$ids"
+  fi
+  port_status
+  monitor_status
+  exit 0
+fi
+
+ids="$(containers false)" || die "Не удалось получить список контейнеров — выключение отменено"
+if [[ -z "$ids" ]]; then
+  echo "Управляемые Docker-контейнеры ACHEWIW уже остановлены или ещё не созданы."
+else
+  # Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
+  owned=()
+  while IFS= read -r id; do
+    [[ -z "$id" ]] && continue
+    verify_owned "$id" || die "Контейнер $id не имеет ВСЕХ разрешающих меток ACHEWIW. НИЧЕГО не останавливаем."
+    owned+=("$id")
+  done <<< "$ids"
+
+  printf 'Проверено %d контейнер(ов) ACHEWIW. Остановка только их.\n' "${#owned[@]}"
+  for id in "${owned[@]}"; do
+    verify_owned "$id" || die "Метки контейнера $id изменились. Остановка прервана."
+    docker stop --time 60 "$id"
+  done
+fi
+
+remaining="$(containers false)" || die "Не удалось проверить результат выключения"
+[[ -z "$remaining" ]] || die "Есть запущенные контейнеры с проектным именем ACHEWIW. Проверьте вручную."
+if [[ "$unit_owned" == true ]]; then
+  # This unit is explicitly linked from /1tbdisk/achewiw/ops.
+  systemctl --user stop "$UNIT" || die "ACHEWIW Docker остановлен, но собственный монитор не удалось остановить."
+  echo "Остановлен собственный хостовый монитор ACHEWIW."
+fi
+echo "Управляемые контейнеры ACHEWIW остановлены; база, образы и файлы не удалены."
+port_status
+echo "Запуска и управления другими службами этот скрипт не выполняет."
+ ||
+       ! printf '%s\n' "$headers" | grep -Eiq '^X-ACHEWIW-Auth:[[:space:]]*private-vpn-no-password[[:space:]]*
+  done
+}
+
+# Unlike restart, rebuild explicitly creates a NEW image and recreates ONLY the
+# verified ACHEWIW studio container. No docker compose down, no pruning.
+run_rebuild() {
+  preflight_all
+  prepare_compose
+  local running current
+  running="$(containers false)" || die "Не удаётся прочитать собственные контейнеры"
+  if [[ -z "$running" ]]; then
+    port_free
+    die "ACHEWIW остановлен: rebuild не запускает ранее остановленный проект. Используй start отдельно."
+  fi
+  echo "Проверено: пересборка только собственного контейнера ACHEWIW Studio."
+  compose up -d --build --force-recreate --no-deps studio ||
+    die "Не удалось пересобрать ACHEWIW. Данные data/ и остальные контейнеры не тронуты."
+  preflight_all
+  [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW после пересборки не запущен"
+  auth_check || die "Новая сборка не прошла проверку отсутствия пароля"
+  current="$(git -C "$WORKSPACE" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ -n "$current" ]]; then
+    [[ ! -L "$WORKSPACE/data/.achewiw-deployed-commit" ]] ||
+      die "Недопустимый симлинк маркера развёртывания"
+    printf '%s\n' "$current" > "$WORKSPACE/data/.achewiw-deployed-commit"
+  fi
+  echo "ACHEWIW: новая сборка подтверждена. Никаких паролей."
+}
+
+run_update() {
+  command -v git >/dev/null 2>&1 || die "Git не установлен"
+  [[ -d "$WORKSPACE/.git" && ! -L "$WORKSPACE/.git" ]] || die "Не найден Git checkout"
+  preflight_all
+  local origin branch dirty running before after
+  origin="$(git -C "$WORKSPACE" remote get-url origin)" || die "Нет origin"
+  case "$origin" in
+    https://github.com/musikfed/achewiw|https://github.com/musikfed/achewiw.git|git@github.com:musikfed/achewiw|git@github.com:musikfed/achewiw.git) ;;
+    *) die "Чужой Git origin: $origin. Обновление отменено" ;;
+  esac
+  branch="$(git -C "$WORKSPACE" symbolic-ref --quiet --short HEAD)" ||
+    die "Detached HEAD; ветку автоматически не переключаем"
+  [[ "$branch" == feature/technical-epub-first ]] ||
+    die "Текущая ветка $branch; рабочая Compose-версия: feature/technical-epub-first. Автопереключения нет"
+  dirty="$(git -C "$WORKSPACE" status --porcelain --untracked-files=normal)" ||
+    die "Нельзя проверить Git status"
+  [[ -z "$dirty" ]] || die "Есть незакоммиченные/неотслеживаемые файлы; никакого reset/clean"
+  running="$(containers false)" || die "Нельзя проверить состояние контейнеров"
+  if [[ -n "$running" ]]; then prepare_compose; fi
+  before="$(git -C "$WORKSPACE" rev-parse --short HEAD)"
+  git -C "$WORKSPACE" fetch --no-tags origin \
+    "+refs/heads/$branch:refs/remotes/origin/$branch" || die "Git fetch не выполнен"
+  git -C "$WORKSPACE" merge-base --is-ancestor HEAD "refs/remotes/origin/$branch" ||
+    die "Ветки разошлись; fast-forward невозможен, файлы не сбрасываем"
+  git -C "$WORKSPACE" merge --ff-only "refs/remotes/origin/$branch" ||
+    die "Git fast-forward не выполнен"
+  after="$(git -C "$WORKSPACE" rev-parse --short HEAD)"
+  local deployed_marker="$WORKSPACE/data/.achewiw-deployed-commit" deployed=""
+  [[ ! -L "$deployed_marker" ]] || die "Маркер развёртывания не может быть ссылкой"
+  if [[ -f "$deployed_marker" ]]; then
+    deployed="$(cat "$deployed_marker")" || die "Нельзя прочитать локальный маркер сборки"
+  fi
+  echo "ACHEWIW: Git $before -> $after; .env, data/, Ollama не изменены"
+  if [[ -n "$running" && ( "$before" != "$after" || "$deployed" != "$after" ) ]]; then
+    preflight_all
+    prepare_compose
+    compose up -d --build --force-recreate --no-deps studio ||
+      die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
+    preflight_all
+    [[ -n "$(containers false)" ]] || die "После обновления studio не запущен"
+    auth_check || die "Studio не прошёл HTTP-проверку: возможно, порт 7080 обслуживает прежний сервер"
+    printf '%s\n' "$after" > "$deployed_marker"
+    echo "Обновлён только работающий ACHEWIW Studio"
+  elif [[ -z "$running" ]]; then
+    echo "ACHEWIW был остановлен и остался остановленным; для запуска: start"
+  else
+    echo "Git уже актуален, контейнер не перезапускался"
+  fi
+}
+
+case "$ACTION" in
+  start) run_start; exit 0 ;;
+  restart) run_restart; exit 0 ;;
+  update) run_update; exit 0 ;;
+  rebuild) run_rebuild; exit 0 ;;
+  auth-check) auth_check; exit 0 ;;
+  monitor-start) monitor_start || die "Не удалось включить собственный монитор; другие службы не изменены"; exit 0 ;;
+esac
+
+printf 'ACHEWIW: %s (только %s; Ollama и другие проекты не управляются)\n' "$ACTION" "$WORKSPACE"
+if [[ "$ACTION" == status ]]; then
+  ids="$(containers true)" || die "Не удалось прочитать Docker containers"
+  if [[ -z "$ids" ]]; then
+    echo "Контейнеров с Compose-проектом ACHEWIW не найдено."
+  else
+    while IFS= read -r id; do
+      [[ -z "$id" ]] && continue
+      if verify_owned "$id"; then
+        echo "Подтверждённый ACHEWIW-контейнер: $id"
+      else
+        echo "ВНИМАНИЕ: контейнер с похожим Compose-именем НЕ подтверждён: $id (не останавливать)"
+      fi
+    done <<< "$ids"
+  fi
+  port_status
+  monitor_status
+  exit 0
+fi
+
+ids="$(containers false)" || die "Не удалось получить список контейнеров — выключение отменено"
+if [[ -z "$ids" ]]; then
+  echo "Управляемые Docker-контейнеры ACHEWIW уже остановлены или ещё не созданы."
+else
+  # Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
+  owned=()
+  while IFS= read -r id; do
+    [[ -z "$id" ]] && continue
+    verify_owned "$id" || die "Контейнер $id не имеет ВСЕХ разрешающих меток ACHEWIW. НИЧЕГО не останавливаем."
+    owned+=("$id")
+  done <<< "$ids"
+
+  printf 'Проверено %d контейнер(ов) ACHEWIW. Остановка только их.\n' "${#owned[@]}"
+  for id in "${owned[@]}"; do
+    verify_owned "$id" || die "Метки контейнера $id изменились. Остановка прервана."
+    docker stop --time 60 "$id"
+  done
+fi
+
+remaining="$(containers false)" || die "Не удалось проверить результат выключения"
+[[ -z "$remaining" ]] || die "Есть запущенные контейнеры с проектным именем ACHEWIW. Проверьте вручную."
+if [[ "$unit_owned" == true ]]; then
+  # This unit is explicitly linked from /1tbdisk/achewiw/ops.
+  systemctl --user stop "$UNIT" || die "ACHEWIW Docker остановлен, но собственный монитор не удалось остановить."
+  echo "Остановлен собственный хостовый монитор ACHEWIW."
+fi
+echo "Управляемые контейнеры ACHEWIW остановлены; база, образы и файлы не удалены."
+port_status
+echo "Запуска и управления другими службами этот скрипт не выполняет."
+; then
+      die "$label отвечает HTTP 200, но НЕ подтверждает новую ACHEWIW Studio. Возможен чужой сервер, старый контейнер или прокси."
+    fi
+    echo "ACHEWIW: $label отвечает HTTP 200; подтверждена новая Studio без HTTP Basic."
   done
 }
 
