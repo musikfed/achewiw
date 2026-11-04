@@ -116,7 +116,7 @@ api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
 class SceneBlock(BaseModel):
     """Author-described segment; generated text never auto-accepted."""
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, pattern=r"^[0-9a-f]{32}$")
-    description: str = Field(min_length=4, max_length=4000)
+    description: str = Field(default="", max_length=4000)
     target_words: int = Field(default=350, ge=80, le=1000)
     requires: list[str] = Field(default_factory=list, max_length=20)
     introduces: list[str] = Field(default_factory=list, max_length=20)
