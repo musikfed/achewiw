@@ -56,14 +56,14 @@ class EditorialLayoutTests(unittest.TestCase):
         self.assertTrue({"workspace", "page-shell", "work-navigator",
                          "hero-copy", "monitor-grid", "export-grid"} <= parser.classes)
         self.assertTrue({"editor", "bookPreview", "monitorCpu", "storyText",
-                         "newProject"} <= parser.ids)
+                         "newProject", "monitorToggle", "monitorGrid"} <= parser.ids)
 
     def test_all_assets_are_busted_to_one_visual_release(self):
         parser = Structure()
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
         self.assertEqual(len(urls), 4)
-        self.assertTrue(all("v=20261104-editorial-v5" in u for u in urls))
+        self.assertTrue(all("v=20261104-editorial-v6" in u for u in urls))
         self.assertTrue(all(u.startswith("/static/") for u in urls))
 
     def test_typography_and_responsive_layout_rules(self):
@@ -77,6 +77,12 @@ class EditorialLayoutTests(unittest.TestCase):
             self.assertRegex(CSS, rf"@media\s*\((?:min|max)-width:{viewport}px\)")
         self.assertIn(".actions >", CSS)
         self.assertIn("min-height:44px", CSS)
+
+    def test_monitor_can_fold_and_uses_compact_card_spacing(self):
+        self.assertIn('class="monitor-controls"', HTML)
+        self.assertIn('aria-expanded="true"', HTML)
+        self.assertIn("monitor-collapsed .monitor-grid", CSS)
+        self.assertIn(".monitor-item{", CSS)
 
     def test_css_braces_are_balanced(self):
         cleaned = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
