@@ -171,12 +171,56 @@ async function saveAuditDecision(){
   }catch(e){toast('Ошибка сохранения решения: '+e.message)}
   finally{button.disabled=false}
 }
-function renderScenes(){$('#sceneCards').innerHTML=project.scenes.map((s,i)=>'<article class="scene" data-index="'+i+'"><div class="sceneTop"><strong>Сцена '+(i+1)+'</strong><button class="removeScene" data-index="'+i+'">Удалить</button></div><div class="sceneFields">'+[['title','Название'],['active_objects','Активные объекты (через запятую)'],['anchor','Якорь-напоминание'],['tempo','Темп'],['reader_info','Информация / подсказки'],['hook','Крючок в конце']].map(([field,label])=>'<label>'+label+(field==='reader_info'||field==='hook'?'<textarea data-scene-field="'+field+'" rows="2">'+escaped(s[field])+'</textarea>':'<input data-scene-field="'+field+'" value="'+escaped(Array.isArray(s[field])?s[field].join(', '):s[field])+'">')+'</label>').join('')+'</div></article>').join('');document.querySelectorAll('.removeScene').forEach(b=>b.onclick=()=>{collectScenes();if(confirm('Удалить сцену?')){project.scenes.splice(Number(b.dataset.index),1);renderScenes();renderWriting()}})}
+function renderScenes(){
+ const type=project.work_type||'fiction',unit=workModes[type]?.part||'Сцена';
+ const fields=type==='technical'?[
+  ['title','Название раздела'],['active_objects','Ключевые термины (через запятую)'],
+  ['anchor','Проверяемый тезис / задача'],['tempo','Уровень сложности'],
+  ['reader_info','Доказательства и источники'],['hook','Что проверить перед выпуском']
+ ]:type==='speech'?[
+  ['title','Название части речи'],['active_objects','Ключевые тезисы'],
+  ['anchor','Цель выступления'],['tempo','Темп и минуты'],['reader_info','Переходы и аудитория'],
+  ['hook','Финальная фраза / приглашение к действию']
+ ]:type==='nonfiction'?[
+  ['title','Название главы'],['active_objects','Главные идеи'],
+  ['anchor','Основной тезис'],['tempo','Сложность'],['reader_info','Примеры, ссылки, подтверждения'],
+  ['hook','Вывод главы']
+ ]:[
+  ['title','Название'],['active_objects','Активные объекты (через запятую)'],
+  ['anchor','Якорь-напоминание'],['tempo','Темп'],['reader_info','Информация / подсказки'],
+  ['hook','Крючок в конце']
+ ];
+ $('#sceneCards').innerHTML=project.scenes.map((s,i)=>
+  '<article class="scene" data-index="'+i+'"><div class="sceneTop"><strong>'+
+  escaped(unit)+' '+(i+1)+'</strong><button class="removeScene" data-index="'+i+'">Удалить</button></div>'+
+  '<div class="sceneFields">'+fields.map(([field,label])=>
+    '<label>'+label+(field==='reader_info'||field==='hook'?
+    '<textarea data-scene-field="'+field+'" rows="2">'+escaped(s[field])+'</textarea>':
+    '<input data-scene-field="'+field+'" value="'+escaped(Array.isArray(s[field])?s[field].join(', '):s[field])+'">')+
+    '</label>').join('')+'</div></article>').join('');
+ document.querySelectorAll('.removeScene').forEach(b=>b.onclick=()=>{
+  collectScenes();if(confirm('Удалить '+unit.toLowerCase()+'?')){
+    project.scenes.splice(Number(b.dataset.index),1);renderScenes();renderWriting();
+  }
+ });
+}
 function collectScenes(){document.querySelectorAll('.scene').forEach(card=>{const s=project.scenes[Number(card.dataset.index)];card.querySelectorAll('[data-scene-field]').forEach(el=>{s[el.dataset.sceneField]=el.dataset.sceneField==='active_objects'?el.value.split(',').map(x=>x.trim()).filter(Boolean):el.value})})}
 function renderWriting(){const select=$('#writingScene'),old=select.value;select.innerHTML=project.scenes.map(s=>'<option value="'+escaped(s.id)+'">'+escaped(s.title)+'</option>').join('');if(project.scenes.some(s=>s.id===old))select.value=old;switchWriting()}
 function switchWriting(){const s=project.scenes.find(s=>s.id===$('#writingScene').value);$('#storyText').value=s?.text??'';previousSceneId=s?.id??null}
 function collectText(){const s=project.scenes.find(s=>s.id===previousSceneId);if(s)s.text=$('#storyText').value}
-async function renderStats(){if(!project)return;try{const data=await api('/projects/'+project.id+'/stats');$('#stats').innerHTML='<h3>Всего: '+data.total_words+' слов · ≈ '+data.minutes_read_aloud+' мин вслух (150 слов/мин)</h3>'+data.scenes.map(s=>'<div class="stat"><strong>'+escaped(s.title)+'</strong><span>'+s.words+' слов · '+s.minutes_read_aloud+' мин · <span class="'+(s.overloaded?'warning':'')+'">'+s.active_objects+' сущностей '+(s.overloaded?'⚠ перегруз':'✓')+'</span></span></div>').join('')}catch(e){toast(e.message)}}
+async function renderStats(){
+ if(!project)return;
+ try{
+  const data=await api('/projects/'+project.id+'/stats');
+  const isStory=(project.work_type||'fiction')==='fiction';
+  $('#stats').innerHTML='<h3>Объём: '+data.total_words+' слов · ≈ '+data.minutes_read_aloud+
+    ' мин произнесения (150 слов/мин)</h3>'+
+    data.scenes.map(s=>'<div class="stat"><strong>'+escaped(s.title)+'</strong><span>'+
+    s.words+' слов · '+s.minutes_read_aloud+' мин'+
+    (isStory?' · '+s.active_objects+' сущностей'+(s.overloaded?' ⚠ перегруз':' ✓'):'')+
+    '</span></div>').join('');
+ }catch(e){toast(e.message)}
+}
 function renderGeneration(job){
   if(!project || job.project_id!==project.id)return;
   const ongoing=['queued','running'].includes(job.status);
