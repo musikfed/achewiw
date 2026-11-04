@@ -132,7 +132,7 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -418,8 +418,8 @@ async function restoreLatestGeneration(){
   if(!project)return;
   try{
     const jobs=await api('/projects/'+project.id+'/ai/jobs',{cache:'no-store'});
-    if(jobs.length){
-      const latest=jobs[0];
+    const latest=jobs.find(j=>j.mode!=='book');
+    if(latest){
       activeGenerationJobId=['queued','running'].includes(latest.status)?latest.id:null;
       renderGeneration(latest);
     } else {
@@ -430,15 +430,18 @@ async function restoreLatestGeneration(){
   }catch(e){toast('Не удалось восстановить журнал генерации: '+e.message)}
 }
 
-function setBookReaderMode(draft){
+function setBookReaderMode(draft, forceRefresh=true){
  bookDraftMode=!!draft && !!bookJobId;
  $('#bookPreview').hidden=bookDraftMode;
  $('#bookDraftPreview').hidden=!bookDraftMode;
  $('#bookPreviewLabel').hidden=bookDraftMode;
+ $('#bookSavedToolbar').hidden=bookDraftMode;
+ $('#bookPrintWarning').hidden=bookDraftMode;
+ $('#bookWarning').hidden=bookDraftMode;
  $('#bookViewDraft').hidden=!bookJobId||bookDraftMode;
  $('#bookViewSaved').hidden=!bookJobId||!bookDraftMode;
  $('#bookDraftRefresh').hidden=!bookDraftMode;
- if(bookDraftMode)refreshBookDraft(true);
+ if(bookDraftMode&&forceRefresh)refreshBookDraft(true);
 }
 async function refreshBookDraft(force=false){
  if(!project||!bookJobId||bookDraftBusy||$('#book').hidden||!bookDraftMode)return;
@@ -504,7 +507,7 @@ function updateBookProduction(job){
    'Все главы приняты в рукопись. Ниже — сохранённая книга, доступная для экспорта.':
    'Ниже показывается создаваемая книга, НЕ старый синопсис. Экспорт PDF/EPUB пока содержит только сохранённую авторскую рукопись. Прими готовые главы отдельной кнопкой.';
  if(accepted)bookDraftMode=false;
- setBookReaderMode(bookDraftMode);
+ setBookReaderMode(bookDraftMode,false);
 }
 
 function renderFullBookJob(job){
@@ -554,6 +557,7 @@ async function restoreLatestBook(){
    bookJobId=jobs[0].id;
    bookDraftMode=true;
    bookDraftWords=-1;
+   bookDraftFetchedAt=0;
    await refreshFullBook();
  }else{
    $('#fullBookStatus').textContent='Укажи целевой объём, утверди каркас и нажми «Написать всю книгу».';
@@ -582,6 +586,7 @@ async function startFullBook(){
    bookJobId=job.id;
    bookDraftMode=true;
    bookDraftWords=-1;
+   bookDraftFetchedAt=0;
    renderFullBookJob(job);
    showTab('book');
    toast('Написание книги запущено. Слова и главы сохраняются на сервере.');
