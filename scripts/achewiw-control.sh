@@ -252,14 +252,20 @@ run_update() {
   git -C "$WORKSPACE" merge --ff-only "refs/remotes/origin/$branch" ||
     die "Git fast-forward не выполнен"
   after="$(git -C "$WORKSPACE" rev-parse --short HEAD)"
+  local deployed_marker="$WORKSPACE/data/.achewiw-deployed-commit" deployed=""
+  [[ ! -L "$deployed_marker" ]] || die "Маркер развёртывания не может быть ссылкой"
+  if [[ -f "$deployed_marker" ]]; then
+    deployed="$(cat "$deployed_marker")" || die "Нельзя прочитать локальный маркер сборки"
+  fi
   echo "ACHEWIW: Git $before -> $after; .env, data/, Ollama не изменены"
-  if [[ -n "$running" && "$before" != "$after" ]]; then
+  if [[ -n "$running" && ( "$before" != "$after" || "$deployed" != "$after" ) ]]; then
     preflight_all
     prepare_compose
     compose up -d --build --no-deps studio ||
       die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
     preflight_all
     [[ -n "$(containers false)" ]] || die "После обновления studio не запущен"
+    printf '%s\n' "$after" > "$deployed_marker"
     echo "Обновлён только работающий ACHEWIW Studio"
   elif [[ -z "$running" ]]; then
     echo "ACHEWIW был остановлен и остался остановленным; для запуска: start"
