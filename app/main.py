@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
+from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
@@ -87,6 +88,7 @@ def init_db() -> None:
             "(id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL)"
         )
         init_jobs(connection)
+        init_illustrations(connection)
         mark_interrupted(connection)
 
 
@@ -386,6 +388,72 @@ def delete_project(project_id: str):
         connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
     return Response(status_code=204)
+
+
+@api.get("/projects/{project_id}/illustrations")
+def illustrations_list(project_id: str):
+    get_project(project_id)
+    with db() as connection:
+        return list_illustrations(connection, project_id)
+
+
+@api.post("/projects/{project_id}/illustrations", status_code=201)
+async def illustrations_upload(project_id: str, file: UploadFile = File(...),
+                               scene_id: str = Form(...), caption: str = Form("")):
+    project = get_project(project_id)
+    if scene_id not in {scene.id for scene in project.scenes}:
+        raise HTTPException(422, "Для иллюстрации выбери существующую главу или сцену")
+    if file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(415, "Загрузи PNG, JPEG или WebP")
+    if len(caption) > 1000:
+        raise HTTPException(422, "Слишком длинная подпись")
+    payload = await file.read(12 * 1024 * 1024 + 1)
+    try:
+        with db() as connection:
+            return save_illustration(DATA_DIR, connection,
+                 project_id=project_id, scene_id=scene_id,
+                 caption=caption, content=payload, created_at=utc_now())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/illustrations/{asset_id}.png")
+def illustrations_image(project_id: str, asset_id: str):
+    get_project(project_id)
+    with db() as connection:
+        if not any(rec["id"] == asset_id for rec in list_illustrations(connection, project_id)):
+            raise HTTPException(404, "Иллюстрация не найдена")
+    try:
+        path = illustration_path(DATA_DIR, project_id, asset_id)
+    except ValueError:
+        raise HTTPException(404, "Иллюстрация не найдена") from None
+    if path.is_symlink() or not path.is_file():
+        raise HTTPException(404, "Файл иллюстрации отсутствует")
+    return FileResponse(path, media_type="image/png",
+                        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
+
+
+@api.delete("/projects/{project_id}/illustrations/{asset_id}", status_code=204)
+def illustrations_delete(project_id: str, asset_id: str):
+    get_project(project_id)
+    try:
+        path = illustration_path(DATA_DIR, project_id, asset_id)
+    except ValueError:
+        raise HTTPException(404, "Иллюстрация не найдена") from None
+    with db() as connection:
+        removed = connection.execute(
+            "DELETE FROM illustrations WHERE id=? AND project_id=?",
+            (asset_id, project_id)).rowcount
+    if not removed:
+        raise HTTPException(404, "Иллюстрация не найдена")
+    if not path.is_symlink():
+        path.unlink(missing_ok=True)
+    return Response(status_code=204)
+
+
+def illustrations_for_book(project_id: str) -> list[dict]:
+    with db() as connection:
+        return export_illustrations(DATA_DIR, connection, project_id)
 
 
 @api.get("/projects/{project_id}/stats")
