@@ -171,6 +171,35 @@ def test_polish_requires_approval_and_keeps_previous_text(studio):
     assert studio.get("/api/projects/"+p["id"]).json()["scenes"][0]["text"]=="Дверь медленно поддалась."
 
 
+
+def test_scene_proposal_uses_same_safe_revision_mechanism(studio):
+    p,sid,bid=make_story(studio)
+    job=insert_ready(p["id"],sid,None,"Он открыл дверь.","Дверь открылась.",mode="scene")
+    assert studio.get("/api/projects/"+p["id"]).json()["scenes"][0]["text"]=="Он открыл дверь."
+    result=studio.post("/api/ai/jobs/"+job+"/accept",json={"confirm":True})
+    assert result.status_code==200,result.text
+    assert result.json()["mode"]=="scene"
+    assert studio.get("/api/projects/"+p["id"]).json()["scenes"][0]["text"]=="Дверь открылась."
+    revisions=studio.get(f"/api/projects/{p['id']}/scenes/{sid}/revisions").json()
+    assert len(revisions)==1
+
+
+def test_manual_rewrite_marks_old_accepted_evidence_unverified(studio):
+    p,sid,bid=make_story(studio)
+    text="Ключ лежал под дверью."
+    job=insert_ready(p["id"],sid,bid,"Он открыл дверь.",text)
+    assert studio.post("/api/ai/jobs/"+job+"/accept",json={"confirm":True}).status_code==200
+    saved=studio.get("/api/projects/"+p["id"]).json()
+    assert saved["scenes"][0]["blocks"][0]["evidence_stale"] is False
+    saved["scenes"][0]["text"]="Автор переписал сцену без ключа."
+    reply=studio.put("/api/projects/"+p["id"],json=saved)
+    assert reply.status_code==200,reply.text
+    assert reply.json()["scenes"][0]["blocks"][0]["evidence_stale"] is True
+    report=studio.get("/api/projects/"+p["id"]+"/continuity")
+    assert report.status_code==200
+    assert any(row["code"]=="stale_evidence" for row in report.json()["causality"]["issues"])
+
+
 def test_deterministic_causality_and_cliches_not_claimed_as_ai_detector(studio):
     p,sid,bid=make_story(studio)
     parsed=main.Project.model_validate(p)
