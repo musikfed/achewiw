@@ -1,11 +1,13 @@
 """ACHEWIW StoryEngine — single-user writing studio; Ollama runs on the Linux host."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import sqlite3
+import time
 import re
 import secrets
-import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -19,6 +21,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
+from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
+                             recent_jobs, get_job, active_job, estimate_progress,
+                             LIMIT, MAX_OUTPUT)
 
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
@@ -55,6 +60,11 @@ def init_db() -> None:
             "CREATE TABLE IF NOT EXISTS projects "
             "(id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL)"
         )
+        init_jobs(connection)
+        mark_interrupted(connection)
+
+
+_background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -62,7 +72,13 @@ async def lifespan(_app: FastAPI):
     if not PASSWORD:
         raise RuntimeError("ACHEWIW_PASSWORD must be set in .env")
     init_db()
-    yield
+    try:
+        yield
+    finally:
+        for task in list(_background_tasks):
+            task.cancel()
+        if _background_tasks:
+            await asyncio.gather(*_background_tasks, return_exceptions=True)
 
 
 app = FastAPI(title="ACHEWIW StoryEngine", version="0.1.0", lifespan=lifespan)
@@ -352,35 +368,145 @@ async def list_models():
         raise HTTPException(503, f"Ollama недоступна на хосте: {error}") from error
 
 
-@api.post("/ai")
+class UnloadRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=200)
+    confirm_shared_model: bool = False
+
+
+@api.post("/models/unload")
+async def unload_model(request: UnloadRequest):
+    """Unloads ONE explicitly selected Ollama model; never resets/clears GPU.
+
+    Shared Ollama may have other clients using the same model. No API can
+    establish exclusive ownership: require an explicit informed confirmation.
+    """
+    if not request.confirm_shared_model:
+        raise HTTPException(422, "Подтверди, что модель в общей Ollama может использоваться другими программами")
+    with db() as connection:
+        if active_job(connection):
+            raise HTTPException(409, "Генерация ACHEWIW выполняется; освобождение памяти запрещено")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=3)) as client:
+            state = await client.get(OLLAMA_BASE_URL + "/api/ps")
+            state.raise_for_status()
+            names = [m["name"] for m in state.json().get("models", [])
+                     if isinstance(m, dict) and isinstance(m.get("name"), str)]
+            if request.model not in names:
+                return {"status": "already_unloaded", "model": request.model}
+            response = await client.post(
+                OLLAMA_BASE_URL + "/api/generate",
+                json={"model": request.model, "keep_alive": 0, "stream": False},
+            )
+            response.raise_for_status()
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        raise HTTPException(502, "Не удалось запросить выгрузку модели через Ollama") from exc
+    return {"status": "unload_requested", "model": request.model,
+            "note": "Обнови мониторинг: фактическая свободная VRAM зависит и от других процессов"}
+
+
+async def execute_generation(job_id: str, payload: dict, mode: str) -> None:
+    """Stream tokens into SQLite without depending on the browser connection."""
+    began = time.monotonic()
+    output = ""
+    estimated_tokens = 0
+    last_saved = 0.0
+    try:
+        with db() as connection:
+            update_job(connection, job_id, stage="Ожидание ответа Ollama")
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=8, read=240, write=30, pool=10)) as client:
+            async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    if not isinstance(item, dict):
+                        raise ValueError("Неверный формат ответа Ollama")
+                    if item.get("error"):
+                        raise ValueError("Ollama вернула ошибку во время генерации")
+                    piece = item.get("response", "")
+                    if not isinstance(piece, str):
+                        raise ValueError("Ожидался текст ответа Ollama")
+                    output += piece
+                    if len(output) > MAX_OUTPUT:
+                        raise ValueError("Достигнут предел длины черновика")
+                    elapsed = time.monotonic() - began
+                    percent, eta, estimated_tokens = estimate_progress(len(output), elapsed)
+                    if elapsed - last_saved >= 1.0 and (piece or item.get("done")):
+                        with db() as connection:
+                            update_job(connection, job_id, stage="Генерация текста",
+                                       output=output, percent=percent, eta_seconds=eta,
+                                       estimated_tokens=estimated_tokens)
+                        last_saved = elapsed
+                    if item.get("done"):
+                        break
+        if not output.strip():
+            raise ValueError("Ollama вернула пустой ответ")
+        suggested = None
+        parse_error = None
+        if mode == "outline":
+            try:
+                suggested = [scene.model_dump() for scene in parse_outline(output)]
+            except (ValueError, TypeError) as exc:
+                parse_error = "Ответ не является корректной структурой сцен"
+        with db() as connection:
+            update_job(connection, job_id, status="ready", stage="Готово · ожидает решения автора",
+                       output=output, percent=100, eta_seconds=0,
+                       estimated_tokens=estimated_tokens, parse_error=parse_error,
+                       suggested_scenes=suggested)
+    except asyncio.CancelledError:
+        with db() as connection:
+            update_job(connection, job_id, status="interrupted", stage="Остановлено при закрытии сервера",
+                       output=output, error="Часть черновика сохранена; сервер был остановлен",
+                       estimated_tokens=estimated_tokens)
+        raise
+    except (httpx.HTTPError, ValueError, json.JSONDecodeError, sqlite3.Error) as exc:
+        # Never publish raw upstream URL, filesystem paths or prompt content.
+        with db() as connection:
+            update_job(connection, job_id, status="error", stage="Генерация завершилась ошибкой",
+                       output=output, error="Не удалось завершить запрос к Ollama; сохранён полученный текст",
+                       estimated_tokens=estimated_tokens)
+
+
+@api.post("/ai", status_code=202)
 async def generate(request: AIRequest):
+    """Enqueue durable generation before returning. Page reload cannot abort it."""
     project = get_project(request.project_id)
     prompt = build_prompt(project, request)
     payload = {
         "model": request.model, "prompt": prompt,
-        "stream": False, "think": False,
-        "options": {"temperature": 0.7, "num_predict": 2400},
+        "stream": True, "think": False, "keep_alive": "5m",
+        "options": {"temperature": 0.7, "num_predict": LIMIT},
     }
     if request.mode == "outline":
         payload["format"] = "json"
+    job_id = uuid.uuid4().hex
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=8)) as client:
-            response = await client.post(OLLAMA_BASE_URL + "/api/generate", json=payload)
-            response.raise_for_status()
-        raw = response.json().get("response", "").strip()
-    except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(502, f"Ошибка Ollama на хосте: {error}") from error
-    if not raw:
-        raise HTTPException(502, "Ollama вернула пустой ответ")
-    result = {"result": raw, "mode": request.mode, "model": request.model}
-    if request.mode == "outline":
-        try:
-            result["suggested_scenes"] = [
-                scene.model_dump() for scene in parse_outline(raw)
-            ]
-        except (ValueError, TypeError) as error:
-            result["parse_error"] = str(error)
+        with db() as connection:
+            record = create_job(connection, job_id, request.project_id,
+                                request.mode, request.model, request.scene_id)
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(409, "Уже выполняется другая генерация ACHEWIW. Дождись её завершения.") from exc
+    task = asyncio.create_task(execute_generation(job_id, payload, request.mode))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return record
+
+
+@api.get("/ai/jobs/{job_id}")
+def generation_status(job_id: str):
+    with db() as connection:
+        result = get_job(connection, job_id)
+    if result is None:
+        raise HTTPException(404, "Задание генерации не найдено")
     return result
+
+
+@api.get("/projects/{project_id}/ai/jobs")
+def project_generation_history(project_id: str):
+    get_project(project_id)
+    with db() as connection:
+        return recent_jobs(connection, project_id)
 
 
 app.include_router(api)
