@@ -27,9 +27,17 @@ case "${1:-}" in
     ;;
   inspect)
     id="${@: -1}"
+    if [[ "$*" == *".HostConfig.NetworkMode"* ]]; then
+      if [[ "${TEST_LEGACY_FOREIGN_MOUNT:-}" == 1 ]]; then
+        printf '/achewiw-studio|host|/other-workspace/data\n'
+      else
+        printf '/achewiw-studio|host|%s/data\n' "$TEST_WORKSPACE"
+      fi
+      exit 0
+    fi
     if [[ "$id" == r0gue ]]; then
       printf 'achewiw|/other/workspace|studio|managed|/other/workspace\n'
-    elif [[ "${TEST_LEGACY:-}" == 1 ]]; then
+    elif [[ "${TEST_LEGACY:-}" == 1 && ! -e "$TEST_MIGRATED" ]]; then
       printf "achewiw|$TEST_WORKSPACE|studio|<no value>|<no value>\n"
     elif [[ "${TEST_WRONG_ROLE:-}" == 1 ]]; then
       printf 'achewiw|/1tbdisk/achewiw|unregistered|managed|$TEST_WORKSPACE\n'
@@ -44,6 +52,7 @@ case "${1:-}" in
       echo studio
     elif [[ "$*" == *" up -d --build --no-deps studio" || "$*" == *" up -d --build --force-recreate --no-deps studio" ]]; then
       printf running > "$TEST_STATE"
+      printf migrated > "$TEST_MIGRATED"
     else exit 55; fi
     ;;
   restart)
@@ -130,6 +139,7 @@ class ShutdownTests(unittest.TestCase):
             file.write_text(script, encoding="utf-8")
             file.chmod(0o755)
         self.curl_log = root / "curl.log"
+        self.migrated = root / "migrated"
         self.log = root / "docker.log"
         self.systemctl_log = root / "systemctl.log"
         self.unit_stopped = root / "unit.stopped"
@@ -143,6 +153,7 @@ class ShutdownTests(unittest.TestCase):
                         TEST_GIT_BRANCH="feature/technical-epub-first",
                         TEST_GIT_DIRTY="0", TEST_GIT_DIVERGED="0",
                         TEST_LOG=str(self.log), TEST_STATE=str(self.state),
+                        TEST_MIGRATED=str(self.migrated),
                         TEST_CURL_LOG=str(self.curl_log),
                         TEST_SYSTEMCTL_LOG=str(self.systemctl_log), TEST_UNIT_STOPPED=str(self.unit_stopped))
 
@@ -296,13 +307,34 @@ class ShutdownTests(unittest.TestCase):
         self.assertNotIn("stop --time", self.commands())
         self.assertTrue((self.workspace/"data/.achewiw-deployed-commit").exists())
 
-    def test_rebuild_refuses_foreign_or_legacy_container(self):
-        for extra in ({"TEST_ROGUE":"1"}, {"TEST_LEGACY":"1"}):
+    def test_rebuild_refuses_foreign_or_unverified_legacy_container(self):
+        for extra in ({"TEST_ROGUE":"1"}, {"TEST_LEGACY":"1", "TEST_LEGACY_FOREIGN_MOUNT":"1"}):
             with self.subTest(extra=extra):
                 self.log.unlink(missing_ok=True)
                 result = self.run_switch("rebuild", **extra)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("up -d", self.commands())
+
+    def test_verified_legacy_studio_is_migrated_only_by_rebuild(self):
+        result = self.run_switch("rebuild", TEST_LEGACY="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("старый контейнер ACHEWIW", result.stdout)
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertTrue(self.migrated.exists())
+        self.assertTrue((self.workspace / "data/.achewiw-deployed-commit").exists())
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_verified_legacy_is_migrated_via_update(self):
+        result = self.run_switch("update", TEST_LEGACY="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("merge --ff-only", self.gitlog.read_text())
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertTrue(self.migrated.exists())
+
+    def test_unverified_legacy_cannot_be_adopted_by_update(self):
+        result = self.run_switch("update", TEST_LEGACY="1", TEST_LEGACY_FOREIGN_MOUNT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("up -d", self.commands())
 
     def test_unidentified_http_200_is_not_accepted(self):
         result = self.run_switch("auth-check", TEST_HTTP_UNIDENTIFIED="1")
