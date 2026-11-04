@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
+from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
@@ -439,6 +440,77 @@ def download_manuscript_epub(project_id: str):
         headers={"Content-Disposition": 'attachment; filename="achewiw-book.epub"',
                  "Cache-Control": "no-store"},
     )
+
+
+@api.get("/projects/{project_id}/manuscript.docx")
+def download_manuscript_docx(project_id: str):
+    try:
+        body = manuscript_docx(get_project(project_id))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return Response(
+        content=body, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": 'attachment; filename="achewiw-book.docx"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+@api.get("/projects/{project_id}/manuscript.fb2")
+def download_manuscript_fb2(project_id: str):
+    try:
+        body = manuscript_fb2(get_project(project_id))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return Response(
+        content=body, media_type="application/xml; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="achewiw-book.fb2"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+@api.get("/projects/{project_id}/manuscript.pdf")
+def download_manuscript_pdf(project_id: str):
+    try:
+        body = manuscript_pdf(get_project(project_id))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return Response(content=body, media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="achewiw-book.pdf"',
+                             "Cache-Control": "no-store"})
+
+
+@api.get("/projects/{project_id}/manuscript.print.pdf")
+def download_print_proof_pdf(project_id: str):
+    try:
+        body = manuscript_pdf(get_project(project_id), print_proof=True)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return Response(content=body, media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="achewiw-print-proof-A5.pdf"',
+                             "X-Print-Status": "proof-not-pdfx",
+                             "Cache-Control": "no-store"})
+
+
+@api.get("/projects/{project_id}/publishing-preflight")
+def publishing_preflight(project_id: str):
+    from manuscript_core import chapter_listing
+    p = get_project(project_id)
+    book = chapter_listing(p)
+    return {
+        "work_type": p.work_type,
+        "title": p.title,
+        "written_sections": book["written_scenes"],
+        "total_sections": book["total_scenes"],
+        "unwritten": book["unwritten"],
+        "ready_for_reading_export": book["written_scenes"] > 0,
+        "print_proof": "available" if book["written_scenes"] else "not_ready",
+        "pdfx_status": "not_certified",
+        "notes": "A5 print PDF is a proof, NOT PDF/X. Confirm printer trim/bleed/ICC/fonts before publication.",
+    }
 
 
 @api.get("/monitoring")
