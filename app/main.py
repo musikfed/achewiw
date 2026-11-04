@@ -28,7 +28,7 @@ from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, max_attempts, count_words as book_words, init_book_tables,
-    create_book_chapters, chapters_for_job, book_summary, save_chapter)
+    create_book_chapters, chapters_for_job, book_summary, save_chapter, check_new_prose)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
@@ -1352,8 +1352,8 @@ async def execute_book(job_id: str) -> None:
                                 raise ValueError("Один фрагмент превышает лимит")
                             if part.get("done"):
                                 break
-                if book_words(generated) < 35:
-                    raise ValueError("Модель выдала слишком короткий фрагмент. Готовые главы сохранены.")
+                # Anti-loop guard: preserve existing chapter text on a repetitive answer.
+                check_new_prose(text, generated)
                 text = (text.rstrip() + "\n\n" + generated.strip()).strip()
                 attempts += 1
                 with db() as connection:
