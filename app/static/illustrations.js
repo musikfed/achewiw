@@ -52,7 +52,7 @@
       el('illustrationReleaseLLM').checked =
         localStorage.getItem(prefKey + 'releaseLLM') === '1';
       el('illustrationReleaseComfy').checked =
-        localStorage.getItem(prefKey + 'releaseComfy') !== '0';
+        localStorage.getItem(prefKey + 'releaseComfy') === '1';
     } catch {}
     return data.scene_id;
   }
