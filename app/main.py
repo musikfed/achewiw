@@ -1401,6 +1401,14 @@ async def resume_full_book(job_id: str):
             raise HTTPException(409, "Каркас изменён; продолжение запрещено")
         if any(fingerprint(originals[c["scene_id"]].text) != c["original_sha256"] for c in chapters):
             raise HTTPException(409, "Рукопись изменена; сохрани черновик перед новой генерацией")
+        # A previous run may have exhausted its bounded chunk budget.
+        # Explicit resume grants a fresh bounded batch without discarding text.
+        for chapter in chapters:
+            if not chapter["complete"] and chapter["attempts"] >= max_attempts(chapter["target_words"]):
+                connection.execute(
+                    "UPDATE ai_book_chapters SET attempts=0,updated_at=? "
+                    "WHERE job_id=? AND scene_id=?",
+                    (utc_now(), job_id, chapter["scene_id"]))
         connection.execute(
             "UPDATE ai_jobs SET status='queued',stage='Возобновление',error=NULL,updated_at=? WHERE id=?",
             (utc_now(), job_id))
