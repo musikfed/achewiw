@@ -32,7 +32,7 @@ test -f app/static/index.html
 test -f app/static/style.css
 test -f app/static/app.js
 test -f scripts/monitor-v2.sh
-grep -Fq "editorial-v7" app/static/index.html || die "Нет новой версии ассетов"
+grep -Fq "editorial-v8" app/static/index.html || die "Нет новой версии ассетов"
 bash -n scripts/achewiw-control.sh
 bash -n scripts/monitor-v2.sh
 
