@@ -13,7 +13,7 @@ cd /1tbdisk/achewiw
 bash scripts/diagnose-7080.sh
 ```
 
-**Исправление в текущей рабочей ветке:** `achewiw-control.sh rebuild` и `update` теперь допускают **однократную замену проверенного старого контейнера** ACHEWIW, даже если у него ещё нет новых служебных меток. Это не универсальное выключение Docker: проверяются `com.docker.compose.project=achewiw`, `service=studio`, полный `working_dir=/1tbdisk/achewiw`, имя `/achewiw-studio`, `network_mode=host`, а также точный bind-mount `/1tbdisk/achewiw/data → /data`. Если любой признак не совпадает (например, контейнер остался от **старого каталога** `/1tbdisk/PegineLab/projects/achewiw`), скрипт **останавливается без удаления и остановки чужих процессов**.
+**Исправление в текущей рабочей ветке:** `achewiw-control.sh rebuild` и `update` теперь допускают **однократную замену проверенного старого контейнера** ACHEWIW, даже если у него ещё нет новых служебных меток. Это не универсальное выключение Docker: проверяются `com.docker.compose.project=achewiw`, `service=studio`, полный `working_dir=/1tbdisk/achewiw`, имя `/achewiw-studio`, `network_mode=host`, а также точный bind-mount `/1tbdisk/achewiw/data → /data`. Дополнительно поддерживается однократная миграция экземпляра из прежней папки `/1tbdisk/PegineLab/projects/achewiw` **только если самой старой папки уже нет**, контейнер помечен проектом `achewiw`, сервисом `studio`, именем `/achewiw-studio`, использует `network_mode=host`, а его единственный проверяемый `/data`-bind соответствовал прежней папке. Если старый путь существует либо любая метка или mount не совпадают — скрипт останавливается. Он не удаляет соседние каталоги и не выключает другие проекты.
 
 Сначала получить новые файлы через Git, затем принудительно пересобрать только свой контейнер:
 
