@@ -40,7 +40,8 @@ def editorial_lint(text: str) -> dict[str, Any]:
         hits = len(re.findall(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", normalized))
         if hits:
             cliches.append({"phrase": phrase, "occurrences": hits})
-    paras = [s.strip() for s in re.split(r"\n\s*\n", normalized) if s.strip()]
+    # Preserve paragraph boundaries BEFORE whitespace normalization.
+    paras = [normalize(s) for s in re.split(r"\n\s*\n", text) if s.strip()]
     identical = [{"paragraph": p[:100], "occurrences": n} for p, n in
                  Counter(paras).items() if n > 1]
     return {"words": words(text), "cliches": cliches,
