@@ -70,7 +70,7 @@ jobs:
       - name: Install FastAPI and HTTPX for isolated API tests
         run: python3 -m pip install --disable-pip-version-check -r app/requirements.txt pytest
       - name: API generation, restart recovery, model-unload and auth tests
-        run: PYTHONPATH=app python3 -m pytest -q tests/test_app.py tests/test_book_generation_core.py
+        run: PYTHONPATH=app python3 -m pytest -q tests/test_app.py tests/test_book_generation_core.py tests/test_chapter_planning.py
       - name: Sequential GPU operations, optional Ollama-to-SDXL prompt and safe browser refresh
         run: |
           PYTHONPATH=app python3 -m pytest -q tests/test_gpu_scheduling.py
