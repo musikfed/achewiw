@@ -207,6 +207,19 @@ class ShutdownTests(unittest.TestCase):
                             TEST_UNIT_FRAGMENT="/other/unit").returncode, 0)
         self.assertNotIn("up -d", self.commands())
 
+    def test_start_with_blank_template_password_explains_configuration(self):
+        env_file = self.workspace / ".env"
+        env_file.write_text(
+            "ACHEWIW_USERNAME=author\nACHEWIW_PASSWORD=\nACHEWIW_MODEL=qwen3:8b\n"
+        )
+        self.state.write_text("stopped")
+        result = self.run_switch("start")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ACHEWIW_PASSWORD пустой", result.stderr)
+        self.assertNotIn("up -d", self.commands())
+        self.assertEqual(self.state.read_text(), "stopped")
+        self.assertNotIn("test-private", result.stderr)
+
     def test_restart_only_verified_studio_and_monitor(self):
         result = self.run_switch("restart", TEST_UNIT_STATE="loaded")
         self.assertEqual(result.returncode, 0, result.stderr)
