@@ -58,6 +58,11 @@ case "${1:-}" in
       [[ "$TEST_BAD_COMPOSE" != 1 ]] || exit 33
     elif [[ "$*" == *" config --services" ]]; then
       echo studio
+    elif [[ "$*" == *" build --no-cache studio" ]]; then
+      true
+    elif [[ "$*" == *" up -d --no-build --force-recreate --no-deps studio" ]]; then
+      printf running > "$TEST_STATE"
+      printf migrated > "$TEST_MIGRATED"
     elif [[ "$*" == *" up -d --build --no-deps studio" || "$*" == *" up -d --build --force-recreate --no-deps studio" ]]; then
       printf running > "$TEST_STATE"
       printf migrated > "$TEST_MIGRATED"
@@ -224,6 +229,16 @@ class ShutdownTests(unittest.TestCase):
         self.assertEqual(self.state.read_text(), "running")
         self.assertFalse(self.unit_stopped.exists())
         self.assertNotIn("stop --time", self.commands())
+
+    def test_no_cache_rebuild_is_project_scoped_and_preserves_other_services(self):
+        result = self.run_switch("rebuild-fresh", TEST_UNIT_STATE="loaded",
+                                 TEST_UNIT_FRAGMENT="/other/monitor.service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("build --no-cache studio", self.commands())
+        self.assertIn("up -d --no-build --force-recreate --no-deps studio", self.commands())
+        self.assertNotIn("prune", self.commands())
+        self.assertNotIn("stop --time", self.commands())
+        self.assertFalse(self.unit_stopped.exists())
 
     def test_rebuild_ignores_foreign_monitor_unit_and_does_not_touch_it(self):
         result = self.run_switch(
