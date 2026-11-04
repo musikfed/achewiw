@@ -63,10 +63,12 @@ FAKE_CURL = r'''#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$TEST_CURL_LOG"
 if [[ "${TEST_HTTP_FAIL:-}" == 1 ]]; then exit 7; fi
-if [[ "${TEST_HTTP_BASIC:-}" == 1 ]]; then
+if [[ "${TEST_HTTP_UNIDENTIFIED:-}" == 1 ]]; then
+  printf 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'
+elif [[ "${TEST_HTTP_BASIC:-}" == 1 ]]; then
   printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="ACHEWIW"\r\n\r\n'
 else
-  printf 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'
+  printf 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nX-ACHEWIW-App: studio\r\nX-ACHEWIW-Auth: private-vpn-no-password\r\n\r\n'
 fi
 '''
 
@@ -301,6 +303,12 @@ class ShutdownTests(unittest.TestCase):
                 result = self.run_switch("rebuild", **extra)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("up -d", self.commands())
+
+    def test_unidentified_http_200_is_not_accepted(self):
+        result = self.run_switch("auth-check", TEST_HTTP_UNIDENTIFIED="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("НЕ подтверждает", result.stderr)
+        self.assertNotIn("up -d", self.commands())
 
     def test_rebuild_fails_if_basic_still_present(self):
         result = self.run_switch("rebuild", TEST_HTTP_BASIC="1")
