@@ -85,10 +85,22 @@ def init_book_tables(db: sqlite3.Connection) -> None:
             attempts INTEGER NOT NULL DEFAULT 0,
             complete INTEGER NOT NULL DEFAULT 0,
             accepted_at TEXT,
+            tension INTEGER NOT NULL DEFAULT 3,
+            reveal_level TEXT NOT NULL DEFAULT 'none',
+            editorial_goal TEXT NOT NULL DEFAULT '',
+            stage_name TEXT NOT NULL DEFAULT 'development',
             updated_at TEXT NOT NULL,
             PRIMARY KEY (job_id, scene_id)
         )
     """)
+    # Additive migration, preserving previously generated books and prose.
+    existing = {row[1] for row in db.execute("PRAGMA table_info(ai_book_chapters)")}
+    for name, definition in (("tension", "INTEGER NOT NULL DEFAULT 3"),
+                             ("reveal_level", "TEXT NOT NULL DEFAULT 'none'"),
+                             ("editorial_goal", "TEXT NOT NULL DEFAULT ''"),
+                             ("stage_name", "TEXT NOT NULL DEFAULT 'development'")):
+        if name not in existing:
+            db.execute(f"ALTER TABLE ai_book_chapters ADD COLUMN {name} {definition}")
     db.execute("CREATE INDEX IF NOT EXISTS ai_book_chapters_job "
                "ON ai_book_chapters(job_id, scene_index)")
 
@@ -97,16 +109,19 @@ def create_book_chapters(db: sqlite3.Connection, job_id: str, chapters: list[dic
     for index, item in enumerate(chapters):
         db.execute("""
             INSERT INTO ai_book_chapters
-                (job_id,scene_id,scene_index,title,target_words,original_sha256,updated_at)
-            VALUES (?,?,?,?,?,?,?)
+                (job_id,scene_id,scene_index,title,target_words,original_sha256,
+                 tension,reveal_level,editorial_goal,stage_name,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (job_id, item["id"], index, item["title"], item["target_words"],
-              item["original_sha256"], now()))
+              item["original_sha256"], item.get("tension", 3),
+              item.get("reveal_level", "none"), item.get("editorial_goal", ""),
+              item.get("stage", "development"), now()))
 
 
 def chapters_for_job(db: sqlite3.Connection, job_id: str, *, include_text: bool = True) -> list[dict]:
     columns = "*" if include_text else (
         "job_id,scene_id,scene_index,title,target_words,word_count,"
-        "attempts,complete,accepted_at,updated_at"
+        "attempts,complete,accepted_at,tension,reveal_level,editorial_goal,stage_name,updated_at"
     )
     return [dict(row) for row in db.execute(
         f"SELECT {columns} FROM ai_book_chapters WHERE job_id=? ORDER BY scene_index",
