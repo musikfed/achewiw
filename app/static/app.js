@@ -3,6 +3,7 @@ let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, pre
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 let draftSaveTimer=null;
 let bookJobId=null, bookPollBusy=false;
+let chapterPlan=null;
 let bookDraftMode=false, bookDraftBusy=false, bookDraftWords=-1, bookDraftFetchedAt=0;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
@@ -132,7 +133,7 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -520,6 +521,7 @@ function renderFullBookJob(job){
  const active=['queued','running'].includes(job.status);
  const accepted=chapters.length&&chapters.every(c=>c.accepted_at);
  $('#generateFullBook').disabled=active||isBusy;
+ if(!active&&chapterPlan)chapterPlanTotal();
  $('#resumeFullBook').hidden=!['interrupted','error'].includes(job.status);
  $('#acceptFullBook').hidden=job.status!=='ready'||!!accepted;
  const progress=$('#fullBookProgress');
@@ -576,11 +578,146 @@ async function restoreLatestBook(){
    setBookReaderMode(false);
  }
 }
+
+const revealChoices={
+ none:'Без сюжетной тайны / без раскрытия',
+ hint:'Намёк, без объяснения',
+ partial:'Частичная разгадка',
+ full:'Полное подготовленное раскрытие',
+ aftermath:'Последствия раскрытия'
+};
+const tensionLabels=['0 · спокойная','1 · лёгкая','2 · интерес','3 · развитие','4 · напряжение','5 · пик'];
+async function loadChapterPlan(suggested=false){
+ if(!project)return;
+ const projectId=project.id;
+ if(!project.scenes.length){
+   chapterPlan=null;
+   $('#chapterPlanSummary').textContent='Сначала добавь главы в каркас.';
+   $('#chapterPlanList').replaceChildren();
+   return;
+ }
+ try{
+   $('#chapterPlanSummary').textContent='Загрузка редакторского плана…';
+   const plan=await api('/projects/'+projectId+'/book-plan'+(suggested?'?suggested=true':''),
+                        {cache:'no-store'});
+   if(!project||project.id!==projectId)return;
+   chapterPlan=plan;
+   renderChapterPlan();
+ }catch(e){
+   chapterPlan=null;
+   $('#chapterPlanSummary').textContent='Не удаётся рассчитать объём глав: '+e.message;
+   $('#chapterPlanList').replaceChildren();
+ }
+}
+function collectChapterPlan(){
+ if(!chapterPlan)return [];
+ const rows=Array.from(document.querySelectorAll('#chapterPlanList [data-plan-scene]'));
+ return rows.map((row,i)=>({
+   ...chapterPlan.chapters[i],
+   scene_id:row.dataset.planScene,
+   target_words:Number(row.querySelector('[data-plan-words]').value),
+   tension:Number(row.querySelector('[data-plan-tension]').value),
+   reveal_level:row.querySelector('[data-plan-reveal]').value,
+   editorial_goal:row.querySelector('[data-plan-goal]').value.trim()
+ }));
+}
+function chapterPlanTotal(){
+ if(!chapterPlan)return false;
+ const list=collectChapterPlan();
+ const total=list.reduce((acc,row)=>acc+(Number.isFinite(row.target_words)?row.target_words:0),0);
+ const diff=chapterPlan.target_words-total;
+ const valid=list.length===project.scenes.length && list.every(c=>
+   Number.isInteger(c.target_words)&&c.target_words>=150&&c.target_words<=12000&&
+   c.editorial_goal.length>=1&&c.editorial_goal.length<=500);
+ $('#chapterPlanSummary').textContent='Цель '+chapterPlan.target_words.toLocaleString('ru-RU')+
+   ' слов (≈ '+chapterPlan.pages_estimate+' стр.) · по главам '+total.toLocaleString('ru-RU')+
+   ' слов · '+(diff===0?'сумма совпадает':diff>0?'не хватает '+diff+' слов':'превышение '+(-diff)+' слов')+
+   (chapterPlan.source==='author'?' · авторский план в SQLite':' · предварительное распределение')+
+   (chapterPlan.stale_saved_plan?' · прежний план устарел, пересчитай и сохрани':'');
+ const okay=valid&&diff===0;
+ $('#saveChapterPlan').disabled=!okay;
+ if(!bookJobId)$('#generateFullBook').disabled=!okay;
+ return okay;
+}
+function renderChapterPlan(){
+ const list=$('#chapterPlanList');list.replaceChildren();
+ if(!chapterPlan)return;
+ chapterPlan.chapters.forEach((chapter,i)=>{
+   const article=document.createElement('article');article.className='chapter-plan-card';
+   article.dataset.planScene=chapter.scene_id;
+   const header=document.createElement('div');header.className='chapter-plan-card-head';
+   const h=document.createElement('strong');h.textContent=(i+1)+'. '+chapter.title;
+   const pages=document.createElement('small');
+   pages.textContent=chapter.stage+' · ≈ '+chapter.pages_estimate+' страниц';
+   header.append(h,pages);article.append(header);
+   const fields=document.createElement('div');fields.className='chapter-plan-fields';
+   function field(label,element){
+     const wrap=document.createElement('label');wrap.className='chapter-plan-field';
+     const name=document.createElement('span');name.textContent=label;
+     wrap.append(name,element);return wrap;
+   }
+   const words=document.createElement('input');words.type='number';
+   words.min='150';words.max='12000';words.step='1';
+   words.value=chapter.target_words;words.dataset.planWords='';
+   const tension=document.createElement('select');tension.dataset.planTension='';
+   tensionLabels.forEach((item,k)=>{const option=document.createElement('option');
+     option.value=String(k);option.textContent=item;tension.append(option)});
+   tension.value=String(chapter.tension);
+   const reveal=document.createElement('select');reveal.dataset.planReveal='';
+   Object.entries(revealChoices).forEach(([key,label])=>{
+     const option=document.createElement('option');option.value=key;option.textContent=label;
+     reveal.append(option);
+   });reveal.value=chapter.reveal_level;
+   const goal=document.createElement('textarea');goal.rows=2;goal.maxLength=500;
+   goal.value=chapter.editorial_goal;goal.dataset.planGoal='';
+   fields.append(field('Цель, слов (не токенов)',words),
+                 field('Напряжение и темп',tension),
+                 field('Что читатель может узнать',reveal),
+                 field('Задача главы: действия и движение внимания',goal));
+   article.append(fields);list.append(article);
+   for(const el of [words,tension,reveal,goal]){
+     el.addEventListener('input',()=>{
+       const count=Number(words.value);
+       pages.textContent=chapter.stage+' · ≈ '+(Number.isFinite(count)?(count/275).toFixed(1):'?')+' страниц';
+       chapterPlanTotal();
+     });
+   }
+ });
+ chapterPlanTotal();
+}
+function balanceChapterPlan(){
+ if(!chapterPlan)return;
+ const rows=Array.from(document.querySelectorAll('#chapterPlanList [data-plan-words]'));
+ const original=rows.map(e=>Math.max(150,Number(e.value)||150));
+ const available=chapterPlan.target_words-rows.length*150;
+ const weights=original.map(n=>Math.max(1,n-150));
+ const sum=weights.reduce((a,c)=>a+c,0);
+ const raw=weights.map(w=>available*w/sum);
+ const values=raw.map(n=>Math.floor(n));
+ let remainder=available-values.reduce((a,n)=>a+n,0);
+ const indexes=raw.map((n,i)=>i).sort((a,b)=>(raw[b]-values[b])-(raw[a]-values[a]));
+ for(let j=0;j<remainder;j++)values[indexes[j%indexes.length]]++;
+ rows.forEach((el,i)=>{el.value=150+values[i];el.dispatchEvent(new Event('input'))});
+}
+async function saveChapterPlan(announce=true){
+ if(!project||!chapterPlan||!chapterPlanTotal())
+   throw Error('Сумма слов по главам должна совпасть с целевым объёмом.');
+ const rows=collectChapterPlan();
+ const data=await api('/projects/'+project.id+'/book-plan',{
+   method:'PUT',body:JSON.stringify({chapters:rows})
+ });
+ chapterPlan=data;renderChapterPlan();
+ if(announce)toast('Режиссура глав сохранена в SQLite. Сам каркас не менялся.');
+ return data;
+}
+
 async function startFullBook(){
  if(!project||isBusy)return;
  if(!project.scenes.length){toast('Сначала создай и утверди каркас');return}
  try{
    await save();
+   if(!chapterPlan)await loadChapterPlan();
+   await saveChapterPlan(false);
    const job=await api('/books/generate',{method:'POST',
       body:JSON.stringify({project_id:project.id,model})});
    bookJobId=job.id;
@@ -702,15 +839,19 @@ document.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{
   else{project=null;render()}
 });
 $('#workType').onchange=e=>{if(!project)return;project.work_type=e.target.value;updateWorkCopy();renderProjects()};
-$('#saveBrief').onclick=()=>save().catch(e=>toast(e.message));
+$('#saveBrief').onclick=async()=>{try{await save();await loadChapterPlan()}catch(e){toast(e.message)}};
 $('#deleteProject').onclick=deleteCurrentProject;
-$('#saveScenes').onclick=()=>{collectScenes();save().catch(e=>toast(e.message))};
+$('#saveScenes').onclick=async()=>{try{collectScenes();await save();await loadChapterPlan()}catch(e){toast(e.message)}};
 $('#saveText').onclick=()=>{collectText();save().catch(e=>toast(e.message))};
 $('#addScene').onclick=()=>{collectScenes();project.scenes.push({id:crypto.randomUUID().replaceAll('-',''),title:'Новая сцена',active_objects:[],anchor:'',tempo:'Ровный',reader_info:'',hook:'',text:''});renderScenes();renderWriting()};
 $('#writingScene').onchange=()=>{collectText();switchWriting()};
 $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#generateFullBook').onclick=startFullBook;
  $('#bookGenerate').onclick=startFullBook;
+ $('#bookOpenChapterPlan').onclick=()=>gotoTab('structure');
+ $('#recalculateChapterPlan').onclick=async()=>{await save();await loadChapterPlan(true)};
+ $('#balanceChapterPlan').onclick=balanceChapterPlan;
+ $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
  $('#bookResume').onclick=resumeFullBook;
  $('#bookAccept').onclick=acceptFullBook;
  $('#bookViewDraft').onclick=()=>setBookReaderMode(true);
@@ -720,7 +861,7 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#acceptFullBook').onclick=acceptFullBook;
 $('#generateScene').onclick=()=>ai('scene');
 $('#runAudit').onclick=()=>ai('audit');
-$('#applyAI').onclick=applyAI;
+$('#applyAI').onclick=async()=>{await applyAI();if(project)loadChapterPlan()};
 $('#saveAuditDecision').onclick=saveAuditDecision;
 $('#aiGoStructure').onclick=()=>gotoTab('structure');
 $('#aiGoWriting').onclick=()=>gotoTab('write');
