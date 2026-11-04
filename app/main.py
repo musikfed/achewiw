@@ -49,6 +49,19 @@ def require_auth(request: Request) -> None:
         raise HTTPException(403, "Доступ разрешён только из локальной сети или VPN")
     if not any(peer in network for network in PRIVATE_CLIENT_NETWORKS):
         raise HTTPException(403, "Внешний IP запрещён — нужен доверенный VPN")
+    # Block DNS rebinding and accidental alternative public hostnames.
+    from urllib.parse import urlsplit
+    raw_host = request.headers.get("host", "")
+    try:
+        hostname = urlsplit("http://" + raw_host).hostname
+    except ValueError:
+        hostname = None
+    allowed_hosts = {name.strip().lower() for name in
+                     os.getenv("ACHEWIW_ALLOWED_HOSTS",
+                               "192.168.0.100,127.0.0.1,localhost").split(",")
+                     if name.strip()}
+    if not hostname or hostname.lower() not in allowed_hosts:
+        raise HTTPException(403, "Недопустимый адрес сервера: используйте доверенный IP по VPN")
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
         # Same-origin protection for browser requests without a password.
