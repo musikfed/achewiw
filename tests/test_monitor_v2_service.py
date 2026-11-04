@@ -32,12 +32,12 @@ class LinkedMonitorTests(unittest.TestCase):
         self.fake("id", '#!/bin/sh\nif [ "$1" = -u ]; then echo 1000; else /usr/bin/id "$@"; fi\n')
         self.fake("systemctl", r'''#!/bin/bash
 set -euo pipefail
-[[ "\${1:-}" == --user ]] || exit 98
+[[ "${1:-}" == --user ]] || exit 98
 shift
-case "\${1:-}" in
+case "${1:-}" in
   show)
-    key="\${4:-}"
-    [[ "\${2:-}" == achewiw-metrics-v2.service && "\${3:-}" == -p ]] || exit 97
+    key="${4:-}"
+    [[ "${2:-}" == achewiw-metrics-v2.service && "${3:-}" == -p ]] || exit 97
     case "$key" in
       LoadState) [[ -e "$TEST_LINK" ]] && echo loaded || echo not-found ;;
       FragmentPath) [[ -e "$TEST_LINK" ]] && echo "$TEST_LINK" || : ;;
