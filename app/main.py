@@ -21,6 +21,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
+from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress,
                              LIMIT, MAX_OUTPUT)
@@ -221,6 +222,10 @@ def build_prompt(project: Project, request: AIRequest) -> str:
         )
     else:
         task = (
+            "Это редакторский ОТЧЁТ, а не художественный текст книги. "
+            "Для каждой проблемы приведи название сцены и конкретную правку. "
+            "Не повторяй исходный текст в качестве исправления; не выдумывай сцены. "
+            "Если нет достаточных данных — отметь неопределённость. "
             "Проведи QA истории по сценам: хронология, причинность, подготовка "
             "используемых предметов, повторение якорей, загрузка кадра, "
             "эмоциональная траектория, клиффхэнгеры, ветка feature/what-if. "
@@ -341,6 +346,44 @@ def export_markdown(project_id: str):
     )
 
 
+@api.get("/projects/{project_id}/manuscript")
+def manuscript_preview(project_id: str):
+    """Read-only view of approved scene texts; missing chapters stay explicit."""
+    return chapter_listing(get_project(project_id))
+
+
+@api.get("/projects/{project_id}/manuscript.md")
+def download_manuscript_markdown(project_id: str):
+    project = get_project(project_id)
+    try:
+        body = manuscript_markdown(project)
+    except ValueError as exc:
+        raise HTTPException(
+            409, "Книга пока не написана. Открой 03 · Редактор и сохрани текст хотя бы одной сцены."
+        ) from exc
+    return PlainTextResponse(
+        body, media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="achewiw-book.md"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+@api.get("/projects/{project_id}/manuscript.epub")
+def download_manuscript_epub(project_id: str):
+    project = get_project(project_id)
+    try:
+        body = manuscript_epub(project)
+    except ValueError as exc:
+        raise HTTPException(
+            409, "Для EPUB сначала сохрани текст хотя бы одной сцены в редакторе."
+        ) from exc
+    return Response(
+        content=body, media_type="application/epub+zip",
+        headers={"Content-Disposition": 'attachment; filename="achewiw-book.epub"',
+                 "Cache-Control": "no-store"},
+    )
+
+
 @api.get("/monitoring")
 async def monitor_status():
     """Authenticated, read-only dashboard; no Docker/NVIDIA command execution."""
@@ -457,7 +500,7 @@ async def execute_generation(job_id: str, payload: dict, mode: str) -> None:
             except (ValueError, TypeError) as exc:
                 parse_error = "Ответ не является корректной структурой сцен"
         with db() as connection:
-            update_job(connection, job_id, status="ready", stage="Готово · ожидает решения автора",
+            update_job(connection, job_id, status="ready", stage=("Отчёт QA готов · выбери действия по правкам" if mode == "audit" else "Черновик готов · ожидает принятия автором"),
                        output=output, percent=100, eta_seconds=0,
                        estimated_tokens=estimated_tokens, parse_error=parse_error,
                        suggested_scenes=suggested)
