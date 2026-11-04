@@ -70,6 +70,7 @@ class CleanupTests(unittest.TestCase):
                 conn.execute("INSERT INTO projects VALUES('drop','{}','today')")
                 conn.execute("INSERT INTO ai_jobs VALUES('job','drop')")
                 conn.execute("INSERT INTO ai_job_reviews VALUES('job')")
+                conn.commit()
                 backup = module.archive(conn, database)
                 module.purge(conn, project_id="drop")
                 conn.commit()
