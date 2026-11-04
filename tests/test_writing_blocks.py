@@ -99,6 +99,42 @@ def test_block_requires_explicit_accept_and_reversible_history(studio):
     assert studio.get(f"/api/projects/{p['id']}/scenes/{sid}/revisions").status_code==200
 
 
+
+def test_real_api_queues_one_targeted_fragment_with_custom_token_budget(studio,monkeypatch):
+    """HTTP POST /api/ai must send the authored fragment spec, not whole-book filler."""
+    p,sid,bid=make_story(studio)
+    observed=[]
+    async def fake_stream(job_id,payload,mode):
+        observed.append((job_id,payload,mode))
+        with main.db() as conn:
+            update_job(conn,job_id,status="ready",stage="Готово",
+                       output="Из коридора донёсся металлический звон.",percent=100)
+    monkeypatch.setattr(main,"execute_generation",fake_stream)
+    response=studio.post("/api/ai",json={
+        "project_id":p["id"],"mode":"block","model":"qwen3:8b",
+        "scene_id":sid,"block_id":bid,"instructions":"Сдержанный стиль, не вводи новые предметы."
+    })
+    assert response.status_code==202,response.text
+    job=response.json()
+    assert job["scene_id"]==sid
+    assert job["block_id"]==bid
+    assert job["base_text_sha256"]==fingerprint("Он открыл дверь.")
+    assert job["token_budget"]==1100
+    import time
+    for _ in range(80):
+        if observed:break
+        time.sleep(0.01)
+    assert observed
+    _,payload,mode=observed[0]
+    assert mode=="block"
+    assert "металличес" not in payload["prompt"]
+    assert "телепортация" in payload["prompt"]
+    assert "Сдержанный стиль" in payload["prompt"]
+    assert payload["options"]["num_predict"]==1100
+    # The model response must remain a proposal until author explicitly accepts.
+    assert studio.get("/api/projects/"+p["id"]).json()["scenes"][0]["text"]=="Он открыл дверь."
+
+
 def test_stale_generation_never_overwrites_manual_text(studio):
     p,sid,bid=make_story(studio)
     job=insert_ready(p["id"],sid,bid,"Он открыл дверь.","Генерируемый блок.")
