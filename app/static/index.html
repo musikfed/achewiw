@@ -55,6 +55,9 @@
   <small class="block-work-note">Объём — цель, а не обещание точного числа слов. «Принять» проверит текущую версию текста, добавит предложение и сохранит отдельную ревизию для отката.</small>
 </section>
 <div class="writing-refine">
+  <label class="writing-refine-prompt">Как именно доработать авторскую сцену?
+    <textarea id="polishInstructions" rows="3" maxlength="2000" placeholder="Например: убрать канцеляризмы; сохранить жёсткий ритм диалогов, не менять события и названия предметов."></textarea>
+  </label>
   <button id="polishScene" type="button">✦ Литературная редактура без ИИ-штампов</button>
   <button id="loadSceneRevisions" type="button">История принятых правок</button>
   <div id="sceneRevisions" class="scene-revisions" hidden></div>
@@ -85,7 +88,9 @@
  <h3 class="illustration-library-title">Иллюстрации рукописи</h3>
  <div id="illustrationGrid" class="illustration-grid"><p>Загрузка каталога...</p></div>
 </section>
-<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div id="continuityFindings" class="continuity-findings"><p>Проверка фактов и причинных связей будет доступна для выбранной художественной истории.</p></div><div class="actions"><label class="continuity-scope">Область проверки <select id="continuityScene"><option value="">Вся история: обзор и реестр</option></select></label><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
+<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div id="continuityFindings" class="continuity-findings"><p>Проверка фактов и причинных связей будет доступна для выбранной художественной истории.</p></div><div class="actions"><label class="continuity-scope">Область проверки <select id="continuityScene"><option value="">Вся история: обзор и реестр</option></select></label><label class="continuity-prompt">Что особенно проверить?
+  <input id="continuityInstructions" maxlength="2000" placeholder="Например: откуда появился ключ, кто знал о посадке и почему герой сменил решение.">
+</label><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
 <section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
   <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
   <p>На выход идут только сохранённые тексты глав или частей. QA-отчёты, технические промпты и незаконченные разделы не подмешиваются в книгу.</p></div>
