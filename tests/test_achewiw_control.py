@@ -31,14 +31,22 @@ case "${1:-}" in
       if [[ "${TEST_LEGACY_FOREIGN_MOUNT:-}" == 1 ]]; then
         printf '/achewiw-studio|host|/other-workspace/data\n'
       else
-        printf '/achewiw-studio|host|%s/data\n' "$TEST_WORKSPACE"
+        if [[ "${TEST_MOVED_LEGACY:-}" == 1 ]]; then
+          printf '/achewiw-studio|host|%s/data\n' "$TEST_OLD_WORKSPACE"
+        else
+          printf '/achewiw-studio|host|%s/data\n' "$TEST_WORKSPACE"
+        fi
       fi
       exit 0
     fi
     if [[ "$id" == r0gue ]]; then
       printf 'achewiw|/other/workspace|studio|managed|/other/workspace\n'
     elif [[ "${TEST_LEGACY:-}" == 1 && ! -e "$TEST_MIGRATED" ]]; then
-      printf "achewiw|$TEST_WORKSPACE|studio|<no value>|<no value>\n"
+      if [[ "${TEST_MOVED_LEGACY:-}" == 1 ]]; then
+        printf "achewiw|$TEST_OLD_WORKSPACE|studio|<no value>|<no value>\n"
+      else
+        printf "achewiw|$TEST_WORKSPACE|studio|<no value>|<no value>\n"
+      fi
     elif [[ "${TEST_WRONG_ROLE:-}" == 1 ]]; then
       printf 'achewiw|/1tbdisk/achewiw|unregistered|managed|$TEST_WORKSPACE\n'
     else
@@ -119,6 +127,7 @@ class ShutdownTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
+        self.old_workspace = root / "legacy-projects" / "achewiw"
         self.workspace = root / "achewiw"
         self.workspace.mkdir()
         (self.workspace / "compose.yaml").write_text("name: achewiw\nservices:\n  studio:\n    image: test\n")
@@ -128,7 +137,11 @@ class ShutdownTests(unittest.TestCase):
         (self.workspace / "ops").mkdir()
         (self.workspace / "ops/achewiw-host-monitor.service").write_text("[Unit]\nDescription=Test\n")
         self.script = root / "control.sh"
-        self.script.write_text(SCRIPT.read_text().replace("/1tbdisk/achewiw", str(self.workspace)))
+        self.script.write_text(
+            SCRIPT.read_text()
+            .replace("/1tbdisk/PegineLab/projects/achewiw", str(self.old_workspace))
+            .replace("/1tbdisk/achewiw", str(self.workspace))
+        )
         self.unit_started = root / "unit.started"
         self.unit_linked = root / "unit.linked"
         self.gitlog = root / "git.log"
@@ -146,7 +159,7 @@ class ShutdownTests(unittest.TestCase):
         self.state = root / "state"
         self.state.write_text("running")
         self.env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
-                        TEST_WORKSPACE=str(self.workspace), TEST_PORT_BUSY="0", TEST_BAD_COMPOSE="0",
+                        TEST_WORKSPACE=str(self.workspace), TEST_OLD_WORKSPACE=str(self.old_workspace), TEST_PORT_BUSY="0", TEST_BAD_COMPOSE="0",
                         TEST_UNIT_STARTED=str(self.unit_started), TEST_UNIT_LINKED=str(self.unit_linked),
                         TEST_GIT_LOG=str(self.gitlog), TEST_GIT_SHA_FILE=str(self.gitsha),
                         TEST_GIT_ORIGIN="https://github.com/musikfed/achewiw.git",
@@ -330,6 +343,21 @@ class ShutdownTests(unittest.TestCase):
         self.assertIn("merge --ff-only", self.gitlog.read_text())
         self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
         self.assertTrue(self.migrated.exists())
+
+    def test_orphaned_studio_from_pre_move_workspace_can_migrate(self):
+        self.assertFalse(self.old_workspace.exists())
+        result = self.run_switch("rebuild", TEST_LEGACY="1", TEST_MOVED_LEGACY="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("старый контейнер ACHEWIW", result.stdout)
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertTrue(self.migrated.exists())
+
+    def test_old_workspace_still_exists_cannot_be_adopted(self):
+        self.old_workspace.mkdir(parents=True)
+        result = self.run_switch("rebuild", TEST_LEGACY="1", TEST_MOVED_LEGACY="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("up -d", self.commands())
+        self.assertTrue(self.old_workspace.is_dir())
 
     def test_unverified_legacy_cannot_be_adopted_by_update(self):
         result = self.run_switch("update", TEST_LEGACY="1", TEST_LEGACY_FOREIGN_MOUNT="1")
