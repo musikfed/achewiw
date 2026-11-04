@@ -26,6 +26,9 @@ from illustrations_core import initialize as init_illustrations, save as save_il
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
+from book_generation_core import (target_words as parse_book_target, distribute_words,
+    chunk_size, max_attempts, count_words as book_words, init_book_tables,
+    create_book_chapters, chapters_for_job, book_summary, save_chapter)
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
@@ -92,6 +95,7 @@ def init_db() -> None:
             "(id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL)"
         )
         init_jobs(connection)
+        init_book_tables(connection)
         init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
@@ -171,7 +175,7 @@ class CreateProject(BaseModel):
 
 class AIRequest(BaseModel):
     project_id: str
-    mode: Literal["outline", "scene", "audit", "block", "continuity", "polish"]
+    mode: Literal["outline", "scene", "audit", "block", "continuity", "polish", "book"]
     model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
     scene_id: str | None = None
     block_id: str | None = None
@@ -262,6 +266,8 @@ def build_prompt(project: Project, request: AIRequest) -> str:
     ]
     extra = f"\nДополнительное пожелание автора: {request.instructions}" if request.instructions else ""
 
+    if request.mode == "book":
+        raise HTTPException(422, "Полная книга создаётся отдельным поэтапным заданием")
     if request.mode == "block":
         if project.work_type != "fiction":
             raise HTTPException(422, "Поблочная художественная генерация доступна в мастерской прозы")
@@ -1172,10 +1178,275 @@ async def execute_generation(job_id: str, payload: dict, mode: str) -> None:
                        estimated_tokens=estimated_tokens)
 
 
+
+class BookRequest(BaseModel):
+    project_id: str
+    model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
+
+
+def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
+    record = get_job(connection, job_id)
+    if record is None or record["mode"] != "book":
+        raise HTTPException(404, "Задание книги не найдено")
+    record["book"] = book_summary(connection, job_id)
+    record["book_chapters"] = chapters_for_job(connection, job_id, include_text=False)
+    # Chapter texts are stored separately, not duplicated into the job result.
+    return record
+
+
+def _book_prompt(project: Project, scene: Scene, chapter_index: int,
+                 chapter_target: int, previous_chapter_tail: str,
+                 existing_text: str, requested_words: int) -> str:
+    """Never feed the entire book back through the limited context window."""
+    chapter_cards = [
+        {"n": index + 1, "title": card.title, "anchor": card.anchor,
+         "hook": card.hook, "reader_info": card.reader_info}
+        for index, card in enumerate(project.scenes)
+    ]
+    brief = {
+        "название": project.title, "тип": project.work_type,
+        "жанр": project.genre, "атмосфера": project.atmosphere,
+        "аудитория": project.audience, "замысел": project.premise,
+        "интрига": project.twist, "момент_раскрытия": project.reveal,
+        "канон": project.anchors, "авторские_источники": project.sources[:2500],
+        "авторские_тезисы": project.claims[:2500],
+        "план": chapter_cards, "текущая_глава": chapter_index + 1,
+        "целевая_длина_главы": chapter_target, "карточка": scene.model_dump(exclude={"text", "blocks"})
+    }
+    if project.work_type == "technical":
+        genre = ("Пиши содержательную техническую книгу, с точными объяснениями и примерами; "
+                 "не выдумывай факты, DOI, нормативные документы и исследования.")
+    elif project.work_type == "speech":
+        genre = "Пиши полноценную речь для произнесения вслух, а не план выступления."
+    elif project.work_type == "nonfiction":
+        genre = "Пиши содержательную главу нонфикшн, без выдуманных источников."
+    else:
+        genre = ("Пиши художественную ПРОЗУ с действием, обстановкой, диалогами, "
+                 "реакциями героев и причинно-следственными событиями. Не пересказывай сюжет.")
+    return (
+        "Ты профессиональный писатель. " + genre +
+        "\nТолько русский литературный текст, без Markdown-заголовков, списков, "
+        "пояснений модели, синопсиса и слов «продолжение следует». "
+        "Продолжай непосредственно текущую главу, а не начинай новую. "
+        "Нельзя повторять уже написанные абзацы, перепрыгивать к финалу, "
+        "отменять ранее произошедшие события или преждевременно раскрывать тайну. "
+        f"\nНапиши СЛЕДУЮЩИЕ примерно {requested_words} слов полноценной прозы "
+        "в рамках указанного плана. Не сокращай до аннотации. "
+        "\nУтверждённый каркас и редакционное задание:\n" +
+        json.dumps(brief, ensure_ascii=False)[:14500] +
+        "\nФинал предыдущей главы (контекст, НЕ повторять):\n" + previous_chapter_tail[-1100:] +
+        "\nУже написанный текст этой главы (последний фрагмент, НЕ повторять):\n" +
+        existing_text[-2200:] +
+        "\nПродолжи текст этой же главы прямо с места остановки:"
+    )[:22000]
+
+
+async def execute_book(job_id: str) -> None:
+    """Sequential Ollama calls, a checkpoint after every chunk, no manuscript writes."""
+    try:
+        with db() as connection:
+            job = _book_record(connection, job_id)
+        project = get_project(job["project_id"])
+        previous = ""
+        for index, chapter in enumerate(chapters_for_job_from_job(job_id)):
+            scene = next((item for item in project.scenes if item.id == chapter["scene_id"]), None)
+            if scene is None:
+                raise ValueError("Каркас изменился; безопасное продолжение остановлено")
+            text = chapter["text"]
+            attempts = chapter["attempts"]
+            if chapter["complete"]:
+                previous = text[-1500:]
+                continue
+            while book_words(text) < chapter["target_words"] and attempts < max_attempts(chapter["target_words"]):
+                remaining = chapter["target_words"] - book_words(text)
+                requested = chunk_size(remaining)
+                prompt = _book_prompt(project, scene, index, chapter["target_words"],
+                                      previous, text, requested)
+                payload = {
+                    "model": job["model"], "prompt": prompt, "stream": True,
+                    "think": False, "keep_alive": "5m",
+                    "options": {"temperature": 0.72, "num_predict": min(3900, max(1200, round(requested * 3.1)))},
+                }
+                generated = ""
+                with db() as connection:
+                    summary = book_summary(connection, job_id)
+                    pct = min(99, round(summary["percent_words"]))
+                    update_job(connection, job_id, stage=f"Глава {index+1}/{len(project.scenes)} · фрагмент {attempts+1}",
+                               output="Текст глав хранится в SQLite отдельно от каркаса.",
+                               percent=pct)
+                async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
+                    async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
+                        response.raise_for_status()
+                        async for line in response.aiter_lines():
+                            if not line.strip():
+                                continue
+                            part = json.loads(line)
+                            if part.get("error"):
+                                raise ValueError("Ollama сообщила об ошибке генерации главы")
+                            generated += part.get("response", "")
+                            if len(generated) > 20000:
+                                raise ValueError("Один фрагмент превышает лимит")
+                            if part.get("done"):
+                                break
+                if book_words(generated) < 35:
+                    raise ValueError("Модель выдала слишком короткий фрагмент. Готовые главы сохранены.")
+                text = (text.rstrip() + "\n\n" + generated.strip()).strip()
+                attempts += 1
+                with db() as connection:
+                    save_chapter(connection, job_id, scene.id, text, attempts,
+                                 complete=book_words(text) >= chapter["target_words"])
+                    summary = book_summary(connection, job_id)
+                    update_job(connection, job_id,
+                               stage=f"Глава {index+1}/{len(project.scenes)} · {book_words(text)}/{chapter['target_words']} слов",
+                               output="Генерация книги: главы сохраняются отдельно; ждут принятия автором.",
+                               percent=min(99, round(summary["percent_words"])))
+            if book_words(text) < chapter["target_words"]:
+                raise ValueError(f"Глава {index+1} не достигла объёма: {book_words(text)}/{chapter['target_words']} слов. "
+                                 "Результат сохранён. Продолжи задание после проверки качества.")
+            previous = text[-1500:]
+        with db() as connection:
+            summary = book_summary(connection, job_id)
+            update_job(connection, job_id, status="ready",
+                       stage="Полный черновик книги готов · ожидает решения автора",
+                       output=f"Черновик {summary['generated_words']} слов из цели {summary['target_words']}. "
+                              "Главы ещё не приняты в рукопись.", percent=100)
+    except asyncio.CancelledError:
+        with db() as connection:
+            summary = book_summary(connection, job_id)
+            update_job(connection, job_id, status="interrupted",
+                       stage="Перезапуск сервера · главы сохранены",
+                       output="Черновик сохранён; можно продолжить.",
+                       percent=min(99, round(summary["percent_words"])))
+        raise
+    except Exception as exc:
+        with db() as connection:
+            summary = book_summary(connection, job_id)
+            update_job(connection, job_id, status="error", stage="Генерация остановлена · главы сохранены",
+                       output="Частичный черновик сохранён в SQLite; исправь проблему и продолжи.",
+                       error=str(exc)[:500], percent=min(99, round(summary["percent_words"])))
+
+
+def chapters_for_job_from_job(job_id: str) -> list[dict]:
+    with db() as connection:
+        return chapters_for_job(connection, job_id)
+
+
+def _start_book(job_id: str) -> None:
+    task = asyncio.create_task(execute_book(job_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+@api.post("/books/generate", status_code=202)
+async def start_full_book(request: BookRequest):
+    project = get_project(request.project_id)
+    try:
+        total = parse_book_target(project.target_length,
+                                  speech_minutes=project.duration_minutes if project.work_type == "speech" else None)
+        allocation = distribute_words(total, [scene.id for scene in project.scenes])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if any(not scene.id or not scene.title.strip() for scene in project.scenes):
+        raise HTTPException(422, "Сначала утверди названия глав в каркасе")
+    # The job is intentionally not a replacement of the author's manuscript.
+    chapters = [
+        {"id": scene.id, "title": scene.title, "target_words": allocation[i],
+         "original_sha256": fingerprint(scene.text)}
+        for i, scene in enumerate(project.scenes)
+    ]
+    job_id = uuid.uuid4().hex
+    try:
+        with db() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if image_operation_active(connection):
+                raise HTTPException(409, "Сейчас работает ComfyUI: запуск книги отложен")
+            create_job(connection, job_id, project.id, "book", request.model, None,
+                       token_budget=total * 3)
+            create_book_chapters(connection, job_id, chapters)
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(409, "Уже выполняется другая генерация") from exc
+    _start_book(job_id)
+    with db() as connection:
+        return _book_record(connection, job_id)
+
+
+@api.get("/books/jobs/{job_id}")
+def full_book_status(job_id: str):
+    with db() as connection:
+        return _book_record(connection, job_id)
+
+
+@api.post("/books/jobs/{job_id}/resume", status_code=202)
+async def resume_full_book(job_id: str):
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        job = _book_record(connection, job_id)
+        if job["status"] not in ("interrupted", "error"):
+            raise HTTPException(409, "Продолжить можно только прерванное задание")
+        if image_operation_active(connection) or active_job(connection):
+            raise HTTPException(409, "Дождись освобождения общей очереди")
+        project = get_project(job["project_id"])
+        originals = {scene.id: scene for scene in project.scenes}
+        chapters = chapters_for_job(connection, job_id)
+        if [s.id for s in project.scenes] != [c["scene_id"] for c in chapters]:
+            raise HTTPException(409, "Каркас изменён; продолжение запрещено")
+        if any(fingerprint(originals[c["scene_id"]].text) != c["original_sha256"] for c in chapters):
+            raise HTTPException(409, "Рукопись изменена; сохрани черновик перед новой генерацией")
+        connection.execute(
+            "UPDATE ai_jobs SET status='queued',stage='Возобновление',error=NULL,updated_at=? WHERE id=?",
+            (utc_now(), job_id))
+    _start_book(job_id)
+    with db() as connection:
+        return _book_record(connection, job_id)
+
+
+@api.post("/books/jobs/{job_id}/accept")
+def accept_full_book(job_id: str, request: AcceptanceRequest):
+    """Accept all chapters in one transaction, with hashes and undo history."""
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        job = _book_record(connection, job_id)
+        chapters = chapters_for_job(connection, job_id)
+        if job["status"] != "ready" or not chapters or any(not c["complete"] or c["accepted_at"] for c in chapters):
+            raise HTTPException(409, "Принять можно только полностью написанную и ещё не принятую книгу")
+        row = connection.execute("SELECT data FROM projects WHERE id=?", (job["project_id"],)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Проект удалён")
+        project = Project.model_validate_json(row["data"])
+        if [s.id for s in project.scenes] != [c["scene_id"] for c in chapters]:
+            raise HTTPException(409, "Каркас изменён после генерации")
+        for scene, chapter in zip(project.scenes, chapters):
+            if fingerprint(scene.text) != chapter["original_sha256"]:
+                raise HTTPException(409, "Текст одной из глав изменён: принятие отменено без потери правок")
+            if not chapter["text"].strip():
+                raise HTTPException(409, "Одна из глав пуста")
+        for scene, chapter in zip(project.scenes, chapters):
+            original = scene.text
+            scene.text = chapter["text"]
+            revision_id = uuid.uuid4().hex
+            connection.execute(
+                "INSERT INTO author_text_revisions "
+                "(id,project_id,scene_id,job_id,previous_text,accepted_text,created_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (revision_id, project.id, scene.id, "book:"+revision_id, original, scene.text, utc_now()))
+            for block in scene.blocks:
+                if block.accepted_job_id and original != scene.text:
+                    block.evidence_stale = True
+            connection.execute("UPDATE ai_book_chapters SET accepted_at=? WHERE job_id=? AND scene_id=?",
+                               (utc_now(), job_id, scene.id))
+        project.updated_at = utc_now()
+        connection.execute("UPDATE projects SET data=?,updated_at=? WHERE id=?",
+                           (project.model_dump_json(), project.updated_at, project.id))
+        return {"status": "accepted_by_author", "chapters": len(chapters),
+                "words": sum(book_words(chapter["text"]) for chapter in chapters)}
+
+
 @api.post("/ai", status_code=202)
 async def generate(request: AIRequest):
     """Enqueue durable generation before returning. Page reload cannot abort it."""
     project = get_project(request.project_id)
+    if request.mode == "book":
+        raise HTTPException(422, "Используй кнопку «Написать книгу по каркасу»")
     prompt = build_prompt(project, request)
     current_scene = next((s for s in project.scenes if s.id == request.scene_id), None)
     if request.mode in ("scene", "block", "polish") and not current_scene:
