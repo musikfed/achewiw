@@ -113,11 +113,21 @@ def get_job(connection: sqlite3.Connection, job_id: str) -> dict | None:
     return data
 
 
-def recent_jobs(connection: sqlite3.Connection, project_id: str) -> list[dict]:
-    ids = connection.execute(
-        "SELECT id FROM ai_jobs WHERE project_id=? ORDER BY created_at DESC, rowid DESC LIMIT 12",
-        (project_id,),
-    ).fetchall()
+def recent_jobs(connection: sqlite3.Connection, project_id: str,
+                mode: str | None = None) -> list[dict]:
+    if mode is None:
+        ids = connection.execute(
+            "SELECT id FROM ai_jobs WHERE project_id=? ORDER BY created_at DESC, rowid DESC LIMIT 12",
+            (project_id,),
+        ).fetchall()
+    else:
+        if mode not in ("outline", "scene", "audit"):
+            raise ValueError("Unknown job mode")
+        ids = connection.execute(
+            "SELECT id FROM ai_jobs WHERE project_id=? AND mode=? "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 30",
+            (project_id, mode),
+        ).fetchall()
     return [get_job(connection, row["id"]) for row in ids]
 
 
