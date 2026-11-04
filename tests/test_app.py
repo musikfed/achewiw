@@ -13,7 +13,7 @@ def test_project_and_stats(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DATA_DIR", tmp_path)
     monkeypatch.setattr(main, "DB_PATH", tmp_path / "test.sqlite3")
     # No password on trusted private network. No BasicAuth dialog.
-    with TestClient(main.app, client=("127.0.0.1", 12345)) as client:
+    with TestClient(main.app, base_url="http://192.168.0.100:7080", client=("127.0.0.1", 12345)) as client:
         assert client.get("/api/projects").status_code == 200
         created = client.post("/api/projects", json={
             "title": "История", "work_type": "fiction"
@@ -50,7 +50,7 @@ def test_project_and_stats(tmp_path, monkeypatch):
 def test_other_work_types_have_relevant_prompts(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DATA_DIR", tmp_path)
     monkeypatch.setattr(main, "DB_PATH", tmp_path / "work.sqlite3")
-    with TestClient(main.app, client=("127.0.0.1", 12345)) as client:
+    with TestClient(main.app, base_url="http://192.168.0.100:7080", client=("127.0.0.1", 12345)) as client:
         for work_type, expected in [
             ("technical", "технической книги"),
             ("nonfiction", "проверяемые"),
@@ -70,13 +70,14 @@ def test_other_work_types_have_relevant_prompts(tmp_path, monkeypatch):
 def test_public_source_denied_and_cross_site_post_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DATA_DIR", tmp_path)
     monkeypatch.setattr(main, "DB_PATH", tmp_path / "sec.sqlite3")
-    with TestClient(main.app, client=("203.0.113.9", 23456)) as outside:
+    with TestClient(main.app, base_url="http://192.168.0.100:7080", client=("203.0.113.9", 23456)) as outside:
         assert outside.get("/api/projects").status_code == 403
         assert outside.get("/").status_code == 403
-    with TestClient(main.app, client=("192.168.0.42", 23456)) as trusted:
+    with TestClient(main.app, base_url="http://192.168.0.100:7080", client=("192.168.0.42", 23456)) as trusted:
         assert trusted.post("/api/projects", json={"title": "X"},
                             headers={"Origin": "https://evil.example"}).status_code == 403
         assert trusted.post("/api/projects", json={"title": "X"}).status_code == 201
+        assert trusted.get("/api/projects", headers={"Host": "malicious.test"}).status_code == 403
 
 
 def test_outline_parser():
