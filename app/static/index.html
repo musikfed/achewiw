@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v3"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v5"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -8,8 +8,8 @@
 <button type="button" data-kind-filter="speech">◈ Выступления</button>
 <button type="button" data-kind-filter="nonfiction">▤ Нонфикшн</button>
 <button type="button" class="nav-all selected" data-kind-filter="all">Все произведения</button>
-</div><div class="sidehead"><span>БИБЛИОТЕКА</span><button type="button" id="newProject">+ Новая</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW · ИЗДАНИЕ <span>v0.3</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
-<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
+</div><div class="sidehead"><span>БИБЛИОТЕКА</span><button type="button" id="newProject">+ Новая</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW · ИЗДАНИЕ <span>v0.4</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
+<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p><div class="release-actions"><button type="button" id="openTypography" class="primary">06 · Типография: PDF / DOCX / EPUB</button><button type="button" id="openIllustrations">04 · Иллюстрации</button></div></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
 <button type="button" id="unloadModel" class="model-unload" title="Выгрузить только выбранную LLM из общей Ollama" disabled>Освободить VRAM модели</button>
 <small class="model-warning">Не сбрасывает RTX 3060. Выгрузка выбранной модели может затронуть другие приложения, использующие ту же Ollama.</small></div></div>
 <section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
@@ -25,7 +25,7 @@
   </div>
   <p class="monitor-note">Показания CPU/RAM/GPU собираются на хосте, без доступа контейнера к NVIDIA. Запуск собственного сборщика: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. Если GPU недоступна, откройте диагностику службы. «Нет данных» не означает нулевую нагрузку.</p>
 </section>
-<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button><button data-tab="book">05 · Книга</button></nav>
+<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button></nav>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
 <option value="fiction">Фантастика, роман и художественная проза</option>
 <option value="technical">Техническая, инженерная и научная книга</option>
@@ -38,6 +38,30 @@
 <label class="wide" data-only-kind="speech">Заметки для выступающего / паузы / слайды<textarea data-field="speaker_notes" rows="4" placeholder="Тайминг, интонации, тезисы для слайдов, требования сцены"></textarea></label></div><div class="actions"><button class="primary" id="saveBrief">Сохранить ТЗ</button><button type="button" id="deleteProject" class="danger-action">Удалить ненужную работу (с архивом)</button><button id="buildOutline">✦ Сгенерировать каркас</button></div></section>
 <section id="structure" class="tabpane" hidden><div class="sectionhead"><h2 id="structureHeading">План произведения</h2><p id="structureHint">Составьте главы и сцены; автор утверждает каждый раздел прежде, чем он попадёт в издание.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div></section>
 <section id="write" class="tabpane" hidden><div class="sectionhead"><h2 id="writingHeading">Редактор текста</h2><p id="writingHint">Сохранённый текст разделов — единственный источник рукописи. Черновик ИИ попадёт в текст только после вашего принятия.</p></div><label class="block"><span id="writingSectionLabel">Глава / часть</span><select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea><div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><button id="openBookFromEditor" type="button">Читать книгу из сцен ↗</button><a id="export" href="#">Скачать техпаспорт проекта (.md)</a></div></section>
+<section id="illustrations" class="tabpane" hidden>
+ <div class="sectionhead"><div class="eyebrow">ИЛЛЮСТРАЦИИ / ОБЛОЖКА / МАКЕТ</div>
+ <h2>Иллюстрации для издания</h2>
+ <p>Добавляй изображения в конкретные главы. Картинки войдут в EPUB, редактируемый DOCX и PDF A5. Хранятся только в каталоге ACHEWIW.</p></div>
+ <div class="illustration-workflow">
+ <div class="illustration-input">
+  <h3>Изображение на страницу</h3>
+  <label>Глава или раздел<select id="illustrationScene"></select></label>
+  <label>Подпись к изображению<input id="illustrationCaption" maxlength="1000" placeholder="Рис. 1 — принципиальная схема"></label>
+  <label>Расположение<select id="illustrationPlacement"><option value="start">После заголовка главы</option><option value="end">После текста главы</option></select></label>
+  <label>Файл PNG, JPEG или WebP (до 12 МиБ)<input type="file" id="illustrationFile" accept="image/png,image/jpeg,image/webp"></label>
+  <button type="button" class="primary" id="illustrationUpload">Загрузить в книгу</button>
+ </div>
+ <div class="illustration-input">
+  <h3>Локальная генерация изображений</h3>
+  <p id="illustrationEngineStatus">Проверка локального генератора...</p>
+  <label>Описание иллюстрации<textarea id="illustrationPrompt" rows="4" maxlength="2500" placeholder="Фотореализм или книжная гравюра, ракурс, композиция, свет..."></textarea></label>
+  <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
+  <p class="illustration-disclaimer">Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
+ </div>
+ </div>
+ <h3 class="illustration-library-title">Иллюстрации рукописи</h3>
+ <div id="illustrationGrid" class="illustration-grid"><p>Загрузка каталога...</p></div>
+</section>
 <section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div class="actions"><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
 <section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
   <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
