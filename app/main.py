@@ -1329,7 +1329,8 @@ async def execute_book(job_id: str) -> None:
                 payload = {
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
-                    "options": {"temperature": 0.72, "num_predict": min(3900, max(1200, round(requested * 3.1)))},
+                    "options": {"temperature": 0.72, "num_ctx": 16384,
+                                "num_predict": min(3900, max(1200, round(requested * 3.1)))},
                 }
                 generated = ""
                 with db() as connection:
