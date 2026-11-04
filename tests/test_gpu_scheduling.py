@@ -201,6 +201,63 @@ def test_comfyui_free_only_when_shared_queue_is_empty(monkeypatch):
     assert calls[-1][2]=={"unload_models":True,"free_memory":True}
 
 
+def test_comfyui_control_api_is_opt_in_allowlisted_and_checks_gpu_lease(studio, monkeypatch):
+    client, _project_id, _scene_id = studio
+    missing = client.get("/api/illustration-engine/control")
+    assert missing.status_code == 503
+
+    # Browser cannot send shell commands, arbitrary actions or malformed IDs.
+    assert client.post("/api/illustration-engine/control",
+                       json={"action": "bash -c id"}).status_code == 422
+    assert client.get("/api/illustration-engine/control/jobs/../x").status_code == 404
+
+    token_path = main.DATA_DIR / "comfyui-control.token"
+    token_path.write_text("A" * 56, encoding="utf-8")
+    token_path.chmod(0o600)
+    calls = []
+
+    class FakeControlResponse:
+        status_code = 200
+        def json(self):
+            return {"installed": True, "model_present": True, "api_ready": True}
+
+    class FakeControlClient:
+        def __init__(self, **_kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_args): return False
+        async def request(self, method, url, *, headers, json):
+            calls.append((method, url, headers, json))
+            response = FakeControlResponse()
+            if method == "POST":
+                response.status_code = 202
+                response.json = lambda: {"job_id": "a" * 32, "action": "start"}
+            return response
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeControlClient)
+    status = client.get("/api/illustration-engine/control")
+    assert status.status_code == 200, status.text
+    assert status.json()["installed"] is True
+    assert calls[-1][:2] == ("GET", "http://127.0.0.1:8190/status")
+    assert calls[-1][2]["X-ACHEWIW-Control-Token"] == "A" * 56
+
+    with main.db() as connection:
+        assert reserve_gpu(connection, "busy", "text")
+    blocked = client.post("/api/illustration-engine/control", json={"action": "stop"})
+    assert blocked.status_code == 409, blocked.text
+    assert not any(item[0] == "POST" for item in calls)
+    with main.db() as connection:
+        release_gpu(connection, "busy")
+
+    denied = client.post("/api/illustration-engine/control",
+                         headers={"Origin": "http://evil.example"},
+                         json={"action": "start"})
+    assert denied.status_code == 403
+    started = client.post("/api/illustration-engine/control", json={"action": "start"})
+    assert started.status_code == 202, started.text
+    assert calls[-1][:2] == ("POST", "http://127.0.0.1:8190/control")
+    assert calls[-1][3] == {"action": "start"}
+
+
 def test_browser_persistence_and_cache_scoping_markers():
     app=(Path(__file__).resolve().parents[1]/"app/static/app.js").read_text()
     illustrations=(Path(__file__).resolve().parents[1]/"app/static/illustrations.js").read_text()
