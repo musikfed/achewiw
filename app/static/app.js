@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s);
 let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, previousSceneId=null;
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
+let draftSaveTimer=null;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
 // Browser UI state is separate from SQLite manuscript data.
@@ -12,6 +13,14 @@ function stashUnsavedProject(){
   updateBrief();collectScenes();collectText();
   const data={version:1,server_updated_at:project.updated_at,project};
   try{sessionStorage.setItem(uiKey('manuscriptDraft'),JSON.stringify(data))}catch{}
+}
+function queueUnsavedProjectSave(){
+  if(!project)return;
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer=setTimeout(()=>{
+    draftSaveTimer=null;
+    if(project)stashUnsavedProject();
+  },350);
 }
 function recoverUnsavedProject(serverProject){
   const raw=safeGet(sessionStorage,uiKey('manuscriptDraft',serverProject.id));
@@ -120,8 +129,8 @@ function render(){
  updateWorkCopy();recommendModel();renderProjects();renderScenes();renderWriting();
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
-async function save(){if(!project)return;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;if(project&&project.id!==id)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -534,6 +543,13 @@ document.addEventListener('input',event=>{
   if(!project)return;
   if(event.target.closest('#editor'))stashUnsavedProject();
 });
+// Persist unpublished manuscript edits while typing, not just on beforeunload.
+// This remains a per-tab browser draft; server canon still requires explicit Save.
+for(const eventName of ['input','change']){
+  document.addEventListener(eventName,event=>{
+    if(event.target?.closest?.('#brief, #structure, #write'))queueUnsavedProjectSave();
+  });
+}
 window.addEventListener('beforeunload',()=>{if(project)stashUnsavedProject()});
 let lastScrollAt=0;
 window.addEventListener('scroll',()=>{
