@@ -18,6 +18,12 @@ jobs:
         run: bash -n scripts/achewiw-control.sh
       - name: Simulated Docker isolation tests
         run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
+      - name: Validate browser application and monitoring JS syntax
+        run: |
+          node --check app/static/app.js
+          node --check app/static/monitor.js
+          grep -Fq 'id="aiProgress"' app/static/index.html
+          grep -Fq 'id="unloadModel"' app/static/index.html
       - name: Check compose ownership markers
         run: |
           grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
