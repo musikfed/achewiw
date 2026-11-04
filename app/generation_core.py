@@ -39,6 +39,13 @@ def init_jobs(connection: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS ai_jobs_for_project "
         "ON ai_jobs(project_id, created_at DESC)"
     )
+    # Separate decision records keep existing ai_jobs and existing books intact.
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS ai_job_reviews (
+            job_id TEXT PRIMARY KEY, decision TEXT NOT NULL,
+            notes TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
+        )
+    """)
 
 
 def mark_interrupted(connection: sqlite3.Connection) -> None:
@@ -95,6 +102,14 @@ def get_job(connection: sqlite3.Connection, job_id: str) -> dict | None:
         json.loads(data["suggested_scenes"]) if data["suggested_scenes"] else None
     )
     data["result"] = data.pop("output")
+    if data["mode"] == "audit":
+        review = connection.execute(
+            "SELECT decision, notes, updated_at FROM ai_job_reviews WHERE job_id=?",
+            (job_id,)
+        ).fetchone()
+        data["author_decision"] = review["decision"] if review else "unreviewed"
+        data["author_notes"] = review["notes"] if review else ""
+        data["reviewed_at"] = review["updated_at"] if review else None
     return data
 
 
@@ -127,3 +142,22 @@ def estimate_progress(characters: int, elapsed_seconds: float) -> tuple[int | No
     rate = characters / elapsed_seconds
     seconds = round(max(0, LIMIT * 3.4 - characters) / max(rate, 1))
     return percent, min(seconds, 7200), guessed_tokens
+
+
+def save_audit_decision(connection: sqlite3.Connection, job_id: str,
+                        decision: str, notes: str) -> dict:
+    """Acknowledge QA suggestions. Never mutate scene text or the manuscript."""
+    if decision not in ("unreviewed", "in_progress", "completed", "reference"):
+        raise ValueError("Unknown audit decision")
+    if len(notes) > 3000:
+        raise ValueError("Audit notes too long")
+    job = get_job(connection, job_id)
+    if job is None or job["mode"] != "audit" or job["status"] != "ready":
+        raise ValueError("Only completed audit jobs can be reviewed")
+    connection.execute("""
+        INSERT INTO ai_job_reviews (job_id, decision, notes, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(job_id) DO UPDATE SET
+            decision=excluded.decision, notes=excluded.notes, updated_at=excluded.updated_at
+    """, (job_id, decision, notes, utc_now()))
+    return get_job(connection, job_id)
