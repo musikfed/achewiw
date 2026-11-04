@@ -115,6 +115,21 @@
       caption:el('illustrationCaption').value,
       placement:el('illustrationPlacement').value
     };
+    if(el('illustrationReleaseLLM').checked){
+      const chosen=document.getElementById('model')?.value;
+      if(!chosen){alert('Сначала выбери текстовую модель Ollama');button.disabled=false;return}
+      const agreement=confirm('Выгрузить только '+chosen+' из общей Ollama для освобождения VRAM?\n'+
+        'Эту модель могут использовать другие приложения. GPU и другие модели не сбрасываются.');
+      if(!agreement){button.disabled=false;return}
+      try{
+        const response=await json('/api/models/unload',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:chosen,confirm_shared_model:true})
+        });
+        el('illustrationEngineStatus').textContent=
+          'Запрошена выгрузка '+chosen+'. ComfyUI автоматически выберет свой checkpoint.';
+      }catch(err){alert('Выгрузка отменена: '+err.message);button.disabled=false;return}
+    }
     const url='/api/projects/'+p.id+'/illustrations/generate';
     const post=payload=>fetch(url,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
