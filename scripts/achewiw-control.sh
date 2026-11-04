@@ -12,8 +12,8 @@ ACTION="${1:-status}"
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 
 case "$ACTION" in
-  start|status|stop|restart|update|rebuild|auth-check|monitor-start) ;;
-  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|rebuild|auth-check|monitor-start" ;;
+  start|status|stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start) ;;
+  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start" ;;
 esac
 [[ $# -le 1 ]] || die "Допускается только одна команда"
 command -v docker >/dev/null 2>&1 || die "Docker CLI не найден"
@@ -301,8 +301,16 @@ run_rebuild() {
     die "ACHEWIW остановлен: rebuild не запускает ранее остановленный проект. Используй start отдельно."
   fi
   echo "Проверено: пересборка только собственного контейнера ACHEWIW Studio."
-  compose up -d --build --force-recreate --no-deps studio ||
-    die "Не удалось пересобрать ACHEWIW. Данные data/ и остальные контейнеры не тронуты."
+  if [[ "$ACTION" == rebuild-fresh ]]; then
+    echo "Пересборка без использования старых Docker build layers (не глобальный prune)."
+    compose build --no-cache studio ||
+      die "Не удалось пересобрать без cache; никакие глобальные кэши не удалялись"
+    compose up -d --no-build --force-recreate --no-deps studio ||
+      die "Не удалось запустить собственный ACHEWIW после чистой сборки"
+  else
+    compose up -d --build --force-recreate --no-deps studio ||
+      die "Не удалось пересобрать ACHEWIW. Данные data/ и остальные контейнеры не тронуты."
+  fi
   preflight_all
   [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW после пересборки не запущен"
   auth_check || die "Новая сборка не прошла проверку отсутствия пароля"
@@ -369,7 +377,7 @@ case "$ACTION" in
   start) run_start; exit 0 ;;
   restart) run_restart; exit 0 ;;
   update) run_update; exit 0 ;;
-  rebuild) run_rebuild; exit 0 ;;
+  rebuild|rebuild-fresh) run_rebuild; exit 0 ;;
   auth-check) auth_check; exit 0 ;;
   monitor-start) monitor_start || die "Не удалось включить собственный монитор; другие службы не изменены"; exit 0 ;;
 esac
