@@ -277,7 +277,7 @@ def test_browser_persistence_and_cache_scoping_markers():
                     "release_comfy_vram:el('illustrationReleaseComfy').checked"):
         assert marker in illustrations,marker
     assert "illustrationEnginePrepare" in illustrations and "illustrationEnginePrepare" in html
-    assert "20261105-longbook-v10" in html
+    assert "20261105-longbook-v11" in html
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
     assert "comfyui-control-agent.sh reload" in updater
