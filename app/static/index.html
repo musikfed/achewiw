@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v3"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
-<div class="workspace"><aside><div class="work-navigator" aria-label="Направления мастерской">
-<div class="nav-heading">Мастерские</div>
+<div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
+<div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
 <button type="button" data-kind-filter="fiction">✦ Фантастика и проза</button>
 <button type="button" data-kind-filter="technical">▣ Технические книги</button>
 <button type="button" data-kind-filter="speech">◈ Выступления</button>
 <button type="button" data-kind-filter="nonfiction">▤ Нонфикшн</button>
 <button type="button" class="nav-all selected" data-kind-filter="all">Все произведения</button>
-</div><div class="sidehead"><span>БИБЛИОТЕКА</span><button id="newProject">+ Проект</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW EDITION <span>v0.2</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
-<main><div class="hero"><div><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
+</div><div class="sidehead"><span>БИБЛИОТЕКА</span><button type="button" id="newProject">+ Новая</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW · ИЗДАНИЕ <span>v0.3</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
+<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
 <button type="button" id="unloadModel" class="model-unload" title="Выгрузить только выбранную LLM из общей Ollama" disabled>Освободить VRAM модели</button>
 <small class="model-warning">Не сбрасывает RTX 3060. Выгрузка выбранной модели может затронуть другие приложения, использующие ту же Ollama.</small></div></div>
 <section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
@@ -25,7 +25,7 @@
   </div>
   <p class="monitor-note">CPU/RAM/GPU показывает хостовый сборщик <code>achewiw-host-monitor.service</code>, а не Docker. Если нет данных, выполните <code>cd /1tbdisk/achewiw && bash scripts/achewiw-control.sh monitor-start</code>. «Нет данных» не означает нулевую нагрузку.</p>
 </section>
-<div id="editor" hidden><nav class="tabs"><button data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button><button data-tab="book">05 · Книга</button></nav>
+<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button><button data-tab="book">05 · Книга</button></nav>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
 <option value="fiction">Фантастика, роман и художественная проза</option>
 <option value="technical">Техническая, инженерная и научная книга</option>
@@ -89,5 +89,5 @@
 <button data-create-kind="technical"><strong>Техническая литература</strong><small>Тезисы, главы, источники и проверка фактов</small></button>
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
-</div><button id="startProject" class="primary">+ Новая работа</button></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js" defer></script><script src="/static/app.js" defer></script></body></html>
+</div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v3" defer></script><script src="/static/app.js?v=20261104-editorial-v3" defer></script></body></html>
