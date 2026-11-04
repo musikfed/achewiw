@@ -1237,7 +1237,10 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
     """Never feed the entire book back through the limited context window."""
     chapter_cards = [
         {"n": index + 1, "title": card.title, "anchor": card.anchor,
-         "hook": card.hook, "reader_info": card.reader_info}
+         "hook": card.hook, "reader_info": card.reader_info,
+         # Legacy short scene texts are often the ONLY approved synopsis.
+         # They describe intended events but must NOT become the book prose.
+         "brief_synopsis": card.text[:850] if book_words(card.text) <= 180 else ""}
         for index, card in enumerate(project.scenes)
     ]
     brief = {
@@ -1248,7 +1251,8 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
         "канон": project.anchors, "авторские_источники": project.sources[:2500],
         "авторские_тезисы": project.claims[:2500],
         "план": chapter_cards, "текущая_глава": chapter_index + 1,
-        "целевая_длина_главы": chapter_target, "карточка": scene.model_dump(exclude={"text", "blocks"})
+        "целевая_длина_главы": chapter_target, "карточка": scene.model_dump(exclude={"text", "blocks"}),
+        "утверждённый_синопсис_главы": scene.text[:2000] if book_words(scene.text) <= 500 else "",
     }
     chapter_plan = chapter_plan or {}
     disclosure = {
