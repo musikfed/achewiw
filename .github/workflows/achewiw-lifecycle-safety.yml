@@ -20,6 +20,8 @@ jobs:
         run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
       - name: Validate safe editorial-only update script
         run: bash -n scripts/update-editorial.sh scripts/monitor-v2.sh scripts/reinstall-studio-fresh.sh
+      - name: Reproduce linked Ubuntu systemd user-unit and isolation checks
+        run: python3 -m unittest discover -v -s tests -p 'test_monitor_v2_service.py'
       - name: Editorial layout, responsive rules and versioned assets
         run: python3 -m unittest discover -v -s tests -p 'test_editorial_layout.py'
       - name: Validate browser application and monitoring JS syntax
