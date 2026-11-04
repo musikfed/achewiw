@@ -62,8 +62,8 @@ class EditorialLayoutTests(unittest.TestCase):
         parser = Structure()
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
-        self.assertEqual(len(urls), 3)
-        self.assertTrue(all("v=20261104-editorial-v3" in u for u in urls))
+        self.assertEqual(len(urls), 4)
+        self.assertTrue(all("v=20261104-editorial-v5" in u for u in urls))
         self.assertTrue(all(u.startswith("/static/") for u in urls))
 
     def test_typography_and_responsive_layout_rules(self):
