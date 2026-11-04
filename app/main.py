@@ -252,11 +252,45 @@ def build_prompt(project: Project, request: AIRequest) -> str:
             "информация": scene.reader_info,
             "крючок": scene.hook,
             "объекты": scene.active_objects,
-            "отрывок": scene.text[:1000],
+            "отрывок": scene.text[:9500] if request.mode == "audit" else scene.text[:1000],
         }
         for scene in project.scenes[:40]
     ]
     extra = f"\nДополнительное пожелание автора: {request.instructions}" if request.instructions else ""
+
+    if request.mode == "block":
+        if project.work_type != "fiction":
+            raise HTTPException(422, "Поблочная художественная генерация доступна в мастерской прозы")
+        selected = next((s for s in project.scenes if s.id == request.scene_id), None)
+        block = next((b for b in selected.blocks if b.id == request.block_id), None) if selected else None
+        if not block:
+            raise HTTPException(422, "Сначала опиши блок сцены и его объём")
+        if block.accepted_job_id:
+            raise HTTPException(409, "Этот блок уже принят. Создай новый блок для дальнейшего текста.")
+        return block_prompt(project, selected, block, request.instructions)
+    if request.mode == "polish":
+        selected = next((s for s in project.scenes if s.id == request.scene_id), None)
+        if not selected or not selected.text.strip():
+            raise HTTPException(422, "Сначала сохрани текст сцены для литературной редактуры")
+        if len(selected.text) > 16000:
+            raise HTTPException(422, "Для качественной редактуры выдели сцену до 16000 символов")
+        return (
+            "Ты литературный редактор. Верни только исправленную русскую прозу, "
+            "без заголовков, списков, объяснений, рецензии и оценки своей работы. "
+            "Убери речевые штампы, повторы синтаксиса, безликие эмоции, чрезмерные "
+            "вводные, искусственные финалы и выспренность. Сохрани авторскую интонацию, "
+            "все факты, логику событий, хронологию, имена, предметы и мотивы. "
+            "Новых предметов, персонажей, событий или способностей не добавляй. "
+            "Автор сам решает, принимать ли правку. Пожелание: "
+            + request.instructions[:2000] + "\nИсходный текст:\n" + selected.text
+        )
+    if request.mode == "continuity":
+        if project.work_type != "fiction":
+            raise HTTPException(422, "Сюжетная проверка предназначена для художественной прозы")
+        findings = story_preflight(project)
+        return (review_prompt(project, request.instructions, polish=False) +
+                "\nРеестр явно заявленных автором фактов (не доказательства ошибок):\n" +
+                json.dumps(findings, ensure_ascii=False))[:35000]
     if request.mode == "outline":
         task = (
             ("Создай последовательный план разделов технической книги (5–8 разделов). "
@@ -289,7 +323,8 @@ def build_prompt(project: Project, request: AIRequest) -> str:
         written = sum(bool(scene.text.strip()) for scene in project.scenes)
         scope = (
             f"В проекте написаны {written} из {len(project.scenes)} сцен. "
-            "Тебе доступны только первые 1000 символов текста каждой сцены. "
+            "Для аудита переданы тексты в пределах общего контекстного окна. "
+            "Не утверждай, что прочёл целиком обрезанные главы. "
             "Не делай выводов об отсутствующем тексте. "
         )
         if not written:
