@@ -141,3 +141,14 @@ def test_http_plan_save_and_generation_freezes_author_instructions(tmp_path,monk
         assert "Главную тайну" not in prompt  # no invented answer
         assert "без ответа" in prompt.lower()
         assert "Сохраняй цель сцены" in prompt
+
+
+def test_quality_guard_rejects_exact_prose_repetitions():
+    from book_generation_core import check_new_prose
+    paragraph = "В переулке медленно загорались фонари, и Миирус слушал город. "
+    already = paragraph * 20
+    check_new_prose("", paragraph * 3)
+    with pytest.raises(ValueError, match="повтор"):
+        check_new_prose(already, paragraph * 10)
+    with pytest.raises(ValueError, match="короткий"):
+        check_new_prose(already, "Краткий пересказ")
