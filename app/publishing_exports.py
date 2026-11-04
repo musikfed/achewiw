@@ -43,7 +43,7 @@ def manuscript_fb2(project) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def manuscript_docx(project) -> bytes:
+def manuscript_docx(project, illustrations=None) -> bytes:
     from docx import Document
     from docx.shared import Cm, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -64,6 +64,11 @@ def manuscript_docx(project) -> bytes:
         if i:
             document.add_page_break()
         document.add_heading(chapter["title"], level=1)
+        for art in illustrations or []:
+            if art["scene_id"] == chapter["scene_id"]:
+                document.add_picture(str(art["path"]), width=Cm(10.5))
+                if art.get("caption"):
+                    document.add_paragraph(art["caption"], style="Caption")
         for paragraph in chapter["text"].strip().split("\n\n"):
             if paragraph.strip():
                 document.add_paragraph(paragraph.strip())
@@ -72,7 +77,7 @@ def manuscript_docx(project) -> bytes:
     return doc.getvalue()
 
 
-def manuscript_pdf(project, *, print_proof=False) -> bytes:
+def manuscript_pdf(project, *, print_proof=False, illustrations=None) -> bytes:
     """A5 reading PDF / A5 print proof with Unicode font, basic page numbers.
 
     This does not claim PDF/X-4, bleed boxes, ICC or printer conformance.
@@ -84,7 +89,7 @@ def manuscript_pdf(project, *, print_proof=False) -> bytes:
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image as RLImage
 
     book = _chapters(project)
     # Licensed Unicode DejaVu Serif from fonts-dejavu-core system package.
@@ -120,6 +125,15 @@ def manuscript_pdf(project, *, print_proof=False) -> bytes:
         if i:
             story.append(PageBreak())
         story.append(Paragraph(escape(chapter["title"]), chapter_style))
+        for art in illustrations or []:
+            if art["scene_id"] == chapter["scene_id"]:
+                from PIL import Image as PILImage
+                with PILImage.open(art["path"]) as picture:
+                    iw, ih = picture.size
+                ratio = min(105 * mm / iw, 113 * mm / ih, 1.0)
+                story.append(RLImage(str(art["path"]), width=iw * ratio, height=ih * ratio))
+                if art.get("caption"):
+                    story.append(Paragraph(escape(art["caption"]), style))
         for paragraph in chapter["text"].strip().split("\n\n"):
             if paragraph.strip():
                 p = "<br/>".join(escape(line) for line in paragraph.splitlines())
