@@ -225,6 +225,44 @@ class ShutdownTests(unittest.TestCase):
         self.assertFalse(self.unit_stopped.exists())
         self.assertNotIn("stop --time", self.commands())
 
+    def test_rebuild_ignores_foreign_monitor_unit_and_does_not_touch_it(self):
+        result = self.run_switch(
+            "rebuild", TEST_UNIT_STATE="loaded",
+            TEST_UNIT_FRAGMENT="/other/monitor.service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("user-unit", result.stdout)
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertFalse(self.unit_stopped.exists())
+        self.assertFalse(self.unit_started.exists())
+
+    def test_update_ignores_foreign_monitor_unit_but_updates_studio(self):
+        result = self.run_switch(
+            "update", TEST_UNIT_STATE="loaded",
+            TEST_UNIT_FRAGMENT="/other/monitor.service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("merge --ff-only", self.gitlog.read_text())
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertFalse(self.unit_stopped.exists())
+        self.assertFalse(self.unit_started.exists())
+
+    def test_auth_check_is_read_only_with_foreign_monitor_unit(self):
+        result = self.run_switch(
+            "auth-check", TEST_UNIT_STATE="loaded",
+            TEST_UNIT_FRAGMENT="/other/monitor.service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("без HTTP Basic", result.stdout)
+        self.assertNotIn("up -d", self.commands())
+        self.assertFalse(self.unit_started.exists())
+        self.assertFalse(self.unit_stopped.exists())
+
+    def test_stop_still_refuses_foreign_monitor_unit(self):
+        result = self.run_switch(
+            "stop", TEST_UNIT_STATE="loaded",
+            TEST_UNIT_FRAGMENT="/other/monitor.service")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.unit_stopped.exists())
+        self.assertNotIn("stop --time", self.commands())
+
     def test_start_stopped_is_safe_and_idempotent(self):
         self.state.write_text("stopped")
         result = self.run_switch("start")
