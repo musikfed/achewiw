@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-longbook-v11"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-narrative-v12"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -48,6 +48,16 @@
  <h3>Написать книгу по утверждённому каркасу</h3>
  <p>Цель берётся из поля «Целевой объём»: 20000 слов или 150 минут (при 150 словах/мин). Каждая глава создаётся несколькими фрагментами, а не одним пересказом. Черновик сохраняется в SQLite, книга не заменяется без вашего согласия.</p>
  </div></div>
+ <div class="chapter-editorial-plan">
+ <div class="chapter-plan-top"><div><h4>Режиссура глав — объём, ритм, интрига</h4>
+ <p>Каркас остаётся прежним. Здесь настраивается только раскрытие информации и глубина прозы для каждой главы. 1 страница ≈ 275 слов — условная оценка, не типографская норма.</p></div>
+ <div class="actions"><button id="recalculateChapterPlan" type="button">Предложить распределение</button>
+ <button id="balanceChapterPlan" type="button">Подогнать сумму под цель</button>
+ <button id="saveChapterPlan" type="button">Сохранить режиссуру глав</button></div></div>
+ <p id="chapterPlanSummary" role="status" aria-live="polite">План загружается…</p>
+ <div id="chapterPlanList" class="chapter-plan-list"></div>
+ <small>Сохранённые настройки хранятся в SQLite отдельно от каркаса. Перераспределение не меняет событий, порядок сцен или принятый текст. Полное раскрытие разрешай только в подготовленной главе.</small>
+ </div>
  <div class="actions"><button id="generateFullBook" class="primary" type="button">✦ Написать всю книгу</button>
  <button id="resumeFullBook" type="button" hidden>Продолжить прерванную генерацию</button>
  <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button></div>
@@ -127,6 +137,7 @@
     <strong id="bookGenerationStatus" role="status" aria-live="polite">Проверяем генерацию и целевой объём…</strong>
     <progress id="bookGenerationProgress" max="100" value="0" aria-label="Фактический процент сгенерированных слов"></progress>
     <div class="actions">
+      <button id="bookOpenChapterPlan" type="button">Настроить объём и интригу глав</button>
       <button id="bookGenerate" class="primary" type="button">✦ Написать полноценную книгу по каркасу</button>
       <button id="bookResume" type="button" hidden>▶ Продолжить написание</button>
       <button id="bookAccept" type="button" hidden>✓ Принять готовые главы в рукопись</button>
@@ -186,4 +197,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-longbook-v11" defer></script><script src="/static/app.js?v=20261105-longbook-v11" defer></script><script src="/static/writing_blocks.js?v=20261105-longbook-v11" defer></script><script src="/static/illustrations.js?v=20261105-longbook-v11" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-narrative-v12" defer></script><script src="/static/app.js?v=20261105-narrative-v12" defer></script><script src="/static/writing_blocks.js?v=20261105-narrative-v12" defer></script><script src="/static/illustrations.js?v=20261105-narrative-v12" defer></script></body></html>
