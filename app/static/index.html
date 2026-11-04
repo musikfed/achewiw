@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v6"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v7"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -43,7 +43,23 @@
 <label data-only-kind="speech">Плановая длительность, минут<input data-field="duration_minutes" inputmode="numeric" type="number" min="1" max="480" value="10"></label>
 <label class="wide" data-only-kind="speech">Заметки для выступающего / паузы / слайды<textarea data-field="speaker_notes" rows="4" placeholder="Тайминг, интонации, тезисы для слайдов, требования сцены"></textarea></label></div><div class="actions"><button class="primary" id="saveBrief">Сохранить ТЗ</button><button type="button" id="deleteProject" class="danger-action">Удалить ненужную работу (с архивом)</button><button id="buildOutline">✦ Сгенерировать каркас</button></div></section>
 <section id="structure" class="tabpane" hidden><div class="sectionhead"><h2 id="structureHeading">План произведения</h2><p id="structureHint">Составьте главы и сцены; автор утверждает каждый раздел прежде, чем он попадёт в издание.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div></section>
-<section id="write" class="tabpane" hidden><div class="sectionhead"><h2 id="writingHeading">Редактор текста</h2><p id="writingHint">Сохранённый текст разделов — единственный источник рукописи. Черновик ИИ попадёт в текст только после вашего принятия.</p></div><label class="block"><span id="writingSectionLabel">Глава / часть</span><select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea><div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><button id="openBookFromEditor" type="button">Читать книгу из сцен ↗</button><a id="export" href="#">Скачать техпаспорт проекта (.md)</a></div></section>
+<section id="write" class="tabpane" hidden><div class="sectionhead"><h2 id="writingHeading">Редактор текста</h2><p id="writingHint">Сохранённый текст разделов — единственный источник рукописи. Черновик ИИ попадёт в текст только после вашего принятия.</p></div><label class="block"><span id="writingSectionLabel">Глава / часть</span><select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea>
+<section id="writingBlockPlanner" class="writing-block-planner" aria-label="Поблочная генерация рассказа" hidden>
+  <div class="block-plan-heading">
+    <div><div class="eyebrow">ПОСЦЕННАЯ ЛАБОРАТОРИЯ</div>
+      <h3>Фрагменты рассказа</h3>
+      <p>Для каждого фрагмента задай событие, приблизительный объём, предысторию предметов и запреты. ИИ предлагает кусок текста, но не меняет рукопись без твоего принятия.</p></div>
+    <button id="addWritingBlock" type="button">+ Фрагмент</button>
+  </div>
+  <div id="writingBlockList" class="writing-block-list" aria-live="polite"></div>
+  <small class="block-work-note">Объём — цель, а не обещание точного числа слов. «Принять» проверит текущую версию текста, добавит предложение и сохранит отдельную ревизию для отката.</small>
+</section>
+<div class="writing-refine">
+  <button id="polishScene" type="button">✦ Литературная редактура без ИИ-штампов</button>
+  <button id="loadSceneRevisions" type="button">История принятых правок</button>
+  <div id="sceneRevisions" class="scene-revisions" hidden></div>
+</div>
+<div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><button id="openBookFromEditor" type="button">Читать книгу из сцен ↗</button><a id="export" href="#">Скачать техпаспорт проекта (.md)</a></div></section>
 <section id="illustrations" class="tabpane" hidden>
  <div class="sectionhead"><div class="eyebrow">ИЛЛЮСТРАЦИИ / ОБЛОЖКА / МАКЕТ</div>
  <h2>Иллюстрации для издания</h2>
@@ -69,7 +85,7 @@
  <h3 class="illustration-library-title">Иллюстрации рукописи</h3>
  <div id="illustrationGrid" class="illustration-grid"><p>Загрузка каталога...</p></div>
 </section>
-<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div class="actions"><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
+<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div id="continuityFindings" class="continuity-findings"><p>Проверка фактов и причинных связей будет доступна для выбранной художественной истории.</p></div><div class="actions"><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
 <section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
   <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
   <p>На выход идут только сохранённые тексты глав или частей. QA-отчёты, технические промпты и незаконченные разделы не подмешиваются в книгу.</p></div>
@@ -111,7 +127,7 @@
   <div class="actions"><button id="saveAuditDecision" class="primary" type="button">Сохранить решение</button><a id="downloadAudit" href="#">Скачать QA-отчёт .md</a></div>
   <small id="auditDecisionStatus">Решение ещё не сохранено</small>
 </section>
-<div class="actions" id="aiNextSteps" hidden><button id="aiGoStructure" type="button">02 · Исправить план сцен</button><button id="aiGoWriting" type="button">03 · Редактировать текст</button><button id="aiGoBook" class="primary" type="button">05 · Читать книгу</button></div>
+<div class="actions" id="aiNextSteps" hidden><button id="aiGoStructure" type="button">02 · Исправить план сцен</button><button id="aiGoWriting" type="button">03 · Редактировать текст</button><button id="aiGoBook" class="primary" type="button">06 · Читать книгу</button></div>
 <div class="actions"><button id="applyAI" class="primary" hidden>Принять предложение</button><button id="copyAI">Копировать</button></div></div>
 <div class="footerbar"><span id="saveState">Все изменения сохраняйте кнопкой «Сохранить»</span><span id="meta"></span></div></div><div id="empty" class="empty-studio"><div class="emptyIcon">✍</div><h2>Выберите свою мастерскую</h2>
 <p>Заведите рукопись с подходящим редактором и потом выпустите её в EPUB, PDF, FB2 или DOCX.</p>
@@ -121,4 +137,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v6" defer></script><script src="/static/app.js?v=20261104-editorial-v6" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v6" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v7" defer></script><script src="/static/app.js?v=20261104-editorial-v7" defer></script><script src="/static/writing_blocks.js?v=20261104-editorial-v7" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v7" defer></script></body></html>
