@@ -100,12 +100,11 @@ async function renderBook(){
   const container=$('#bookPreview');
   container.replaceChildren();
   $('#bookSummary').textContent='Читаем сохранённую рукопись…';
-  $('#bookMarkdown').hidden=true;
-  $('#bookEpub').hidden=true;
+  for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=true;
   try{
     const data=await api('/projects/'+project.id+'/manuscript',{cache:'no-store'});
     $('#bookSummary').textContent=data.written_scenes+' из '+data.total_scenes+
-      ' сцен написано · '+data.total_words+' слов';
+      ' частей написано · '+data.total_words+' слов';
     const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
     $('#bookWarning').textContent=missing.length?
       'Ещё не написаны сцены: '+missing.join(' · ')+
@@ -137,8 +136,7 @@ async function renderBook(){
       }
       container.append(chapter);
     }
-    $('#bookMarkdown').hidden=false;
-    $('#bookEpub').hidden=false;
+    for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=false;
   }catch(e){
     $('#bookSummary').textContent='Не удалось загрузить рукопись';
     $('#bookWarning').textContent=e.message;
@@ -299,7 +297,15 @@ async function releaseSelectedModel(){
 function applyAI(){if(!pending)return;if(pending.mode==='outline'&&pending.suggested_scenes){if(project.scenes.length&&!confirm('Заменить текущий каркас предложенным?'))return;project.scenes=pending.suggested_scenes;renderScenes();renderWriting();showTab('structure')}else if(pending.mode==='scene'){const s=project.scenes.find(s=>s.id===pending.sceneId);if(!s)return;if(s.text&&!confirm('Заменить существующий текст сцены?'))return;s.text=pending.result;renderWriting();showTab('write')}$('#aiPanel').hidden=true;toast('Предложение принято. Нажмите «Сохранить» для записи в базу.')}
 async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}if(data.models.includes(model))select.value=model;else if(data.models.length)model=select.value;$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
-$('#newProject').onclick=$('#startProject').onclick=createProject;
+$('#newProject').onclick=$('#startProject').onclick=()=>createProject();
+document.querySelectorAll('[data-create-kind]').forEach(b=>b.onclick=()=>createProject(b.dataset.createKind));
+document.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{
+  const kind=b.dataset.kindFilter;setKindFilter(kind);
+  const matching=kind==='all'?projects[0]:projects.find(p=>(p.work_type||'fiction')===kind);
+  if(matching)loadProject(matching.id);
+  else{project=null;render()}
+});
+$('#workType').onchange=e=>{if(!project)return;project.work_type=e.target.value;updateWorkCopy();renderProjects()};
 $('#saveBrief').onclick=()=>save().catch(e=>toast(e.message));
 $('#saveScenes').onclick=()=>{collectScenes();save().catch(e=>toast(e.message))};
 $('#saveText').onclick=()=>{collectText();save().catch(e=>toast(e.message))};
