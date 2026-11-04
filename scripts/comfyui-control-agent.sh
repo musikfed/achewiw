@@ -8,8 +8,8 @@ TOKEN="$ROOT/data/comfyui-control.token"
 ACTION="${1:-status}"
 die(){ echo "ACHEWIW ComfyUI control: ОСТАНОВЛЕНО — $*" >&2; exit 1; }
 msg(){ echo "ACHEWIW ComfyUI control: $*"; }
-[[ $# -le 1 && ( "$ACTION" == start || "$ACTION" == status || "$ACTION" == stop ) ]] ||
-  die "Команды: start | status | stop"
+[[ $# -le 1 && ( "$ACTION" == start || "$ACTION" == reload || "$ACTION" == status || "$ACTION" == stop ) ]] ||
+  die "Команды: start | reload | status | stop"
 [[ "$(id -u)" -ne 0 ]] || die "Используй обычного пользователя Ubuntu, не root"
 [[ -d "$ROOT" && ! -L "$ROOT" && -d "$ROOT/data" && ! -L "$ROOT/data" ]] ||
   die "Недопустимый корень ACHEWIW или data/"
@@ -42,7 +42,7 @@ case "$ACTION" in
       msg "host-control не установлен; для установки выполни start"
     fi
     ;;
-  start)
+  start|reload)
     [[ -f "$ROOT/scripts/comfyui-local.sh" && ! -L "$ROOT/scripts/comfyui-local.sh" ]] ||
       die "Нет собственного scripts/comfyui-local.sh"
     [[ ! -L "$ROOT/data/comfyui-runtime" && ! -L "$ROOT/data/comfyui-control-jobs" ]] ||
@@ -64,7 +64,28 @@ case "$ACTION" in
       systemctl --user daemon-reload || die "Не удалось перечитать systemd user units"
     fi
     owned || die "Проверка источника unit, WorkingDirectory или ExecStart не прошла"
-    systemctl --user start "$UNIT" || die "Не удалось запустить host-control"
+    if [[ "$ACTION" == reload && "$(show ActiveState)" == active ]]; then
+      # Do not drop the running job registry during a large SDXL download or install.
+      # If the old controller is unreachable, fail closed and leave it running.
+      python3 - "$TOKEN" <<'PY' || die "Контроллер занят или недоступен: не прерываем установку/загрузку модели"
+import json, sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+token = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+request = Request("http://127.0.0.1:8190/status",
+                  headers={"X-ACHEWIW-Control-Token": token})
+with urlopen(request, timeout=12) as response:
+    state = json.load(response)
+if not isinstance(state, dict) or state.get("busy") is not False:
+    raise SystemExit("Текущая операция ComfyUI ещё выполняется")
+PY
+    fi
+    systemctl --user daemon-reload || die "Не удалось перечитать собственный systemd unit"
+    if [[ "$ACTION" == reload && "$(show ActiveState)" == active ]]; then
+      systemctl --user restart "$UNIT" || die "Не удалось обновить собственный host-control"
+    else
+      systemctl --user start "$UNIT" || die "Не удалось запустить host-control"
+    fi
     systemctl --user is-active --quiet "$UNIT" || die "Host-control не активен"
     msg "кнопочное управление готово: 127.0.0.1:8190; токен хранится только в data/"
     ;;
