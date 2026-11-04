@@ -109,7 +109,7 @@ async def lifespan(_app: FastAPI):
             await asyncio.gather(*_background_tasks, return_exceptions=True)
 
 
-app = FastAPI(title="ACHEWIW StoryEngine", version="0.2.1", lifespan=lifespan)
+app = FastAPI(title="ACHEWIW StoryEngine", version="0.5.0", lifespan=lifespan)
 api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
 
 
