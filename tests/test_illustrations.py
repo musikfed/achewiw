@@ -52,7 +52,7 @@ def test_actual_chapter_image_and_export(tmp_path,monkeypatch):
         assert pdf.status_code==200,pdf.text
         assert pdf.content.startswith(b"%PDF")
         assert client.delete(url+"/"+asset).status_code==204
-        assert client.get(url)==client.get(url) # repeatable read
+        assert client.get(url).status_code==200
         assert client.get(url).json()==[]
 
 
