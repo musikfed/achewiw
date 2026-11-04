@@ -7,7 +7,7 @@
 
 ## Что показывает экран
 
-Панель «Состояние сервера» добавлена на главную страницу студии и обновляется каждые 10 секунд, пока вкладка открыта. API `GET /api/monitoring` находится под **существующей HTTP Basic авторизацией**.
+Панель «Состояние сервера» добавлена на главную страницу студии и обновляется каждые 10 секунд, пока вкладка открыта. API `GET /api/monitoring` доступен **без HTTP Basic в доверенной LAN/VPN**, с проверкой приватного адреса клиента и разрешённого `Host` на FastAPI.
 
 | Поле | Откуда данные | Что означает |
 | --- | --- | --- |
@@ -27,7 +27,7 @@
 flowchart LR
   Host["Ubuntu host: /proc + nvidia-smi"] --> Collector["achewiw_host_monitor.py\nread-only collector"]
   Collector --> Data["/1tbdisk/achewiw/data/monitor/host.json"]
-  Data --> API["FastAPI: /api/monitoring\nBasic Auth + sanitize"]
+  Data --> API["FastAPI: /api/monitoring\nLAN/VPN host check + sanitization"]
   Ollama["Host Ollama /api/ps"] --> API
   API --> Browser["ACHEWIW :7080\nCPU/RAM/GPU/LLM panel"]
 ```
@@ -66,33 +66,49 @@ echo "Мониторинг скачан. Ничего не запущено."
 BASH
 ```
 
-## 2. Подключить сбор показаний хоста на работающем Huananzhi
+## 2. Подключить сбор CPU, RAM и NVIDIA на Ubuntu
 
-На работающем Ubuntu-сервере есть два безопасных режима. Предпочтителен контролируемый user-systemd; команда `start` приложения теперь пытается подключить его автоматически, а `monitor-start` делает то же явно.
+У веб-контейнера нет прав на видеокарту или Docker socket — это правильно. Для поступления метрик нужен **хостовый процесс**, который обновляет `/1tbdisk/achewiw/data/monitor/host.json` каждые 5 секунд.
 
-**Разовая диагностика (без фоновой службы):**
+В логах 4 ноября обнаружена ошибка проверки после `systemctl --user link`: systemd возвращал `FragmentPath=/home/user/.config/systemd/user/achewiw-metrics-v2.service`, хотя символическая ссылка указывала на правильный unit в `/1tbdisk/achewiw/ops`. Поэтому пользовательский unit был `Loaded: linked`, но `Active: inactive (dead)`. Проверка **исправлена**: теперь она сверяет `readlink -e FragmentPath` с единственным разрешённым исходником, дополнительно проверяя `WorkingDirectory` и `ExecStart`. Чужая служба с таким же именем по-прежнему не запускается.
 
-```bash
-cd /1tbdisk/achewiw
-python3 scripts/achewiw_host_monitor.py --once
-```
-
-Это создаст один JSON в `data/monitor/` и завершится; спустя 30 секунд браузер покажет `stale`. Если запись не разрешена пользователю, следует проверить владельца **только** папки `/1tbdisk/achewiw/data`, а не менять права корня `/1tbdisk`.
-
-**Непрерывный мониторинг (через отдельную управляемую службу):** в репозитории есть `ops/achewiw-host-monitor.service`, предназначенный для **user-systemd** (без root). Перед его включением необходимо проверить `WorkingDirectory`, `ExecStart`, владельца `data/`, доступность `nvidia-smi` и `systemctl --user`.
+После обновления GitHub:
 
 ```bash
 cd /1tbdisk/achewiw
-mkdir -p data/monitor
-bash scripts/achewiw-control.sh monitor-start
-bash scripts/achewiw-control.sh status
-systemctl --user status achewiw-host-monitor.service --no-pager
-nvidia-smi
+git status -sb
+git fetch origin
+git merge --ff-only origin/feature/technical-epub-first
+bash scripts/monitor-v2.sh start
+bash scripts/monitor-v2.sh status
+systemctl --user status achewiw-metrics-v2.service --no-pager
 ```
 
-**Запускай эти команды именно на Huananzhi, не внутри контейнера.** Не использовать `sudo systemctl enable`: это отдельная ограниченная пользовательская служба, не системный демон. Она НЕ включается автоматически при загрузке Ubuntu. Если монитор отключён, значения хоста станут `stale`; Ollama продолжает отображаться через отдельный API. Точная ошибка user-systemd: `journalctl --user -u achewiw-host-monitor.service -n 50 --no-pager`.
+Если нужен только разовый снимок, не устанавливая/не запуская unit:
+
+```bash
+cd /1tbdisk/achewiw
+bash scripts/monitor-v2.sh once
+```
+
+Проверка фактически полученных данных:
+
+```bash
+curl --noproxy '*' -fsS http://127.0.0.1:7080/api/monitoring | python3 -m json.tool
+```
+
+В успешном ответе ожидается `"host": {"status": "ok", ...}`. Если статус `stale` или `unavailable`, проверьте `journalctl --user -u achewiw-metrics-v2.service -n 40 --no-pager` и права своего `data/monitor`. Для температуры и загрузки NVIDIA отдельно проверьте `nvidia-smi` на Ubuntu. Даже если NVIDIA недоступна, CPU и RAM должны отображаться при работающем сборщике.
+
+### Компактная панель
+
+Начиная с редакционного оформления `v6` монитор занимает небольшой горизонтальный блок над редактором, с четырьмя короткими карточками. Кнопка «Свернуть» скрывает карточки; состояние сохраняется локально в браузере. Подробная помощь спрятана под ссылкой «Диагностика датчиков и хостового сборщика», но доступна в любой момент. На узких экранах карточки перестраиваются в две колонки или одну.
+
+**Важно:** изменение панели требует пересборки только веб-контейнера `bash scripts/achewiw-control.sh rebuild`. Изменение **хостового скрипта мониторинга** само по себе не требует пересборки Docker; достаточно `bash scripts/monitor-v2.sh start`. Старые рукописи и база при этих действиях не удаляются.
 
 ## Выключатель ACHEWIW
+
+**Примечание по жизненному циклу:** новый `achewiw-metrics-v2.service` управляется собственным скриптом `monitor-v2.sh`. Описанный ниже старый выключатель пока проверяет только прежний `achewiw-host-monitor.service`; не делайте вывод, что `stop` автоматически остановил новый v2 collector. Пока требуется отдельная проверка `systemctl --user status achewiw-metrics-v2.service` (и отдельная остановка своей подтверждённой службы при необходимости). Это не касается общей Ollama или других сервисов.
+
 
 `scripts/achewiw-control.sh stop` после будущего запуска:
 1. проверяет **точные Docker-метки** управляемых контейнеров ACHEWIW;
