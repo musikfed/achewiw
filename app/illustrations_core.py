@@ -26,9 +26,13 @@ def initialize(conn: sqlite3.Connection) -> None:
             project_id TEXT NOT NULL,
             scene_id TEXT NOT NULL,
             caption TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            placement TEXT NOT NULL DEFAULT "start"
         )"""
     )
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(illustrations)")}
+    if "placement" not in columns:
+        conn.execute("ALTER TABLE illustrations ADD COLUMN placement TEXT NOT NULL DEFAULT 'start'")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_illustrations_project ON illustrations(project_id)")
 
 
@@ -67,9 +71,11 @@ def normalize_png(data: bytes) -> bytes:
 
 def save(data_dir: Path, conn: sqlite3.Connection, *,
          project_id: str, scene_id: str, caption: str,
-         content: bytes, created_at: str) -> dict:
+         content: bytes, created_at: str, placement: str = "start") -> dict:
     if not ID.fullmatch(project_id) or not ID.fullmatch(scene_id):
         raise ValueError("Неверный проект или раздел")
+    if placement not in {"start", "end"}:
+        raise ValueError("Некорректное расположение иллюстрации")
     if len(caption) > 1000:
         raise ValueError("Подпись слишком длинная")
     count = conn.execute(
@@ -89,25 +95,25 @@ def save(data_dir: Path, conn: sqlite3.Connection, *,
         with os.fdopen(fd, "wb") as dst:
             dst.write(blob)
         conn.execute(
-            "INSERT INTO illustrations VALUES (?,?,?,?,?)",
-            (asset_id, project_id, scene_id, caption.strip(), created_at),
+            "INSERT INTO illustrations (id,project_id,scene_id,caption,created_at,placement) VALUES (?,?,?,?,?,?)",
+            (asset_id, project_id, scene_id, caption.strip(), created_at, placement),
         )
     except Exception:
         path.unlink(missing_ok=True)
         raise
     return {"id": asset_id, "project_id": project_id, "scene_id": scene_id,
-            "caption": caption.strip(), "created_at": created_at}
+            "caption": caption.strip(), "created_at": created_at, "placement": placement}
 
 
 def listing(conn: sqlite3.Connection, project_id: str) -> list[dict]:
     if not ID.fullmatch(project_id):
         raise ValueError("Некорректный ID проекта")
     records = conn.execute(
-        "SELECT id,scene_id,caption,created_at FROM illustrations WHERE project_id=? ORDER BY created_at,id",
+        "SELECT id,scene_id,caption,created_at,placement FROM illustrations WHERE project_id=? ORDER BY created_at,id",
         (project_id,),
     ).fetchall()
     return [dict(id=row[0], scene_id=row[1], caption=row[2],
-                 created_at=row[3]) for row in records]
+                 created_at=row[3], placement=row[4]) for row in records]
 
 
 def asset_for_export(data_dir: Path, conn: sqlite3.Connection, project_id: str) -> list[dict]:
