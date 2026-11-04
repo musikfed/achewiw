@@ -318,7 +318,7 @@ def index(_=Depends(require_auth)):
 
 
 @app.get("/static/{filename}")
-def asset(filename: Literal["app.js", "style.css", "monitor.js"], _=Depends(require_auth)):
+def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js"], _=Depends(require_auth)):
     return FileResponse(STATIC_DIR / filename, headers={"Cache-Control": "no-store"})
 
 
