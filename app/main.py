@@ -467,8 +467,9 @@ async def execute_generation(job_id: str, payload: dict, mode: str) -> None:
                        output=output, error="Часть черновика сохранена; сервер был остановлен",
                        estimated_tokens=estimated_tokens)
         raise
-    except (httpx.HTTPError, ValueError, json.JSONDecodeError, sqlite3.Error) as exc:
-        # Never publish raw upstream URL, filesystem paths or prompt content.
+    except Exception:
+        # Unexpected failures must close the durable job instead of leaving a
+        # permanent phantom 'running' record. Never expose upstream secrets.
         with db() as connection:
             update_job(connection, job_id, status="error", stage="Генерация завершилась ошибкой",
                        output=output, error="Не удалось завершить запрос к Ollama; сохранён полученный текст",
