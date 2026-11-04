@@ -56,7 +56,7 @@ PY
 
 msg "Каталог: $ROOT; ветка: $BRANCH."
 msg "Защищены: SQLite, data/, .env, рукописи, ComfyUI, Ollama, NVIDIA и другие проекты."
-msg "Обновим страницу через новую версию ресурсов editorial-v8; браузерное хранилище не стираем."
+msg "Обновим страницу через новую версию ресурсов editorial-v9; браузерное хранилище не стираем."
 msg "Docker studio будет пересобран без старых слоёв build cache, но без глобального prune."
 if [[ "$ACTION" == preview ]]; then
   msg "PREVIEW — ничего не меняем"
@@ -92,10 +92,10 @@ msg "4/5 — пересборка без кэша только подтверж�
 bash scripts/achewiw-control.sh rebuild-fresh
 msg "5/5 — проверяем веб-приложение и мониторинг"
 bash scripts/achewiw-control.sh auth-check
-if bash scripts/comfyui-control-agent.sh start; then
+if bash scripts/comfyui-control-agent.sh reload; then
   msg "Кнопочное управление ComfyUI подключено"
 else
-  msg "ВНИМАНИЕ: host-control ComfyUI не запущен; проверь scripts/comfyui-control-agent.sh status"
+  msg "ВНИМАНИЕ: host-control ComfyUI не обновлён (возможно, занята загрузка SDXL). Проверь scripts/comfyui-control-agent.sh status, затем повтори reload"
 fi
 if bash scripts/monitor-v2.sh start; then
   msg "Монитор CPU/RAM/GPU запущен"
