@@ -33,7 +33,7 @@ def target_words(raw: str, *, speech_minutes: int | None = None) -> int:
     """
     value = (raw or "").strip().lower().replace("\u00a0", " ")
     word_match = re.search(r"(?<!\d)(\d[\d\s]*\d|\d+)\s*(?:слов(?:а|о)?|words?)(?!\w)", value)
-    minute_match = re.search(r"(?<!\d)(\d[\d\s]*\d|\d+)\s*(?:мин(?:ут(?:а|ы)?)?\.?|minutes?)(?!\w)", value)
+    minute_match = re.search(r"(?<!\d)(\d[\d\s]*\d|\d+)\s*(?:мин(?:ут(?:а|ы)?)?\.?|minutes?|mins?)(?!\w)", value)
     if word_match:
         count = int(re.sub(r"\s+", "", word_match.group(1)))
     elif minute_match:
