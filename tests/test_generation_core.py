@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from generation_core import (init_jobs, create_job, update_job, get_job,
                              recent_jobs, mark_interrupted, active_job,
-                             estimate_progress)
+                             estimate_progress, save_audit_decision)
 
 
 class DurableGenerationTests(unittest.TestCase):
@@ -69,6 +69,37 @@ class DurableGenerationTests(unittest.TestCase):
             update_job(db, "b" * 32, status="error", stage="Неудача", error="server down")
         with self.connect() as db:
             self.assertEqual(recent_jobs(db, "project1")[0]["status"], "error")
+
+    def test_qa_decisions_persist_without_touching_report_or_scenes(self):
+        jid = "d" * 32
+        with self.connect() as db:
+            create_job(db, jid, "my-book", "audit", "qwen3:8b", None)
+            update_job(db, jid, status="ready", stage="QA", output="Исправить сцену 2")
+            result=save_audit_decision(db, jid, "in_progress", "Сначала проверю сцену 2")
+            self.assertEqual(result["author_decision"], "in_progress")
+        with self.connect() as db:
+            result=get_job(db, jid)
+            self.assertEqual(result["author_notes"], "Сначала проверю сцену 2")
+            self.assertEqual(result["result"], "Исправить сцену 2")
+            save_audit_decision(db, jid, "completed", "Исправил сцену вручную")
+        with self.connect() as db:
+            self.assertEqual(get_job(db, jid)["author_decision"], "completed")
+            self.assertEqual(get_job(db, jid)["result"], "Исправить сцену 2")
+
+    def test_cannot_accept_an_outstanding_audit_or_non_qa_draft(self):
+        with self.connect() as db:
+            create_job(db, "1"*32, "my-book", "audit", "qwen3:8b", None)
+            with self.assertRaises(ValueError):
+                save_audit_decision(db, "1"*32, "in_progress", "")
+            update_job(db, "1"*32, status="ready", output="QA")
+            with self.assertRaises(ValueError):
+                save_audit_decision(db, "1"*32, "invalid", "")
+            with self.assertRaises(ValueError):
+                save_audit_decision(db, "1"*32, "in_progress", "x" * 3001)
+            create_job(db, "2"*32, "my-book", "scene", "qwen3:8b", None)
+            update_job(db, "2"*32, status="ready", output="Рассказ")
+            with self.assertRaises(ValueError):
+                save_audit_decision(db, "2"*32, "completed", "")
 
     def test_percent_and_eta_are_explicit_approximations(self):
         self.assertEqual(estimate_progress(0, 1)[0], None)
