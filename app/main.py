@@ -402,7 +402,8 @@ def illustrations_list(project_id: str):
 
 @api.post("/projects/{project_id}/illustrations", status_code=201)
 async def illustrations_upload(project_id: str, file: UploadFile = File(...),
-                               scene_id: str = Form(...), caption: str = Form("")):
+                               scene_id: str = Form(...), caption: str = Form(""),
+                               placement: str = Form("start")):
     project = get_project(project_id)
     if scene_id not in {scene.id for scene in project.scenes}:
         raise HTTPException(422, "Для иллюстрации выбери существующую главу или сцену")
@@ -415,7 +416,7 @@ async def illustrations_upload(project_id: str, file: UploadFile = File(...),
         with db() as connection:
             return save_illustration(DATA_DIR, connection,
                  project_id=project_id, scene_id=scene_id,
-                 caption=caption, content=payload, created_at=utc_now())
+                 caption=caption, content=payload, created_at=utc_now(), placement=placement)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
