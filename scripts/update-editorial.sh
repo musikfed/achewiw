@@ -32,7 +32,7 @@ test -f app/static/index.html
 test -f app/static/style.css
 test -f app/static/app.js
 test -f scripts/monitor-v2.sh
-grep -Fq "editorial-v3" app/static/index.html || die "Нет новой версии ассетов"
+grep -Fq "editorial-v5" app/static/index.html || die "Нет новой версии ассетов"
 bash -n scripts/achewiw-control.sh
 
 printf '\n=== 3/4: пересборка только своего Studio (без общего prune) ===\n'
