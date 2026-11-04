@@ -81,6 +81,17 @@ class ComfyUIControlAgentTests(unittest.TestCase):
                 self.assertNotIn("shell", calls[0][1])
                 self.assertEqual(calls[0][1]["stdin"], agent.subprocess.DEVNULL)
 
+    def test_safe_reload_does_not_interrupt_sd_xl_download(self):
+        root = Path(__file__).resolve().parents[1]
+        command = (root / "scripts/comfyui-control-agent.sh").read_text(encoding="utf-8")
+        updater = (root / "scripts/update-studio-clean.sh").read_text(encoding="utf-8")
+        self.assertIn("start|reload)", command)
+        self.assertIn('state.get("busy") is not False', command)
+        self.assertIn('if [[ "$ACTION" == reload', command)
+        self.assertIn('owned || die', command)
+        self.assertIn('systemctl --user restart "$UNIT"', command)
+        self.assertIn("comfyui-control-agent.sh reload", updater)
+
 
 if __name__ == "__main__":
     unittest.main()

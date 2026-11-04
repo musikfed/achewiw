@@ -265,12 +265,14 @@ def test_browser_persistence_and_cache_scoping_markers():
     control=(Path(__file__).resolve().parents[1]/"scripts/achewiw-control.sh").read_text()
     updater=(Path(__file__).resolve().parents[1]/"scripts/update-studio-clean.sh").read_text()
     for marker in ("manuscriptDraft","activeProjectId","writingScene","lastScrollAt",
-                   "selectedModel","uiKey('tab')","achewiw:tab-shown"):
+                   "selectedModel","uiKey('tab')","achewiw:tab-shown",
+                   "queueUnsavedProjectSave","draftSaveTimer"):
         assert marker in app,marker
     for marker in ("illustrationPreparedPrompt","illustrationRefine",
                    "illustrationReleaseComfy"):
         assert marker in illustrations and marker in html,marker
     for marker in ("saveDraft","restoreDraft","achewiw:tab-shown",
+                    "resumeControlJob","savedControlJob","watchControlJob",
                     "const prompt=prepared||plain",
                     "release_comfy_vram:el('illustrationReleaseComfy').checked"):
         assert marker in illustrations,marker
@@ -278,6 +280,7 @@ def test_browser_persistence_and_cache_scoping_markers():
     assert "editorial-v9" in html
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
+    assert "comfyui-control-agent.sh reload" in updater
     assert "docker system prune" not in updater
     assert "rm -rf" not in updater
     assert "data/achewiw.sqlite3" in updater
