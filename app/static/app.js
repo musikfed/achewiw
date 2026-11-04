@@ -48,7 +48,7 @@ function updateWorkCopy(){
 
  $('#structureHint').textContent=kind==='technical'?'Каждый раздел содержит задачу, понятия, аргументацию и проверяемые источники.':kind==='speech'?'Каждый блок речи имеет переходы, тайминг и ясную задачу.':'Создавайте разделы; текст публикуется только после сохранения.';
  $('#writingHint').textContent=kind==='speech'?'Речь сохраняется блоками; ИИ предлагает текст, но автор принимает каждую правку.':'Сохранённый текст является рукописью, а предложения ИИ не подменяют книгу.';
- const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',audit:'04 · Проверка',book:'05 · Типография / Экспорт'};
+ const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',illustrations:'04 · Иллюстрации',audit:'05 · Проверка',book:'06 · Типография / Экспорт'};
  document.querySelectorAll('[data-tab]').forEach(b=>{if(names[b.dataset.tab])b.textContent=names[b.dataset.tab]});
  document.querySelectorAll('[data-only-kind]').forEach(el=>el.hidden=!el.dataset.onlyKind.split(' ').includes(kind));
 }
