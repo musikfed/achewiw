@@ -91,6 +91,9 @@
       linkWrap.append(cause);
       const fields = make('div','planned-block-fields');
       fields.append(description,volume,requires,introduces,linkWrap,forbidden,style);
+      if(block.accepted_job_id){
+        fields.querySelectorAll('input,textarea,select').forEach(node=>node.disabled=true);
+      }
       const actions = make('div','planned-block-actions');
       const generate = make('button','primary','✦ Написать этот фрагмент');
       generate.type='button';
@@ -140,6 +143,18 @@
       return;
     }
     node.hidden=false;
+    const scope=el('continuityScene');
+    const selectedScope=scope.value;
+    scope.replaceChildren();
+    const all=document.createElement('option');all.value='';
+    all.textContent='Вся история: обзор карточек и реестра';
+    scope.append(all);
+    for(const scene of project.scenes){
+      const option=document.createElement('option');
+      option.value=scene.id;option.textContent=scene.title;
+      scope.append(option);
+    }
+    if(project.scenes.some(s=>s.id===selectedScope))scope.value=selectedScope;
     node.textContent='Проверяем явные причины и появление предметов…';
     try{
       const projectId=project.id;
@@ -222,6 +237,6 @@
   el('saveBlockPlans').onclick=saveBlockPlan;
   el('polishScene').onclick=()=>ai('polish');
   el('loadSceneRevisions').onclick=revisions;
-  el('runContinuity').onclick=()=>ai('continuity');
+  el('runContinuity').onclick=()=>ai('continuity',{scene_id:el('continuityScene').value||null});
   document.querySelector('[data-tab="audit"]')?.addEventListener('click',renderContinuity);
 })();
