@@ -206,10 +206,16 @@ def test_audit_report_and_author_decisions_are_separate_from_book(tmp_path, monk
             main.create_job(connection,job_id,p["id"],"audit","qwen3:8b",None)
             main.update_job(connection,job_id,status="ready",stage="QA отчёт",output="Исправить причинность сцены 2")
         endpoint="/api/ai/jobs/"+job_id+"/decision"
+        summary=client.get(f"/api/projects/{p['id']}/ai/jobs?mode=audit&summary=true",headers=headers)
+        assert summary.status_code==200
+        assert summary.json()[0]["id"]==job_id
+        assert "result" not in summary.json()[0]
         response=client.put(endpoint,json={"decision":"in_progress",
               "notes":"Проверю причинность; бессмысленные повторы отвергаю"},headers=headers)
         assert response.status_code==200, response.text
         assert response.json()["author_decision"]=="in_progress"
+        summary2=client.get(f"/api/projects/{p['id']}/ai/jobs?mode=audit&summary=true",headers=headers).json()
+        assert summary2[0]["author_decision"]=="in_progress"
         assert client.get(endpoint).status_code==405
         assert client.put(endpoint,json={"decision":"not-existing","notes":""},headers=headers).status_code==422
         report=client.get("/api/ai/jobs/"+job_id+"/report.md",headers=headers)
