@@ -153,3 +153,48 @@ def test_book_acceptance_rejects_stale_author_text(tmp_path, monkeypatch):
         assert client.post("/api/books/jobs/" + job["id"] + "/accept",
                            json={"confirm": True}).status_code == 409
         assert client.get("/api/projects/" + project["id"]).json()["scenes"][0]["text"] == "Свежая правка автора"
+
+
+def test_live_book_draft_is_not_the_old_synopsis(tmp_path, monkeypatch):
+    """The Book tab can read the full chapter drafts without publishing them."""
+    from fastapi.testclient import TestClient
+    import main
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "DB_PATH", tmp_path / "book-visible.sqlite3")
+    monkeypatch.setattr(main, "_start_book", lambda job_id: None)
+    with TestClient(main.app, base_url="http://192.168.0.100:7080",
+                    client=("127.0.0.1", 12345)) as client:
+        project = client.post("/api/projects", json={"title": "Филиниусы"}).json()
+        project["target_length"] = "20000"
+        project["scenes"] = [
+            {"title": "Прибытие", "text": "Краткий пересказ первой главы."},
+            {"title": "Погоня", "text": "Краткий пересказ второй главы."},
+        ]
+        project = client.put("/api/projects/" + project["id"], json=project).json()
+        job_resp = client.post("/api/books/generate", json={
+            "project_id": project["id"], "model": "qwen3:8b"
+        })
+        assert job_resp.status_code == 202, job_resp.text
+        job = job_resp.json()
+        assert job["book"]["target_words"] == 20000
+        first = job["book_chapters"][0]
+        with main.db() as connection:
+            draft_text = ("Кот увидел огни приближающегося корабля. " * 110).strip()
+            save_chapter(connection, job["id"], first["scene_id"], draft_text, 1)
+        preview = client.get("/api/books/jobs/" + job["id"] + "/draft")
+        assert preview.status_code == 200, preview.text
+        assert preview.headers["cache-control"] == "no-store"
+        visible = preview.json()
+        assert visible["book"]["generated_words"] == count_words(draft_text)
+        assert visible["book"]["target_words"] == 20000
+        assert visible["chapters"][0]["text"] == draft_text
+        assert visible["chapters"][1]["text"] == ""
+        assert visible["chapters"][0]["target_words"] == 10000
+        # No automatic replacement of approved book or export.
+        original = client.get(f"/api/projects/{project['id']}/manuscript").json()
+        assert original["total_words"] < 30
+        assert original["chapters"][0]["text"] == "Краткий пересказ первой главы."
+        assert client.post("/api/books/jobs/" + job["id"] + "/accept",
+                           json={"confirm": True}).status_code == 409
+        missing = client.get("/api/books/jobs/" + "a" * 32 + "/draft")
+        assert missing.status_code == 404
