@@ -283,6 +283,13 @@ def update_project(project_id: str, project: Project):
 def delete_project(project_id: str):
     get_project(project_id)
     with db() as connection:
+        running = connection.execute(
+            "SELECT 1 FROM ai_jobs WHERE project_id=? AND status IN ('queued','running') LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        if running:
+            raise HTTPException(409, "Нельзя удалить проект во время его генерации")
+        connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
     return Response(status_code=204)
 
