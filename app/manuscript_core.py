@@ -72,6 +72,7 @@ def manuscript_epub(project, illustrations=None) -> bytes:
         name = f"chapter-{sequence:03}.xhtml"
         chapter_title = escape(chapter["title"])
         inner = _paragraphs(chapter["text"])
+        opening, closing = [], []
         for illustration in images:
             if illustration["scene_id"] != chapter["scene_id"]:
                 continue
@@ -79,10 +80,12 @@ def manuscript_epub(project, illustrations=None) -> bytes:
             files["EPUB/" + file_name] = illustration["path"].read_bytes()
             manifest.append('<item id="img' + illustration["id"] +
                             '" href="' + file_name + '" media-type="image/png"/>')
-            inner = ('<figure><img src="' + file_name + '" alt="' +
+            figure = ('<figure><img src="' + file_name + '" alt="' +
                      escape(illustration.get("caption") or chapter["title"], quote=True) +
                      '"/><figcaption>' + escape(illustration.get("caption") or "") +
-                     '</figcaption></figure>') + inner
+                     '</figcaption></figure>')
+            (closing if illustration.get("placement") == "end" else opening).append(figure)
+        inner = "".join(opening) + inner + "".join(closing)
         files[f"EPUB/{name}"] = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<html xmlns="http://www.w3.org/1999/xhtml" lang="ru">'
