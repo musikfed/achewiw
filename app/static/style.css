@@ -50,3 +50,9 @@
 #auditDecisionStatus{display:block;color:#806d55;line-height:1.5}
 #aiNextSteps{border-top:1px solid #e7dbc8;padding-top:17px}
 @media(max-width:800px){.book-toolbar{display:block}.book-toolbar .actions{margin-top:16px}.book-reader{padding:20px}.book-chapter p{font-size:16px}}
+
+.audit-history{border-top:1px solid #e8dfd4;padding-top:16px;margin-top:28px}
+.audit-history h3{font:normal 21px Georgia,serif;margin:0 0 12px}
+#auditHistory{display:flex;flex-direction:column;gap:8px;color:#918170}
+.audit-history-item{text-align:left;width:100%;background:#fffaf3;color:#66513b;border:1px solid #e8d8bf}
+.audit-history-item:hover{background:#f9efd9}
