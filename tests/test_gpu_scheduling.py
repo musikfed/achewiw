@@ -174,6 +174,33 @@ def test_image_saves_only_after_empty_ollama_and_explicit_free(studio,monkeypatc
         assert not image_operation_active(conn)
 
 
+
+def test_comfyui_free_only_when_shared_queue_is_empty(monkeypatch):
+    import asyncio
+    calls=[]
+    class FakeComfy:
+        def __init__(self,busy):self.busy=busy
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):return False
+        async def get(self,url,**kwargs):
+            calls.append(("GET",url))
+            return MockResponse({"queue_running": [["other-task"]] if self.busy else [],
+                                 "queue_pending": []})
+        async def post(self,url,**kwargs):
+            calls.append(("POST",url,kwargs["json"]))
+            return MockResponse({})
+    monkeypatch.setattr(image_engine.httpx,"AsyncClient",
+                        lambda **kwargs: FakeComfy(True))
+    assert asyncio.run(image_engine.free_cached_models())=="skipped_comfyui_queue_busy"
+    assert all(x[0]=="GET" for x in calls)
+    calls.clear()
+    monkeypatch.setattr(image_engine.httpx,"AsyncClient",
+                        lambda **kwargs: FakeComfy(False))
+    assert asyncio.run(image_engine.free_cached_models())=="free_requested"
+    assert calls[-1][1].endswith("/free")
+    assert calls[-1][2]=={"unload_models":True,"free_memory":True}
+
+
 def test_browser_persistence_and_cache_scoping_markers():
     app=(Path(__file__).resolve().parents[1]/"app/static/app.js").read_text()
     illustrations=(Path(__file__).resolve().parents[1]/"app/static/illustrations.js").read_text()
