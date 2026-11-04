@@ -100,14 +100,11 @@ compose() {
     --project-directory "$WORKSPACE" --file "$WORKSPACE/compose.yaml" "$@")
 }
 prepare_compose() {
-  [[ -f "$WORKSPACE/.env" && ! -L "$WORKSPACE/.env" ]] ||
-    die "Сначала создайте .env из .env.example с непустым ACHEWIW_PASSWORD"
-  # The distributed .env.example intentionally has an EMPTY password.
-  # Never print or log the actual secret.
-  local password_value
-  password_value="$(sed -n 's/^[[:space:]]*ACHEWIW_PASSWORD[[:space:]]*=[[:space:]]*//p' "$WORKSPACE/.env" | tail -n 1)"
-  if [[ -z "$password_value" || "$password_value" == '""' || "$password_value" == "''" ]]; then
-    die "ACHEWIW_PASSWORD пустой в $WORKSPACE/.env. Откройте nano $WORKSPACE/.env и задайте свой секретный пароль. Шаблон .env.example оставляет его пустым намеренно. Ничего не запускалось."
+  # Passwordless by design; private LAN/VPN client-CIDR check is enforced by FastAPI.
+  # Existing .env (if any) may still contain old password keys; they are IGNORED.
+  if [[ -e "$WORKSPACE/.env" || -L "$WORKSPACE/.env" ]]; then
+    [[ -f "$WORKSPACE/.env" && ! -L "$WORKSPACE/.env" ]] ||
+      die ".env должен быть обычным файлом (не символической ссылкой)"
   fi
   [[ -d "$WORKSPACE/data" && ! -L "$WORKSPACE/data" ]] ||
     die "Создайте обычную папку data/ для книг и SQLite"
@@ -116,6 +113,7 @@ prepare_compose() {
   services="$(compose config --services)" || die "Нельзя проверить Compose services"
   [[ "$services" == studio ]] || die "Разрешена только служба studio"
 }
+
 preflight_all() {
   # Also check fixed container name: do not replace an unrelated/legacy container.
   local candidates named id
