@@ -2,16 +2,66 @@ const $=s=>document.querySelector(s);
 let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, previousSceneId=null;
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let activeKind='all';
+const workModes={
+ fiction:{name:'Фантастика и проза',part:'Сцена',eyebrow:'СТУДИЯ ФАНТАСТИКИ / РОМАН / ПРОЗА',intro:'Канон мира, повороты сюжета, последовательность сцен и литературная редактура.',structure:'Сюжет и главы',write:'Редактор художественного текста',audit:'Редакторская проверка истории'},
+ technical:{name:'Техническая книга',part:'Раздел',eyebrow:'НАУКА / ТЕХНИКА / ИНЖЕНЕРНАЯ КНИГА',intro:'Тезисы, проверяемые источники, терминология, технические разделы и полноценное издание.',structure:'Разделы и доказательства',write:'Редактор технических глав',audit:'Проверка фактов и источников'},
+ speech:{name:'Выступление',part:'Блок речи',eyebrow:'ВЫСТУПЛЕНИЕ / ДОКЛАД / ЛЕКЦИЯ',intro:'Длительность, аудитория, речевые блоки, паузы и чистовой текст для сцены.',structure:'План выступления',write:'Редактор выступления',audit:'Репетиция и проверка речи'},
+ nonfiction:{name:'Нонфикшн',part:'Глава',eyebrow:'НОНФИКШН / ОБРАЗОВАНИЕ / ИССЛЕДОВАНИЕ',intro:'Ясная структура, доказательные аргументы, реальные источники и читаемая книга.',structure:'Главы и аргументы',write:'Редактор нонфикшн',audit:'Логическая и фактологическая проверка'}
+};
+function setKindFilter(kind){
+ if(kind!=='all'&&!workModes[kind])return;
+ activeKind=kind;
+ document.querySelectorAll('[data-kind-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.kindFilter===kind));
+ renderProjects();
+}
+function updateWorkCopy(){
+ const kind=project?.work_type||'fiction',copy=workModes[kind]||workModes.fiction;
+ $('#workEyebrow').textContent=copy.eyebrow;
+ $('#workIntro').textContent=copy.intro;
+ $('#structureHeading').textContent=copy.structure;
+ $('#writingHeading').textContent=copy.write;
+ $('#auditHeading').textContent=copy.audit;
+ $('#writingSectionLabel').textContent=copy.part;
+ $('#structureHint').textContent=kind==='technical'?'Каждый раздел содержит задачу, понятия, аргументацию и проверяемые источники.':kind==='speech'?'Каждый блок речи имеет переходы, тайминг и ясную задачу.':'Создавайте разделы; текст публикуется только после сохранения.';
+ $('#writingHint').textContent=kind==='speech'?'Речь сохраняется блоками; ИИ предлагает текст, но автор принимает каждую правку.':'Сохранённый текст является рукописью, а предложения ИИ не подменяют книгу.';
+ const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',audit:'04 · Проверка',book:'05 · Типография / Экспорт'};
+ document.querySelectorAll('[data-tab]').forEach(b=>{if(names[b.dataset.tab])b.textContent=names[b.dataset.tab]});
+ document.querySelectorAll('[data-only-kind]').forEach(el=>el.hidden=!el.dataset.onlyKind.split(' ').includes(kind));
+}
 async function api(path,options={}){const r=await fetch('/api'+path,{headers:{'Content-Type':'application/json'},...options});if(!r.ok){let detail='Ошибка '+r.status;try{detail=(await r.json()).detail||detail}catch{}throw Error(detail)}if(r.status===204)return null;return r.json()}
 function toast(message){const t=$('#toast');t.textContent=message;t.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.style.display='none',5000)}
 function setBusy(value){isBusy=value;document.querySelectorAll('button').forEach(b=>{if(['generateScene','buildOutline','buildOutline2','runAudit','unloadModel'].includes(b.id))b.disabled=value});$('#status').textContent=value?'Идёт генерация StoryEngine · сохраняется на сервере':'Студия готова'}
-function renderProjects(){$('#projects').innerHTML=projects.map(p=>'<button class="projectItem '+(project?.id===p.id?'selected':'')+'" data-id="'+escaped(p.id)+'"><strong>'+escaped(p.title)+'</strong><small>'+escaped(p.genre)+'</small></button>').join('');document.querySelectorAll('.projectItem').forEach(b=>b.onclick=()=>loadProject(b.dataset.id))}
+function renderProjects(){
+ const items=projects.filter(p=>activeKind==='all'||(p.work_type||'fiction')===activeKind);
+ $('#projects').innerHTML=items.map(p=>'<button class="projectItem '+(project?.id===p.id?'selected':'')+'" data-id="'+escaped(p.id)+'"><strong>'+escaped(p.title)+'</strong><small>'+escaped(workModes[p.work_type||'fiction']?.name||'Проза')+'</small></button>').join('');
+ document.querySelectorAll('.projectItem').forEach(b=>b.onclick=()=>loadProject(b.dataset.id))
+}
 async function refreshProjects(){projects=await api('/projects');renderProjects()}
-function render(){const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;$('#heading').textContent=active?project.title:'Ваши истории начинаются здесь.';if(!active)return;document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');$('#export').href='/api/projects/'+project.id+'/export';$('#bookMarkdown').href='/api/projects/'+project.id+'/manuscript.md';$('#bookEpub').href='/api/projects/'+project.id+'/manuscript.epub';$('#meta').textContent=project.scenes.length+' сцен';renderProjects();renderScenes();renderWriting()}
+function render(){
+ const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;
+ $('#heading').textContent=active?project.title:'Выберите мастерскую';
+ updateWorkCopy();if(!active)return;
+ document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');
+ $('#export').href='/api/projects/'+project.id+'/export';
+ $('#meta').textContent=project.scenes.length+' частей';
+ const prefix='/api/projects/'+project.id+'/manuscript';
+ for(const [id,suffix] of Object.entries({bookMarkdown:'.md',bookEpub:'.epub',bookFb2:'.fb2',bookPdf:'.pdf',bookPrint:'.print.pdf',bookDocx:'.docx'}))$('#'+id).href=prefix+suffix;
+ updateWorkCopy();renderProjects();renderScenes();renderWriting();
+}
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;updateBrief();project=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
 async function loadProject(id){if(isBusy)return;project=await api('/projects/'+id);try{localStorage.setItem('achewiw.activeProjectId',id)}catch{}pending=null;render();await restoreLatestGeneration()}
-async function createProject(){if(isBusy)return;const title=prompt('Название произведения','Новая история');if(title===null||!title.trim())return;project=await api('/projects',{method:'POST',body:JSON.stringify({title:title.trim()})});pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;await refreshProjects();render();showTab('brief')}
+async function createProject(kind){
+ if(isBusy)return;
+ const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
+ const title=prompt('Название: '+workModes[selected].name,'Новая работа');
+ if(title===null||!title.trim())return;
+ project=await api('/projects',{method:'POST',body:JSON.stringify({title:title.trim(),work_type:selected})});
+ activeKind=selected;document.querySelectorAll('[data-kind-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.kindFilter===selected));
+ pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;
+ await refreshProjects();render();showTab('brief');
+}
 function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
 async function renderAuditHistory(){
   if(!project)return;
