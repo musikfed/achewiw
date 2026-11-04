@@ -125,7 +125,8 @@ async function renderAuditHistory(){
   const projectId=project.id;
   target.textContent='Получаем историю QA из SQLite…';
   try{
-    const jobs=await api('/projects/'+projectId+'/ai/jobs?mode=audit&summary=true',{cache:'no-store'});
+    const allJobs=await api('/projects/'+projectId+'/ai/jobs?summary=true',{cache:'no-store'});
+    const jobs=allJobs.filter(j=>['audit','continuity'].includes(j.mode));
     if(!project || projectId!==project.id)return;
     target.replaceChildren();
     if(!jobs.length){target.textContent='Ещё нет QA-отчётов для этой истории.';return}
@@ -299,11 +300,13 @@ function renderGeneration(job){
   const ongoing=['queued','running'].includes(job.status);
   setBusy(ongoing);
   $('#aiPanel').hidden=false;
-  $('#aiHeading').textContent=job.mode==='audit'?
-    '✦ Редакторская проверка · не текст издания':
+  $('#aiHeading').textContent=['audit','continuity'].includes(job.mode)?
+    '✦ Редакторская проверка причинности · не текст издания':
+    job.mode==='polish'?'✦ Литературная редактура · без ИИ-штампов':
+    job.mode==='block'?'✦ Фрагмент рассказа · предложение автора':
     job.mode==='outline'?'✦ Предложение структуры: '+(workModes[project.work_type]?.name||'книга'):
     '✦ Черновик: '+(workModes[project.work_type]?.part||'глава');
-  $('#aiStage').textContent=job.status==='ready'&&job.mode==='audit'?'QA-отчёт готов · выбери решение автора ниже':job.stage||'Ожидание генерации';
+  $('#aiStage').textContent=job.status==='ready'&&['audit','continuity'].includes(job.mode)?'QA-отчёт готов · выбери решение автора ниже':job.stage||'Ожидание генерации';
   $('#aiJobId').textContent='Задание '+job.id.slice(0,12)+' · '+job.model+' · '+new Date(job.updated_at).toLocaleTimeString();
   if(job.status==='ready' && job.result){
     $('#aiOutput').innerHTML=renderAIText(job.result);
@@ -322,7 +325,7 @@ function renderGeneration(job){
   $('#aiNotice').textContent=ongoing?
     'Ответ поступает частями и сохраняется на сервере. Можно обновить страницу — запись не пропадёт.':
     job.status==='ready'?
-      (job.mode==='audit'?
+      (['audit','continuity'].includes(job.mode)?
         'QA-отчёт сохранён. Выбери решение по рекомендациям, затем исправляй нужные сцены. Сам отчёт НЕ является книгой.':
         job.parse_error?'Ответ готов, но JSON-каркас не разобран: '+job.parse_error:
         'Черновик готов. Исходный проект не изменён до принятия предложения.'):
@@ -330,11 +333,12 @@ function renderGeneration(job){
         '. Полученный текст сохранён. '+(job.error||'');
   pending=job.status==='ready'?{
     mode:job.mode,model:job.model,result:job.result,
-    suggested_scenes:job.suggested_scenes,sceneId:job.scene_id
+    suggested_scenes:job.suggested_scenes,sceneId:job.scene_id,
+    jobId:job.id,blockId:job.block_id,accepted:job.accepted
   }:null;
-  $('#applyAI').hidden=!(pending&&(pending.mode==='scene'||(pending.mode==='outline'&&pending.suggested_scenes)));
+  $('#applyAI').hidden=!(pending&&!pending.accepted&&(pending.mode==='scene'||pending.mode==='block'||pending.mode==='polish'||(pending.mode==='outline'&&pending.suggested_scenes)));
   $('#aiNextSteps').hidden=job.status!=='ready';
-  const review=job.status==='ready'&&job.mode==='audit';
+  const review=job.status==='ready'&&['audit','continuity'].includes(job.mode);
   $('#auditReview').hidden=!review;
   shownAuditJobId=review?job.id:null;
   if(review){
@@ -372,7 +376,7 @@ async function restoreLatestGeneration(){
     }
   }catch(e){toast('Не удалось восстановить журнал генерации: '+e.message)}
 }
-async function ai(mode){
+async function ai(mode, extras={}){
   if(!project||isBusy)return;
   updateBrief();collectScenes();collectText();
   await save();
@@ -388,7 +392,8 @@ async function ai(mode){
   $('#applyAI').hidden=true;$('#auditReview').hidden=true;$('#aiNextSteps').hidden=true;shownAuditJobId=null;pending=null;
   try{
     const job=await api('/ai',{method:'POST',body:JSON.stringify({
-      project_id:project.id,mode,model,scene_id:$('#writingScene').value||null
+      project_id:project.id,mode,model,scene_id:$('#writingScene').value||null,
+      ...extras
     })});
     activeGenerationJobId=job.id;
     renderGeneration(job);
@@ -416,7 +421,40 @@ async function releaseSelectedModel(){
   }catch(e){toast('Не удалось освободить модель: '+e.message)}
   finally{button.disabled=isBusy}
 }
-function applyAI(){if(!pending)return;if(pending.mode==='outline'&&pending.suggested_scenes){if(project.scenes.length&&!confirm('Заменить текущий каркас предложенным?'))return;project.scenes=pending.suggested_scenes;renderScenes();renderWriting();showTab('structure')}else if(pending.mode==='scene'){const s=project.scenes.find(s=>s.id===pending.sceneId);if(!s)return;if(s.text&&!confirm('Заменить существующий текст сцены?'))return;s.text=pending.result;renderWriting();showTab('write')}$('#aiPanel').hidden=true;toast('Предложение принято. Нажмите «Сохранить» для записи в базу.')}
+async function applyAI(){
+ if(!pending)return;
+ if(['block','polish'].includes(pending.mode)){
+   const jobId=pending.jobId,mode=pending.mode,sceneId=pending.sceneId;
+   if(!jobId||pending.accepted)return;
+   if(!confirm(mode==='block'?
+      'Добавить предложенный фрагмент в конец сцены? Внесение будет сохранено на сервере с возможностью отката.':
+      'Заменить текст сцены литературной редактурой? Исходный текст сохранится как ревизия для отката.'))return;
+   try{
+     collectScenes();collectText();await save();
+     const r=await api('/ai/jobs/'+jobId+'/accept',
+       {method:'POST',body:JSON.stringify({confirm:true})});
+     const active=project.id;
+     project=await api('/projects/'+active);
+     pending=null;render();showTab('write');
+     $('#writingScene').value=sceneId;switchWriting();
+     $('#aiPanel').hidden=true;
+     toast(mode==='block'?'Фрагмент принят и сохранён · '+r.words+' слов':
+       'Литературная редактура принята, исходник в истории ревизий');
+   }catch(err){toast('Предложение не применено: '+err.message)}
+   return;
+ }
+ if(pending.mode==='outline'&&pending.suggested_scenes){
+   if(project.scenes.length&&!confirm('Заменить текущий каркас предложенным?'))return;
+   project.scenes=pending.suggested_scenes;renderScenes();renderWriting();showTab('structure');
+ }else if(pending.mode==='scene'){
+   const s=project.scenes.find(s=>s.id===pending.sceneId);
+   if(!s)return;
+   if(s.text&&!confirm('Заменить существующий текст сцены?'))return;
+   s.text=pending.result;renderWriting();showTab('write');
+ }
+ $('#aiPanel').hidden=true;
+ toast('Предложение принято. Нажмите «Сохранить» для записи в базу.');
+}
 async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}if(data.models.includes(model))select.value=model;else if(data.models.length)model=select.value;recommendModel(true);$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
 $('#newProject').onclick=$('#startProject').onclick=()=>createProject();
