@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ipaddress
 import os
 import sqlite3
 import time
@@ -15,9 +16,8 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Request
 from fastapi.responses import FileResponse, PlainTextResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
@@ -30,22 +30,33 @@ DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
 STATIC_DIR = Path(__file__).parent / "static"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-USERNAME = os.getenv("ACHEWIW_USERNAME", "author")
-PASSWORD = os.getenv("ACHEWIW_PASSWORD", "")
 DEFAULT_MODEL = os.getenv("ACHEWIW_MODEL", "qwen3:8b")
-basic = HTTPBasic()
+# Password-free private LAN/VPN mode. No unauthenticated access from public IPs.
+# Connections forwarded by a reverse proxy must preserve a trusted source address;
+# X-Forwarded-For is intentionally ignored.
+PRIVATE_CLIENT_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
+    "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+    "::1/128", "fc00::/7"
+))
 
 
-def require_auth(credentials: HTTPBasicCredentials = Depends(basic)) -> None:
-    if not PASSWORD:
-        raise HTTPException(503, "Configure ACHEWIW_PASSWORD in .env")
-    if not (
-        secrets.compare_digest(credentials.username.encode(), USERNAME.encode())
-        and secrets.compare_digest(credentials.password.encode(), PASSWORD.encode())
-    ):
-        raise HTTPException(
-            401, "Invalid credentials", headers={"WWW-Authenticate": "Basic"}
-        )
+def require_auth(request: Request) -> None:
+    host = request.client.host if request.client else ""
+    try:
+        peer = ipaddress.ip_address(host)
+    except ValueError:
+        raise HTTPException(403, "Доступ разрешён только из локальной сети или VPN")
+    if not any(peer in network for network in PRIVATE_CLIENT_NETWORKS):
+        raise HTTPException(403, "Внешний IP запрещён — нужен доверенный VPN")
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        # Same-origin protection for browser requests without a password.
+        if origin:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(origin)
+            if parsed.scheme != request.url.scheme or parsed.netloc != request.headers.get("host", ""):
+                raise HTTPException(403, "Межсайтовая операция запрещена")
+
 
 
 def db() -> sqlite3.Connection:
@@ -70,8 +81,6 @@ _background_tasks: set[asyncio.Task] = set()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if not PASSWORD:
-        raise RuntimeError("ACHEWIW_PASSWORD must be set in .env")
     init_db()
     try:
         yield
@@ -105,6 +114,11 @@ class Project(BaseModel):
     audience: str = Field(default="", max_length=1000)
     target_length: str = Field(default="", max_length=200)
     format: Literal["reading", "performance"] = "reading"
+    work_type: Literal["fiction", "nonfiction", "technical", "speech"] = "fiction"
+    sources: str = Field(default="", max_length=15000)
+    claims: str = Field(default="", max_length=15000)
+    duration_minutes: int = Field(default=10, ge=1, le=480)
+    speaker_notes: str = Field(default="", max_length=10000)
     premise: str = Field(default="", max_length=10000)
     twist: str = Field(default="", max_length=4000)
     reveal: str = Field(default="", max_length=2000)
@@ -114,7 +128,8 @@ class Project(BaseModel):
 
 
 class CreateProject(BaseModel):
-    title: str = Field(default="Новая история", min_length=1, max_length=200)
+    title: str = Field(default="Новая работа", min_length=1, max_length=200)
+    work_type: Literal["fiction", "nonfiction", "technical", "speech"] = "fiction"
 
 
 class AIRequest(BaseModel):
@@ -168,14 +183,21 @@ def parse_outline(raw: str) -> list[Scene]:
 
 
 def build_prompt(project: Project, request: AIRequest) -> str:
-    instruction = (
-        "Ты StoryEngine — русскоязычный литературный архитектор и редактор. "
-        "Пиши ясно, образно и структурно. Не придумывай случайных спасительных предметов. "
-        "Читатель — активный соавтор. Желательно не более пяти активных сущностей на сцену. "
-        "Не путай якорь локации с подробным повторным описанием.\n"
-    )
+    guidance = {
+        "fiction": "Ты опытный редактор фантастики и прозы. Соблюдай причинность, канон мира, развитие персонажей; не подменяй сцену отчётом.",
+        "nonfiction": "Ты редактор нонфикшн. Давай ясные тезисы, проверяемые объяснения, примеры и различай факт и интерпретацию.",
+        "technical": "Ты научно-технический редактор. Отделяй утверждения от доказательств, не выдумывай DOI, библиографию и исследования; отмечай непроверенные факты и условия применения.",
+        "speech": "Ты спичрайтер и режиссёр выступлений. Пиши текст для произнесения вслух, с ясными переходами, паузами и таймингом; не подменяй речь планом.",
+    }
+    instruction = guidance[project.work_type] + " Ответ строго на русском, содержательно, без вводных оправданий.\\n"
+
     spec = {
         "название": project.title,
+        "тип": project.work_type,
+        "проверенные источники, внесённые автором": project.sources,
+        "тезисы/гипотезы": project.claims,
+        "тайминг выступления, минуты": project.duration_minutes,
+        "заметки выступающего": project.speaker_notes,
         "жанр": project.genre,
         "атмосфера": project.atmosphere,
         "аудитория": project.audience,
@@ -203,7 +225,11 @@ def build_prompt(project: Project, request: AIRequest) -> str:
     extra = f"\nДополнительное пожелание автора: {request.instructions}" if request.instructions else ""
     if request.mode == "outline":
         task = (
-            "Создай последовательный Story.prj (5–8 сцен, если ТЗ не требует другого). "
+            ("Создай последовательный план разделов технической книги (5–8 разделов). "
+             if project.work_type == "technical" else
+             "Создай последовательный план выступления с таймингом и переходами. "
+             if project.work_type == "speech" else
+             "Создай последовательный план глав/сцен произведения (5–8). ")
             "Верни СТРОГО валидный JSON без markdown: "
             '{"scenes":[{"title":"...","active_objects":["..."],"anchor":"...",'
             '"tempo":"...","reader_info":"...","hook":"...","text":""}]}. '
@@ -215,9 +241,14 @@ def build_prompt(project: Project, request: AIRequest) -> str:
         if selected is None:
             raise HTTPException(422, "Сначала выберите сцену")
         task = (
-            "Напиши полноценный художественный текст выбранной сцены. "
-            "Сохраняй хронологию и предустановленные якоря. "
-            "Не включай комментарии о процессе. Текст сцены:\n"
+            ("Напиши полноценный раздел технической книги. Используй только предоставленные автором источники; любые неподтверждённые факты явно маркируй. "
+             if project.work_type == "technical" else
+             "Напиши произносимый текст части выступления, с переходами, паузами и ясными тезисами. "
+             if project.work_type == "speech" else
+             "Напиши полноценный содержательный текст раздела книги с аргументами и примерами. "
+             if project.work_type == "nonfiction" else
+             "Напиши полноценный художественный текст выбранной сцены, с каноном и причинностью. ")
+            + "Не включай комментарии о процессе. Материал текущей части:\\n"
             + json.dumps(selected.model_dump(), ensure_ascii=False)
         )
     else:
@@ -239,9 +270,13 @@ def build_prompt(project: Project, request: AIRequest) -> str:
             "Для каждой проблемы приведи название сцены и конкретную правку. "
             "Не повторяй исходный текст в качестве исправления; не выдумывай сцены. "
             "Если нет достаточных данных — отметь неопределённость. "
-            "Проведи QA истории по сценам: хронология, причинность, подготовка "
-            "используемых предметов, повторение якорей, загрузка кадра, "
-            "эмоциональная траектория, клиффхэнгеры, ветка feature/what-if. "
+            ("Проведи научно-техническую проверку: тезисы, достоверность источников, неподтверждённые утверждения, терминология и логика. "
+             if project.work_type == "technical" else
+             "Проверь речь: тайминг, аудитория, ясность, произносимость, переходы и аргументация. "
+             if project.work_type == "speech" else
+             "Проверь нонфикшн: структура аргументов, подтверждение фактов, логика и доступность. "
+             if project.work_type == "nonfiction" else
+             "Проведи QA истории: хронология, причинность, подготовка предметов, канон, эмоциональная траектория, клиффхэнгеры. ")
             "Отметь конкретные проблемы и предложи короткие исправления. "
             "Не выдавай выдуманное за установленный факт."
         )
@@ -273,7 +308,8 @@ def list_projects():
         ).fetchall()
     return [
         {"id": (p := json.loads(row["data"]))["id"],
-         "title": p["title"], "genre": p["genre"],
+         "title": p["title"], "genre": p.get("genre", ""),
+         "work_type": p.get("work_type", "fiction"),
          "updated_at": row["updated_at"]}
         for row in rows
     ]
@@ -281,7 +317,11 @@ def list_projects():
 
 @api.post("/projects", status_code=201)
 def create_project(request: CreateProject):
-    return persist(Project(title=request.title))
+    labels = {"fiction": "Фантастика", "nonfiction": "Нонфикшн",
+              "technical": "Техническая литература", "speech": "Выступление"}
+    return persist(Project(title=request.title, work_type=request.work_type,
+                           genre=labels[request.work_type],
+                           format="performance" if request.work_type == "speech" else "reading"))
 
 
 @api.get("/projects/{project_id}")
