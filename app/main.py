@@ -950,7 +950,7 @@ async def execute_generation(job_id: str, payload: dict, mode: str) -> None:
                     if len(output) > MAX_OUTPUT:
                         raise ValueError("Достигнут предел длины черновика")
                     elapsed = time.monotonic() - began
-                    percent, eta, estimated_tokens = estimate_progress(len(output), elapsed)
+                    percent, eta, estimated_tokens = estimate_progress(len(output), elapsed, payload["options"]["num_predict"])
                     if elapsed - last_saved >= 1.0 and (piece or item.get("done")):
                         with db() as connection:
                             update_job(connection, job_id, stage="Генерация текста",
@@ -993,10 +993,22 @@ async def generate(request: AIRequest):
     """Enqueue durable generation before returning. Page reload cannot abort it."""
     project = get_project(request.project_id)
     prompt = build_prompt(project, request)
+    current_scene = next((s for s in project.scenes if s.id == request.scene_id), None)
+    if request.mode in ("scene", "block", "polish") and not current_scene:
+        raise HTTPException(422, "Выбери существующую сцену")
+    selected_block = None
+    if request.mode == "block" and current_scene:
+        selected_block = next((b for b in current_scene.blocks if b.id == request.block_id), None)
+        if not selected_block or selected_block.accepted_job_id:
+            raise HTTPException(409, "Указанного непринятого блока нет в сцене")
+    # Text-only Ollama: a bounded word target is more useful than a fake
+    # guaranteed output length. Actual word count is shown after completion.
+    token_budget = min(4200, max(1100, round(selected_block.target_words * 3.1))) if selected_block else LIMIT
     payload = {
         "model": request.model, "prompt": prompt,
         "stream": True, "think": False, "keep_alive": "5m",
-        "options": {"temperature": 0.7, "num_predict": LIMIT},
+        "options": {"temperature": 0.72 if request.mode in ("scene", "block") else 0.35,
+                    "num_predict": token_budget},
     }
     if request.mode == "outline":
         payload["format"] = "json"
@@ -1004,7 +1016,10 @@ async def generate(request: AIRequest):
     try:
         with db() as connection:
             record = create_job(connection, job_id, request.project_id,
-                                request.mode, request.model, request.scene_id)
+                                request.mode, request.model, request.scene_id,
+                                block_id=selected_block.id if selected_block else None,
+                                base_text_sha256=fingerprint(current_scene.text) if current_scene else None,
+                                token_budget=token_budget)
     except sqlite3.IntegrityError as exc:
         raise HTTPException(409, "Уже выполняется другая генерация ACHEWIW. Дождись её завершения.") from exc
     task = asyncio.create_task(execute_generation(job_id, payload, request.mode))
@@ -1040,7 +1055,7 @@ def decide_audit(job_id: str, request: AuditDecisionRequest):
 def download_audit_report(job_id: str):
     with db() as connection:
         record = get_job(connection, job_id)
-    if record is None or record["mode"] != "audit" or record["status"] != "ready":
+    if record is None or record["mode"] not in ("audit", "continuity") or record["status"] != "ready":
         raise HTTPException(404, "Готовый отчёт QA не найден")
     text = (
         f"# Редакторский аудит: {get_project(record['project_id']).title}\n\n"
@@ -1058,7 +1073,7 @@ def download_audit_report(job_id: str):
 
 @api.get("/projects/{project_id}/ai/jobs")
 def project_generation_history(project_id: str,
-                               mode: Literal["outline", "scene", "audit"] | None = None,
+                               mode: Literal["outline", "scene", "audit", "block", "continuity", "polish"] | None = None,
                                summary: bool = False):
     get_project(project_id)
     with db() as connection:
