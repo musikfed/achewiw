@@ -68,7 +68,9 @@ def chunk_size(remaining: int) -> int:
 
 def max_attempts(chapter_target: int) -> int:
     # Guard against a model that returns only a sentence for every call.
-    return min(60, max(4, math.ceil(chapter_target / 350) + 4))
+    # Smaller local models often stop early; allow enough segments to reach
+    # the requested volume without ever declaring a short chapter complete.
+    return min(160, max(8, math.ceil(chapter_target / 140) + 8))
 
 
 def init_book_tables(db: sqlite3.Connection) -> None:
