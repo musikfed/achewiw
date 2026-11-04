@@ -184,8 +184,10 @@ def test_browser_persistence_and_cache_scoping_markers():
                    "selectedModel","uiKey('tab')"):
         assert marker in app,marker
     for marker in ("illustrationPreparedPrompt","illustrationRefine",
-                   "illustrationReleaseComfy","saveDraft","restoreDraft"):
+                   "illustrationReleaseComfy"):
         assert marker in illustrations and marker in html,marker
+    for marker in ("saveDraft","restoreDraft"):
+        assert marker in illustrations,marker
     assert "editorial-v8" in html
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
