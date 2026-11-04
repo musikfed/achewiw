@@ -3,6 +3,7 @@ let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, pre
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 let draftSaveTimer=null;
 let bookJobId=null, bookPollBusy=false;
+let bookDraftMode=false, bookDraftBusy=false, bookDraftWords=-1, bookDraftFetchedAt=0;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
 // Browser UI state is separate from SQLite manuscript data.
@@ -131,7 +132,7 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -155,7 +156,7 @@ async function deleteCurrentProject(){
   toast('Работа удалена. Резервная копия SQLite сохранена.');
  }catch(e){toast('Удаление не выполнено: '+e.message)}
 }
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook();document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book'){renderBook();if(bookJobId)refreshFullBook();}document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
 async function renderAuditHistory(){
   if(!project)return;
   const target=$('#auditHistory');
@@ -429,9 +430,88 @@ async function restoreLatestGeneration(){
   }catch(e){toast('Не удалось восстановить журнал генерации: '+e.message)}
 }
 
+function setBookReaderMode(draft){
+ bookDraftMode=!!draft && !!bookJobId;
+ $('#bookPreview').hidden=bookDraftMode;
+ $('#bookDraftPreview').hidden=!bookDraftMode;
+ $('#bookPreviewLabel').hidden=bookDraftMode;
+ $('#bookViewDraft').hidden=!bookJobId||bookDraftMode;
+ $('#bookViewSaved').hidden=!bookJobId||!bookDraftMode;
+ $('#bookDraftRefresh').hidden=!bookDraftMode;
+ if(bookDraftMode)refreshBookDraft(true);
+}
+async function refreshBookDraft(force=false){
+ if(!project||!bookJobId||bookDraftBusy||$('#book').hidden||!bookDraftMode)return;
+ const stamp=Date.now();
+ if(!force && stamp-bookDraftFetchedAt<12000)return;
+ const jobId=bookJobId, projectId=project.id;
+ bookDraftBusy=true;
+ bookDraftFetchedAt=stamp;
+ try{
+   const data=await api('/books/jobs/'+jobId+'/draft',{cache:'no-store'});
+   if(!project||project.id!==projectId||bookJobId!==jobId||!bookDraftMode)return;
+   const reader=$('#bookDraftPreview');
+   reader.replaceChildren();
+   const title=document.createElement('h2');title.textContent=data.title;
+   reader.append(title);
+   const notice=document.createElement('p');
+   notice.className='book-empty';
+   notice.textContent='ЧЕРНОВИК ИИ · '+data.book.generated_words.toLocaleString('ru-RU')+
+     ' из '+data.book.target_words.toLocaleString('ru-RU')+
+     ' слов ('+data.book.percent_words+'%). Это реальные написанные главы. '+
+     'Они не попадут в EPUB/PDF до принятия автором.';
+   reader.append(notice);
+   for(const chapter of data.chapters){
+     const section=document.createElement('section');
+     section.className='book-chapter';
+     const heading=document.createElement('h3');
+     heading.textContent=chapter.index+'. '+chapter.title+' · '+
+       chapter.words+' / '+chapter.target_words+' слов';
+     section.append(heading);
+     if(!chapter.text.trim()){
+       const empty=document.createElement('p');
+       empty.textContent='Эта глава ожидает написания.';
+       section.append(empty);
+     }else{
+       for(const paragraph of chapter.text.split(/\n\s*\n/)){
+         if(!paragraph.trim())continue;
+         const node=document.createElement('p');
+         node.textContent=paragraph.trim();
+         section.append(node);
+       }
+     }
+     reader.append(section);
+   }
+   bookDraftWords=data.book.generated_words;
+ }catch(e){
+   $('#bookDraftPreview').textContent='Ошибка чтения глав: '+e.message;
+ }finally{bookDraftBusy=false}
+}
+function updateBookProduction(job){
+ const summary=job.book||{}, chapters=job.book_chapters||[];
+ const accepted=chapters.length>0 && chapters.every(c=>c.accepted_at);
+ const active=['queued','running'].includes(job.status);
+ $('#bookGenerate').hidden=active || (!accepted&&['ready','interrupted','error'].includes(job.status));
+ $('#bookResume').hidden=!['interrupted','error'].includes(job.status);
+ $('#bookAccept').hidden=job.status!=='ready'||accepted;
+ $('#bookGenerationProgress').value=Math.min(100,summary.percent_words||0);
+ $('#bookGenerationStatus').textContent=(job.stage||job.status)+' · написано '+
+   (summary.generated_words||0).toLocaleString('ru-RU')+' / '+
+   (summary.target_words||0).toLocaleString('ru-RU')+
+   ' слов ('+(summary.percent_words||0)+'%) · глав '+(summary.chapters_complete||0)+
+   '/'+(summary.chapters||0)+(job.error?' · '+job.error:'');
+ $('#bookProductionHint').textContent=accepted?
+   'Все главы приняты в рукопись. Ниже — сохранённая книга, доступная для экспорта.':
+   'Ниже показывается создаваемая книга, НЕ старый синопсис. Экспорт PDF/EPUB пока содержит только сохранённую авторскую рукопись. Прими готовые главы отдельной кнопкой.';
+ if(accepted)bookDraftMode=false;
+ setBookReaderMode(bookDraftMode);
+}
+
 function renderFullBookJob(job){
  if(!project||job.project_id!==project.id)return;
+ const changedJob=bookJobId!==job.id;
  bookJobId=job.id;
+ if(changedJob){bookDraftWords=-1;bookDraftMode=true;}
  safeSet(localStorage,uiKey('bookJob'),job.id);
  const b=job.book||{}, chapters=job.book_chapters||[];
  const active=['queued','running'].includes(job.status);
@@ -447,6 +527,8 @@ function renderFullBookJob(job){
    ' слов ('+(b.percent_words||0)+'%); глав: '+(b.chapters_complete||0)+'/'+(b.chapters||0)+
    (job.error?' · '+job.error:'')+
    (accepted?' · Принято в рукопись.':' · Черновики отдельно от рукописи.');
+ updateBookProduction(job);
+ if(bookDraftMode && (changedJob||bookDraftWords!==b.generated_words))refreshBookDraft();
  $('#fullBookChapters').replaceChildren(...chapters.map(c=>{
    const p=document.createElement('p');
    p.textContent=(c.scene_index+1)+'. '+c.title+': '+c.word_count+' / '+c.target_words+
@@ -470,6 +552,8 @@ async function restoreLatestBook(){
  const jobs=await api('/projects/'+project.id+'/ai/jobs?mode=book',{cache:'no-store'});
  if(jobs.length){
    bookJobId=jobs[0].id;
+   bookDraftMode=true;
+   bookDraftWords=-1;
    await refreshFullBook();
  }else{
    $('#fullBookStatus').textContent='Укажи целевой объём, утверди каркас и нажми «Написать всю книгу».';
@@ -478,18 +562,29 @@ async function restoreLatestBook(){
    $('#resumeFullBook').hidden=true;
    $('#acceptFullBook').hidden=true;
    $('#generateFullBook').disabled=false;
+   $('#bookGenerate').hidden=false;
+   $('#bookResume').hidden=true;
+   $('#bookAccept').hidden=true;
+   $('#bookGenerationProgress').value=0;
+   $('#bookGenerationStatus').textContent='Генерация не запускалась. Цель: '+(project.target_length||'не указана')+
+     '. Сохранённые краткие описания глав — это ещё не книга.';
+   $('#bookProductionHint').textContent='Нажми «Написать полноценную книгу по каркасу» — модель напишет реальные главы по частям. Уже сохранённые тексты не будут затронуты до принятия результата.';
+   setBookReaderMode(false);
  }
 }
 async function startFullBook(){
  if(!project||isBusy)return;
  if(!project.scenes.length){toast('Сначала создай и утверди каркас');return}
- if(!confirm('Начать поэтапное написание всех глав по целевому объёму? Рукопись не заменяется до отдельного принятия.'))return;
  try{
    await save();
    const job=await api('/books/generate',{method:'POST',
       body:JSON.stringify({project_id:project.id,model})});
+   bookJobId=job.id;
+   bookDraftMode=true;
+   bookDraftWords=-1;
    renderFullBookJob(job);
-   toast('Запущено написание книги по главам; можно обновлять страницу.');
+   showTab('book');
+   toast('Написание книги запущено. Слова и главы сохраняются на сервере.');
  }catch(e){toast('Книга не запущена: '+e.message)}
 }
 async function resumeFullBook(){
@@ -497,6 +592,7 @@ async function resumeFullBook(){
  try{
    const job=await api('/books/jobs/'+bookJobId+'/resume',{method:'POST',body:'{}'});
    renderFullBookJob(job);
+   showTab('book');
    toast('Генерация продолжена с сохранённого текста.');
  }catch(e){toast('Не удалось продолжить: '+e.message)}
 }
@@ -509,6 +605,7 @@ async function acceptFullBook(){
      {method:'POST',body:JSON.stringify({confirm:true})});
    project=await api('/projects/'+project.id);
    render();await refreshFullBook();
+   bookDraftMode=false;setBookReaderMode(false);await renderBook();
    toast('Принято '+result.chapters+' глав · '+result.words+' слов. Ревизии сохранены.');
  }catch(e){toast('Принятие отменено: '+e.message)}
 }
@@ -608,6 +705,12 @@ $('#addScene').onclick=()=>{collectScenes();project.scenes.push({id:crypto.rando
 $('#writingScene').onchange=()=>{collectText();switchWriting()};
 $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#generateFullBook').onclick=startFullBook;
+ $('#bookGenerate').onclick=startFullBook;
+ $('#bookResume').onclick=resumeFullBook;
+ $('#bookAccept').onclick=acceptFullBook;
+ $('#bookViewDraft').onclick=()=>setBookReaderMode(true);
+ $('#bookViewSaved').onclick=()=>setBookReaderMode(false);
+ $('#bookDraftRefresh').onclick=()=>refreshBookDraft(true);
  $('#resumeFullBook').onclick=resumeFullBook;
  $('#acceptFullBook').onclick=acceptFullBook;
 $('#generateScene').onclick=()=>ai('scene');
