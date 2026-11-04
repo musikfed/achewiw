@@ -424,12 +424,14 @@ async function releaseSelectedModel(){
 }
 async function applyAI(){
  if(!pending)return;
- if(['block','polish'].includes(pending.mode)){
+ if(['block','polish','scene'].includes(pending.mode)){
    const jobId=pending.jobId,mode=pending.mode,sceneId=pending.sceneId;
    if(!jobId||pending.accepted)return;
    if(!confirm(mode==='block'?
       'Добавить предложенный фрагмент в конец сцены? Внесение будет сохранено на сервере с возможностью отката.':
-      'Заменить текст сцены литературной редактурой? Исходный текст сохранится как ревизия для отката.'))return;
+      mode==='polish'?
+      'Заменить текст сцены литературной редактурой? Исходный текст сохранится как ревизия для отката.':
+      'Заменить текст сцены новым предложением ИИ? Исходник сохранится как отдельная ревизия для отката.'))return;
    try{
      collectScenes();collectText();await save();
      const r=await api('/ai/jobs/'+jobId+'/accept',
@@ -440,18 +442,13 @@ async function applyAI(){
      $('#writingScene').value=sceneId;switchWriting();
      $('#aiPanel').hidden=true;
      toast(mode==='block'?'Фрагмент принят и сохранён · '+r.words+' слов':
-       'Литературная редактура принята, исходник в истории ревизий');
+       'Рукопись обновлена. Исходный текст сохранён в истории ревизий.');
    }catch(err){toast('Предложение не применено: '+err.message)}
    return;
  }
  if(pending.mode==='outline'&&pending.suggested_scenes){
    if(project.scenes.length&&!confirm('Заменить текущий каркас предложенным?'))return;
    project.scenes=pending.suggested_scenes;renderScenes();renderWriting();showTab('structure');
- }else if(pending.mode==='scene'){
-   const s=project.scenes.find(s=>s.id===pending.sceneId);
-   if(!s)return;
-   if(s.text&&!confirm('Заменить существующий текст сцены?'))return;
-   s.text=pending.result;renderWriting();showTab('write');
  }
  $('#aiPanel').hidden=true;
  toast('Предложение принято. Нажмите «Сохранить» для записи в базу.');
