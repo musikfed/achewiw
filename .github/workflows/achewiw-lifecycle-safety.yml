@@ -29,11 +29,19 @@ jobs:
           grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
           grep -Fq 'org.achewiw.workspace: "/1tbdisk/achewiw"' compose.yaml
       - name: Validate Python monitor syntax
-        run: python3 -m py_compile scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/main.py
+        run: python3 -m py_compile scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/manuscript_core.py app/main.py
       - name: Read-only host metrics parsing tests
         run: python3 -m unittest discover -v -s tests -p 'test_*monitor*.py'
       - name: Durable SQLite generation jobs safety tests
         run: python3 -m unittest discover -v -s tests -p 'test_generation_core.py'
+      - name: Real manuscript Markdown/EPUB & QA persistence unit tests
+        run: python3 -m unittest discover -v -s tests -p 'test_manuscript_core.py'
+      - name: Verify new book and author-choice elements
+        run: |
+          grep -Fq 'data-tab="book"' app/static/index.html
+          grep -Fq 'id="bookPreview"' app/static/index.html
+          grep -Fq 'id="auditReview"' app/static/index.html
+          grep -Fq 'id="saveAuditDecision"' app/static/index.html
       - name: Install FastAPI and HTTPX for isolated API tests
         run: python3 -m pip install --disable-pip-version-check -r app/requirements.txt pytest
       - name: API generation, restart recovery, model-unload and auth tests
