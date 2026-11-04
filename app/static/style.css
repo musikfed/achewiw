@@ -112,3 +112,5 @@ main{background:linear-gradient(180deg,#f7f5f1,#f5f3ef)}
 #aiOutput.ai-document li{margin-bottom:7px}
 #aiOutput.ai-document hr{border:0;border-top:1px solid #e7dacb;margin:25px 0}
 #modelGuide.model-guide{display:block;margin:10px 0;line-height:1.5;color:#907a60}
+
+.danger-action{border-color:#e1bbb4;color:#9c4e40;background:#fff9f8}.danger-action:hover{background:#fff0ed;border-color:#cc877e}
