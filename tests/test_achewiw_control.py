@@ -285,8 +285,14 @@ class ShutdownTests(unittest.TestCase):
         result = self.run_switch("start")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("up -d", self.commands())
-        self.assertNotEqual(self.run_switch("start", TEST_UNIT_STATE="loaded",
-                            TEST_UNIT_FRAGMENT="/other/unit").returncode, 0)
+        # Starting/inspecting verified Studio must not be blocked by a
+        # foreign unit; the unknown unit must NOT be started or stopped.
+        result = self.run_switch("start", TEST_UNIT_STATE="loaded",
+                                 TEST_UNIT_FRAGMENT="/other/unit")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(self.unit_started.exists())
+        self.assertFalse(self.unit_stopped.exists())
+        self.assertNotIn("stop --time", self.commands())
 
     def test_blank_legacy_password_does_not_block_private_studio(self):
         env_file = self.workspace / ".env"
