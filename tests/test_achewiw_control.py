@@ -69,6 +69,8 @@ case "$*" in
   *'-p ExecStart --value'*) printf '%s\n' "argv[]=/usr/bin/python3 ${TEST_WORKSPACE}/scripts/achewiw_host_monitor.py --watch --interval 5" ;;
   *'--user stop achewiw-host-monitor.service'*) printf 'stopped' > "$TEST_UNIT_STOPPED" ;;
   *'--user start achewiw-host-monitor.service'*) printf 'started' > "$TEST_UNIT_STARTED" ;;
+  *'--user link '* ) printf 'linked' > "$TEST_UNIT_LINKED" ;;
+  *'--user daemon-reload'*) true ;;
   *) exit 56 ;;
 esac
 '''
@@ -101,9 +103,12 @@ class ShutdownTests(unittest.TestCase):
         (self.workspace / ".env").write_text("ACHEWIW_PASSWORD=test-private\n")
         (self.workspace / "data").mkdir()
         (self.workspace / ".git").mkdir()
+        (self.workspace / "ops").mkdir()
+        (self.workspace / "ops/achewiw-host-monitor.service").write_text("[Unit]\nDescription=Test\n")
         self.script = root / "control.sh"
         self.script.write_text(SCRIPT.read_text().replace("/1tbdisk/achewiw", str(self.workspace)))
         self.unit_started = root / "unit.started"
+        self.unit_linked = root / "unit.linked"
         self.gitlog = root / "git.log"
         self.gitsha = root / "sha"
         self.gitsha.write_text("oldsha\n")
@@ -118,7 +123,7 @@ class ShutdownTests(unittest.TestCase):
         self.state.write_text("running")
         self.env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
                         TEST_WORKSPACE=str(self.workspace), TEST_PORT_BUSY="0", TEST_BAD_COMPOSE="0",
-                        TEST_UNIT_STARTED=str(self.unit_started),
+                        TEST_UNIT_STARTED=str(self.unit_started), TEST_UNIT_LINKED=str(self.unit_linked),
                         TEST_GIT_LOG=str(self.gitlog), TEST_GIT_SHA_FILE=str(self.gitsha),
                         TEST_GIT_ORIGIN="https://github.com/musikfed/achewiw.git",
                         TEST_GIT_BRANCH="feature/technical-epub-first",
@@ -219,6 +224,21 @@ class ShutdownTests(unittest.TestCase):
         self.assertNotIn("up -d", self.commands())
         self.assertEqual(self.state.read_text(), "stopped")
         self.assertNotIn("test-private", result.stderr)
+
+    def test_monitor_start_links_only_own_user_unit(self):
+        result=self.run_switch("monitor-start")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.unit_linked.exists())
+        self.assertTrue(self.unit_started.exists())
+        self.assertNotIn("up -d", self.commands())
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_monitor_start_refuses_foreign_loaded_unit(self):
+        result=self.run_switch("monitor-start", TEST_UNIT_STATE="loaded",
+                               TEST_UNIT_FRAGMENT="/elsewhere/evil.service")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.unit_started.exists())
+        self.assertNotIn("up -d", self.commands())
 
     def test_restart_only_verified_studio_and_monitor(self):
         result = self.run_switch("restart", TEST_UNIT_STATE="loaded")
