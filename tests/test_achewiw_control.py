@@ -285,6 +285,10 @@ class ShutdownTests(unittest.TestCase):
         result = self.run_switch("start")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("up -d", self.commands())
+        # First start legitimately started the own monitor. Reset that
+        # observation before the second run with a foreign unit.
+        self.unit_started.unlink(missing_ok=True)
+        self.unit_stopped.unlink(missing_ok=True)
         # Starting/inspecting verified Studio must not be blocked by a
         # foreign unit; the unknown unit must NOT be started or stopped.
         result = self.run_switch("start", TEST_UNIT_STATE="loaded",
