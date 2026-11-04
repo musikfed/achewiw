@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v9"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-longbook-v10"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -42,7 +42,20 @@
 <label class="wide" data-only-kind="technical nonfiction">Ключевые тезисы, гипотезы и доказательства<textarea data-field="claims" rows="3" placeholder="Что доказать, что требует проверки, какие определения использовать"></textarea></label>
 <label data-only-kind="speech">Плановая длительность, минут<input data-field="duration_minutes" inputmode="numeric" type="number" min="1" max="480" value="10"></label>
 <label class="wide" data-only-kind="speech">Заметки для выступающего / паузы / слайды<textarea data-field="speaker_notes" rows="4" placeholder="Тайминг, интонации, тезисы для слайдов, требования сцены"></textarea></label></div><div class="actions"><button class="primary" id="saveBrief">Сохранить ТЗ</button><button type="button" id="deleteProject" class="danger-action">Удалить ненужную работу (с архивом)</button><button id="buildOutline">✦ Сгенерировать каркас</button></div></section>
-<section id="structure" class="tabpane" hidden><div class="sectionhead"><h2 id="structureHeading">План произведения</h2><p id="structureHint">Составьте главы и сцены; автор утверждает каждый раздел прежде, чем он попадёт в издание.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div></section>
+<section id="structure" class="tabpane" hidden><div class="sectionhead"><h2 id="structureHeading">План произведения</h2><p id="structureHint">Составьте главы и сцены; автор утверждает каждый раздел прежде, чем он попадёт в издание.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div>
+<div class="writing-block-planner" id="fullBookPanel">
+ <div class="block-plan-heading"><div><div class="eyebrow">ПОЛНОЦЕННАЯ РУКОПИСЬ</div>
+ <h3>Написать книгу по утверждённому каркасу</h3>
+ <p>Цель берётся из поля «Целевой объём»: 20000 слов или 150 минут (при 150 словах/мин). Каждая глава создаётся несколькими фрагментами, а не одним пересказом. Черновик сохраняется в SQLite, книга не заменяется без вашего согласия.</p>
+ </div></div>
+ <div class="actions"><button id="generateFullBook" class="primary" type="button">✦ Написать всю книгу</button>
+ <button id="resumeFullBook" type="button" hidden>Продолжить прерванную генерацию</button>
+ <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button></div>
+ <p id="fullBookStatus" role="status" aria-live="polite">Утвердите каркас, укажите объём в редакционном задании и нажмите «Написать всю книгу».</p>
+ <progress id="fullBookProgress" max="100" aria-label="Процент полученного текста к целевому количеству слов" hidden></progress>
+ <div id="fullBookChapters"></div>
+ <small>Генерация работает на сервере независимо от вкладки браузера. После перезапуска сервера можно продолжить с сохранённых глав. Точный объём зависит от ответа модели: недостающие слова не объявляются готовой книгой.</small>
+</div></section>
 <section id="write" class="tabpane" hidden><div class="sectionhead"><h2 id="writingHeading">Редактор текста</h2><p id="writingHint">Сохранённый текст разделов — единственный источник рукописи. Черновик ИИ попадёт в текст только после вашего принятия.</p></div><label class="block"><span id="writingSectionLabel">Глава / часть</span><select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea>
 <section id="writingBlockPlanner" class="writing-block-planner" aria-label="Поблочная генерация рассказа" hidden>
   <div class="block-plan-heading">
@@ -157,4 +170,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v9" defer></script><script src="/static/app.js?v=20261104-editorial-v9" defer></script><script src="/static/writing_blocks.js?v=20261104-editorial-v9" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v9" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-longbook-v10" defer></script><script src="/static/app.js?v=20261105-longbook-v10" defer></script><script src="/static/writing_blocks.js?v=20261105-longbook-v10" defer></script><script src="/static/illustrations.js?v=20261105-longbook-v10" defer></script></body></html>
