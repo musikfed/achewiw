@@ -569,6 +569,134 @@ async def generate_book_illustration(project_id: str, request: ImageGenerationRe
             "note": "Изображение сохранено; модели Ollama не переключались и не выгружались"}
 
 
+
+@api.get("/projects/{project_id}/continuity")
+def continuity_report(project_id: str):
+    p = get_project(project_id)
+    return {"causality": story_preflight(p),
+            "style": [{"scene_id": s.id, "title": s.title,
+                       "report": editorial_lint(s.text)} for s in p.scenes if s.text.strip()]}
+
+
+class AcceptanceRequest(BaseModel):
+    confirm: Literal[True]
+
+
+@api.post("/ai/jobs/{job_id}/accept")
+def accept_written_proposal(job_id: str, request: AcceptanceRequest):
+    """Atomically accept one AI-generated block or stylistic rewrite.
+
+    The source text hash is captured BEFORE inference. If an editor changed
+    the text meanwhile, acceptance is rejected rather than overwriting it.
+    Each accepted revision remains stored in SQLite and is undoable.
+    """
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        job = get_job(connection, job_id)
+        if not job or job["status"] != "ready" or job["mode"] not in ("block", "polish"):
+            raise HTTPException(422, "Можно принять только готовый блок или литературную редактуру")
+        if job.get("accepted"):
+            raise HTTPException(409, "Это предложение уже принималось")
+        row = connection.execute("SELECT data FROM projects WHERE id=?", (job["project_id"],)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Рукопись удалена")
+        p = Project.model_validate_json(row["data"])
+        scene = next((s for s in p.scenes if s.id == job["scene_id"]), None)
+        if scene is None:
+            raise HTTPException(409, "Сцена удалена или перемещена")
+        if not job.get("base_text_sha256") or fingerprint(scene.text) != job["base_text_sha256"]:
+            raise HTTPException(409, "Текст сцены изменился после генерации; открой предложение и проверь новую версию")
+        original = scene.text
+        proposed = job["result"].strip()
+        if not proposed or len(proposed) > MAX_OUTPUT:
+            raise HTTPException(422, "Невозможно принять пустой или слишком длинный черновик")
+        selected = None
+        if job["mode"] == "block":
+            selected = next((b for b in scene.blocks if b.id == job["block_id"]), None)
+            if selected is None or selected.accepted_job_id:
+                raise HTTPException(409, "Блок удалён или уже был принят")
+            scene.text = (scene.text.rstrip() + "\n\n" + proposed).strip()
+            selected.accepted_job_id = job_id
+            selected.accepted_at = utc_now()
+        else:
+            scene.text = proposed
+        if len(scene.text) > 150000:
+            raise HTTPException(422, "Сцена превышает предельный размер")
+        revision_id = uuid.uuid4().hex
+        connection.execute(
+            "INSERT INTO author_text_revisions "
+            "(id,project_id,scene_id,job_id,previous_text,accepted_text,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (revision_id, p.id, scene.id, job_id, original, scene.text, utc_now()),
+        )
+        p.updated_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        connection.execute(
+            "UPDATE projects SET data=?, updated_at=? WHERE id=?",
+            (p.model_dump_json(), p.updated_at, p.id),
+        )
+        result = {
+            "status": "accepted_by_author", "revision_id": revision_id,
+            "scene_id": scene.id, "scene_text": scene.text,
+            "words": words(proposed), "mode": job["mode"],
+        }
+        if selected:
+            result["target_words"] = selected.target_words
+            result["within_15_percent"] = (abs(words(proposed) - selected.target_words) <=
+                                           max(1, int(selected.target_words * 0.15)))
+    return result
+
+
+@api.get("/projects/{project_id}/scenes/{scene_id}/revisions")
+def list_scene_revisions(project_id: str, scene_id: str):
+    p = get_project(project_id)
+    if not any(s.id == scene_id for s in p.scenes):
+        raise HTTPException(404, "Сцена не найдена")
+    with db() as connection:
+        return authored_revisions(connection, project_id, scene_id)
+
+
+class RestoreRevisionRequest(BaseModel):
+    confirm: Literal[True]
+
+
+@api.post("/projects/{project_id}/scenes/{scene_id}/revisions/{revision_id}/restore")
+def restore_scene_revision(project_id: str, scene_id: str, revision_id: str,
+                           request: RestoreRevisionRequest):
+    """Undo last accepted text revision only if the current text still matches."""
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        record = revision_detail(connection, revision_id)
+        if record is None or record["project_id"] != project_id or record["scene_id"] != scene_id:
+            raise HTTPException(404, "Ревизия не найдена")
+        row = connection.execute("SELECT data FROM projects WHERE id=?", (project_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Проект не найден")
+        p = Project.model_validate_json(row["data"])
+        scene = next((s for s in p.scenes if s.id == scene_id), None)
+        if scene is None or scene.text != record["accepted_text"]:
+            raise HTTPException(409, "После ревизии текст изменён; откат без потери правок невозможен")
+        scene.text = record["previous_text"]
+        for block in scene.blocks:
+            if block.accepted_job_id == record["job_id"]:
+                block.accepted_job_id = None
+                block.accepted_at = None
+        # Retain the old revision as evidence, but a fresh acceptance must
+        # create a new job. This undo itself is also recorded and reversible.
+        undo_id = uuid.uuid4().hex
+        connection.execute(
+            "INSERT INTO author_text_revisions "
+            "(id,project_id,scene_id,job_id,previous_text,accepted_text,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (undo_id, project_id, scene_id, "undo:"+undo_id,
+             record["accepted_text"], record["previous_text"], utc_now()),
+        )
+        p.updated_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        connection.execute("UPDATE projects SET data=?, updated_at=? WHERE id=?",
+                           (p.model_dump_json(), p.updated_at, project_id))
+    return {"status": "restored_by_author", "scene_id": scene_id,
+            "scene_text": record["previous_text"], "undo_revision_id": undo_id}
+
+
 @api.get("/projects/{project_id}/stats")
 def stats(project_id: str):
     project = get_project(project_id)
