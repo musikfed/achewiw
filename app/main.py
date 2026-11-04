@@ -189,7 +189,7 @@ def get_project(project_id: str) -> Project:
 
 
 def persist(project: Project) -> Project:
-    project.updated_at = utc_now()
+    project.updated_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     with db() as connection:
         connection.execute(
             "INSERT INTO projects (id, data, updated_at) VALUES (?, ?, ?) "
@@ -405,10 +405,30 @@ def read_project(project_id: str):
 
 @api.put("/projects/{project_id}")
 def update_project(project_id: str, project: Project):
-    get_project(project_id)
+    """Protect authored text and accepted blocks from stale browser tabs."""
     if project.id != project_id:
         raise HTTPException(400, "Project ID mismatch")
-    return persist(project)
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row=connection.execute("SELECT data FROM projects WHERE id=?", (project_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Проект не найден")
+        previous=Project.model_validate_json(row["data"])
+        if previous.updated_at != project.updated_at:
+            raise HTTPException(409, "Рукопись изменена в другой вкладке или после принятия ИИ-правки. Перезагрузи проект.")
+        existing_blocks={b.id:b for s in previous.scenes for b in s.blocks}
+        for scene in project.scenes:
+            for block in scene.blocks:
+                accepted=existing_blocks.get(block.id)
+                if block.accepted_job_id and (
+                        accepted is None or accepted.model_dump() != block.model_dump()):
+                    raise HTTPException(409, "Принятые блоки нельзя незаметно менять в плане. Создай новый фрагмент.")
+        project.updated_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        connection.execute(
+            "UPDATE projects SET data=?,updated_at=? WHERE id=?",
+            (project.model_dump_json(), project.updated_at, project_id),
+        )
+    return project
 
 
 @api.delete("/projects/{project_id}", status_code=204)
