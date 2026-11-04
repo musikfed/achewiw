@@ -9,6 +9,20 @@ const workModes={
  speech:{name:'Выступление',part:'Блок речи',eyebrow:'ВЫСТУПЛЕНИЕ / ДОКЛАД / ЛЕКЦИЯ',intro:'Длительность, аудитория, речевые блоки, паузы и чистовой текст для сцены.',structure:'План выступления',write:'Редактор выступления',audit:'Репетиция и проверка речи'},
  nonfiction:{name:'Нонфикшн',part:'Глава',eyebrow:'НОНФИКШН / ОБРАЗОВАНИЕ / ИССЛЕДОВАНИЕ',intro:'Ясная структура, доказательные аргументы, реальные источники и читаемая книга.',structure:'Главы и аргументы',write:'Редактор нонфикшн',audit:'Логическая и фактологическая проверка'}
 };
+const modelPicks={
+ fiction:{name:'qwen3:8b',reason:'Фантастика: qwen3:8b — хороший баланс русского текста, скорости и VRAM. Для сравнения художественного стиля попробуйте Hermes-4-14B.'},
+ technical:{name:'qwen2.5-coder:14b',reason:'Технические главы и код: qwen2.5-coder:14b, если хватает VRAM. Проверка фактов и DOI остаётся за автором.'},
+ speech:{name:'qwen3:8b',reason:'Выступление: qwen3:8b для структуры, ясных переходов и репетиций.'},
+ nonfiction:{name:'qwen3:8b',reason:'Нонфикшн: qwen3:8b, но библиографию и источники нужно проверять.'}
+};
+function recommendModel(){
+ const kind=project?.work_type||'fiction',recommend=modelPicks[kind]||modelPicks.fiction;
+ $('#modelGuide').textContent=recommend.reason;
+ const select=$('#model');
+ if(Array.from(select.options).some(o=>o.value===recommend.name)){
+  model=recommend.name;select.value=recommend.name;
+ }
+}
 function setKindFilter(kind){
  if(kind!=='all'&&!workModes[kind])return;
  activeKind=kind;
@@ -47,7 +61,7 @@ function render(){
  $('#meta').textContent=project.scenes.length+' частей';
  const prefix='/api/projects/'+project.id+'/manuscript';
  for(const [id,suffix] of Object.entries({bookMarkdown:'.md',bookEpub:'.epub',bookFb2:'.fb2',bookPdf:'.pdf',bookPrint:'.print.pdf',bookDocx:'.docx'}))$('#'+id).href=prefix+suffix;
- updateWorkCopy();renderProjects();renderScenes();renderWriting();
+ updateWorkCopy();recommendModel();renderProjects();renderScenes();renderWriting();
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;updateBrief();project=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
@@ -339,7 +353,7 @@ async function releaseSelectedModel(){
   finally{button.disabled=isBusy}
 }
 function applyAI(){if(!pending)return;if(pending.mode==='outline'&&pending.suggested_scenes){if(project.scenes.length&&!confirm('Заменить текущий каркас предложенным?'))return;project.scenes=pending.suggested_scenes;renderScenes();renderWriting();showTab('structure')}else if(pending.mode==='scene'){const s=project.scenes.find(s=>s.id===pending.sceneId);if(!s)return;if(s.text&&!confirm('Заменить существующий текст сцены?'))return;s.text=pending.result;renderWriting();showTab('write')}$('#aiPanel').hidden=true;toast('Предложение принято. Нажмите «Сохранить» для записи в базу.')}
-async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}if(data.models.includes(model))select.value=model;else if(data.models.length)model=select.value;$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
+async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}if(data.models.includes(model))select.value=model;else if(data.models.length)model=select.value;recommendModel();$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
 $('#newProject').onclick=$('#startProject').onclick=()=>createProject();
 document.querySelectorAll('[data-create-kind]').forEach(b=>b.onclick=()=>createProject(b.dataset.createKind));
