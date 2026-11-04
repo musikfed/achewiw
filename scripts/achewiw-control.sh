@@ -12,8 +12,8 @@ ACTION="${1:-status}"
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 
 case "$ACTION" in
-  start|status|stop|restart|update) ;;
-  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update" ;;
+  start|status|stop|restart|update|monitor-start) ;;
+  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|monitor-start" ;;
 esac
 [[ $# -le 1 ]] || die "Допускается только одна команда"
 command -v docker >/dev/null 2>&1 || die "Docker CLI не найден"
@@ -139,6 +139,57 @@ start_monitor() {
       die "Studio работает, но собственный host-monitor не удалось включить"
   fi
 }
+# The CPU/RAM/NVIDIA collector is an unprivileged *ACHEWIW-owned* unit.
+# Never enable an unrelated service, Docker privileged mode or host Ollama.
+monitor_start() {
+  local file="$WORKSPACE/ops/$UNIT" current_fragment current_workdir current_exec state
+  if [[ ! -f "$file" || -L "$file" || ! -d "$WORKSPACE/data" ]]; then
+    echo "Хостовый монитор: отсутствует свой unit или каталог data/" >&2
+    return 1
+  fi
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "Хостовый монитор: systemctl --user недоступен" >&2
+    return 1
+  fi
+  state="$(systemctl --user show "$UNIT" -p LoadState --value 2>/dev/null)" || {
+    echo "Хостовый монитор: нет доступа к systemd --user" >&2; return 1;
+  }
+  if [[ "$state" != loaded ]]; then
+    if [[ "$state" != not-found && -n "$state" ]]; then
+      echo "Хостовый монитор: неизвестный unit, не заменяем" >&2
+      return 1
+    fi
+    systemctl --user link "$file" || return 1
+    systemctl --user daemon-reload || return 1
+  fi
+  current_fragment="$(systemctl --user show "$UNIT" -p FragmentPath --value 2>/dev/null)" || return 1
+  current_workdir="$(systemctl --user show "$UNIT" -p WorkingDirectory --value 2>/dev/null)" || return 1
+  current_exec="$(systemctl --user show "$UNIT" -p ExecStart --value 2>/dev/null)" || return 1
+  if [[ "$current_fragment" != "$file" || "$current_workdir" != "$WORKSPACE" ||
+        "$current_exec" != *"$WORKSPACE/scripts/achewiw_host_monitor.py"* ]]; then
+    echo "Хостовый монитор: одноимённая служба не принадлежит ACHEWIW. НЕ запускать." >&2
+    return 1
+  fi
+  systemctl --user start "$UNIT" || return 1
+  echo "Хостовый монитор ACHEWIW запущен: CPU / RAM / NVIDIA каждые 5 секунд"
+  unit_owned=true
+}
+monitor_status() {
+  local sample="$WORKSPACE/data/monitor/host.json" stamp seconds
+  if [[ ! -f "$sample" || -L "$sample" ]]; then
+    echo "Мониторинг CPU/GPU: нет файла; запусти monitor-start"
+    return
+  fi
+  stamp="$(stat -c %Y "$sample" 2>/dev/null)" || {
+    echo "Мониторинг CPU/GPU: нельзя проверить файл"; return;
+  }
+  seconds="$(( $(date +%s) - stamp ))"
+  if (( seconds >= 0 && seconds < 30 )); then
+    echo "Мониторинг CPU/GPU: свежий снимок ($seconds сек. назад)"
+  else
+    echo "Мониторинг CPU/GPU: устарел ($seconds сек.); проверь monitor-start"
+  fi
+}
 run_start() {
   preflight_all
   prepare_compose
@@ -152,9 +203,12 @@ run_start() {
   fi
   preflight_all
   [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW не запущен"
-  start_monitor
+  if ! monitor_start; then
+    echo "ВНИМАНИЕ: Studio работает, но host-monitor не запущен. Выполни monitor-start и посмотри ошибку." >&2
+  fi
   echo "ACHEWIW: studio работает; данные сохранены"
   port_status
+  monitor_status
 }
 run_restart() {
   preflight_all
@@ -167,7 +221,9 @@ run_restart() {
     verify_owned "$id" || die "Метки поменялись; перезапуск отменён"
     docker restart --time 60 "$id" || die "Restart контейнера не выполнен"
   done <<< "$running"
-  start_monitor
+  if ! monitor_start; then
+    echo "ВНИМАНИЕ: Studio перезапущен, но host-monitor недоступен." >&2
+  fi
   echo "Перезапущен только ACHEWIW; Ollama не затронута"
   port_status
 }
@@ -218,6 +274,7 @@ case "$ACTION" in
   start) run_start; exit 0 ;;
   restart) run_restart; exit 0 ;;
   update) run_update; exit 0 ;;
+  monitor-start) monitor_start || die "Не удалось включить собственный монитор; другие службы не изменены"; exit 0 ;;
 esac
 
 printf 'ACHEWIW: %s (только %s; Ollama и другие проекты не управляются)\n' "$ACTION" "$WORKSPACE"
@@ -236,6 +293,7 @@ if [[ "$ACTION" == status ]]; then
     done <<< "$ids"
   fi
   port_status
+  monitor_status
   exit 0
 fi
 
