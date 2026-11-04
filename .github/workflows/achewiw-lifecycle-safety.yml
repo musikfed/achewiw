@@ -29,7 +29,7 @@ jobs:
           grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
           grep -Fq 'org.achewiw.workspace: "/1tbdisk/achewiw"' compose.yaml
       - name: Validate Python monitor syntax
-        run: python3 -m py_compile scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/manuscript_core.py app/main.py
+        run: python3 -m py_compile scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/manuscript_core.py app/publishing_exports.py scripts/library_admin.py app/main.py
       - name: Read-only host metrics parsing tests
         run: python3 -m unittest discover -v -s tests -p 'test_*monitor*.py'
       - name: Durable SQLite generation jobs safety tests
@@ -46,6 +46,20 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check -r app/requirements.txt pytest
       - name: API generation, restart recovery, model-unload and auth tests
         run: PYTHONPATH=app python3 -m pytest -q tests/test_app.py
+      - name: Validate full typing and export controls
+        run: |
+          grep -Fq 'data-kind-filter="technical"' app/static/index.html
+          grep -Fq 'data-kind-filter="speech"' app/static/index.html
+          grep -Fq 'id="bookPrint"' app/static/index.html
+          grep -Fq 'id="bookDocx"' app/static/index.html
+          grep -Fq 'org.achewiw.workspace' compose.yaml
+          ! grep -Fq 'ACHEWIW_PASSWORD:' compose.yaml
+      - name: Install free Cyrillic fonts for PDF tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core
+      - name: Real publishing artifacts, genres and safe data reset
+        run: |
+          PYTHONPATH=app python3 -m pytest -q tests/test_publishing_exports.py
+          PYTHONPATH=app python3 -m pytest -q tests/test_app.py
       - name: Check user systemd telemetry ownership
         run: |
           grep -Fq 'WorkingDirectory=/1tbdisk/achewiw' ops/achewiw-host-monitor.service
