@@ -189,7 +189,9 @@ def test_live_book_draft_is_not_the_old_synopsis(tmp_path, monkeypatch):
         assert visible["book"]["target_words"] == 20000
         assert visible["chapters"][0]["text"] == draft_text
         assert visible["chapters"][1]["text"] == ""
-        assert visible["chapters"][0]["target_words"] == 10000
+        plan = client.get(f"/api/projects/{project['id']}/book-plan").json()
+        assert visible["chapters"][0]["target_words"] == plan["chapters"][0]["target_words"]
+        assert sum(c["target_words"] for c in visible["chapters"]) == 20000
         # No automatic replacement of approved book or export.
         original = client.get(f"/api/projects/{project['id']}/manuscript").json()
         assert original["total_words"] < 30
