@@ -56,3 +56,46 @@
 #auditHistory{display:flex;flex-direction:column;gap:8px;color:#918170}
 .audit-history-item{text-align:left;width:100%;background:#fffaf3;color:#66513b;border:1px solid #e8d8bf}
 .audit-history-item:hover{background:#f9efd9}
+
+
+/* ACHEWIW publishing-house edition: paper, ink, navigation and real export desk */
+:root{--paper:#f6f4ef;--ink:#252932;--copper:#9b683c;--rule:#e8e2d6}
+body{background:var(--paper);color:var(--ink)}
+header{background:#fffdfa;border-bottom:1px solid var(--rule);box-shadow:0 2px 20px #26221906}
+.brand strong{font-family:Georgia,serif;letter-spacing:.22em}
+aside{background:#fffdfa;border-right:1px solid var(--rule)}
+main{background:linear-gradient(180deg,#f7f5f1,#f5f3ef)}
+.hero{padding-top:28px;padding-bottom:37px}
+.hero h1{font-size:clamp(34px,3.4vw,58px);letter-spacing:-.025em}
+.hero .eyebrow{letter-spacing:.19em}
+.tabs{border-bottom:1px solid #d6cab6;gap:14px}
+.tabs button.selected{border-bottom:3px solid #97673b;color:#714725}
+.tabpane .sectionhead{border-bottom:1px solid #eee7dc;padding-bottom:18px}
+.tabpane .sectionhead h2{font-size:clamp(27px,2vw,37px)}
+.fields label[hidden]{display:none!important}
+.work-navigator{display:flex;flex-direction:column;gap:4px;padding-bottom:26px;margin-bottom:24px;border-bottom:1px solid #e8e2d6}
+.work-navigator .nav-heading{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:800;color:#9b7856;margin:0 9px 9px}
+.work-navigator button{border:0;box-shadow:none;text-align:left;background:transparent;color:#656059;border-radius:8px;padding:11px 10px;font-weight:600;font-size:12px}
+.work-navigator button:hover{background:#f6eee3}
+.work-navigator button.selected{background:#f0e5d4;color:#63401f}
+.work-navigator button.nav-all{font-weight:500;color:#93897d}
+.sidehead{padding-top:1px}
+.sidebottom{font-family:Georgia,serif}
+.empty-studio{max-width:1040px;margin:28px auto;text-align:center}
+.empty-studio h2{font-size:clamp(29px,3vw,43px)}
+.quick-create{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;max-width:850px;margin:30px auto}
+.quick-create button{text-align:left;min-height:112px;padding:24px;background:#fff;border:1px solid #e9e0d5;box-shadow:0 10px 26px #30282008}
+.quick-create button strong{display:block;font:normal 23px Georgia,serif;margin-bottom:8px}
+.quick-create button small{color:#8e8277;font-size:12px;line-height:1.7}
+.quick-create button:hover{border-color:#b38b58;background:#fffdf8}
+.export-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%;margin:16px 0}
+.book-toolbar{display:block;background:#fffefa}
+.book-toolbar .export-format{display:flex;align-items:center;min-height:69px;background:#faf7f1;border:1px solid #e4d9c9;border-radius:9px;font-weight:650;line-height:1.45;padding:17px;text-decoration:none;color:#493a2c}
+.book-toolbar .export-format:hover{background:#efe4d3;color:#322518}
+.book-toolbar .export-format[hidden]{display:none!important}
+.book-print-warning{padding:14px 18px;background:#fff9ed;border-left:3px solid #b6894e;color:#806848;font-size:12px;line-height:1.65}
+.book-reader{box-shadow:0 14px 35px #2b241012;border-radius:5px;background:#fffefa}
+.book-reader h2{text-align:center;font-size:clamp(25px,3vw,40px)}
+#aiOutput{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+@media(max-width:1000px){.export-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.quick-create,.export-grid{grid-template-columns:1fr}.work-navigator{gap:2px}.hero{display:block}}
