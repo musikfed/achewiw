@@ -326,7 +326,7 @@ async function renderStats(){
   const data=await api('/projects/'+project.id+'/stats');
   const isStory=(project.work_type||'fiction')==='fiction';
   $('#stats').innerHTML='<h3>Объём: '+data.total_words+' слов · ≈ '+data.minutes_read_aloud+
-    ' мин произнесения (150 слов/мин)</h3>'+
+    ' мин произнесения (150 слов/мин)' + (data.target_words?' · цель: '+data.target_words+' слов · выполнено '+data.completion_percent+'% · осталось '+data.remaining_words+' слов':'')+'</h3>'+
     data.scenes.map(s=>'<div class="stat"><strong>'+escaped(s.title)+'</strong><span>'+
     s.words+' слов · '+s.minutes_read_aloud+' мин'+
     (isStory?' · '+s.active_objects+' сущностей'+(s.overloaded?' ⚠ перегруз':' ✓'):'')+
