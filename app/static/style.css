@@ -857,3 +857,16 @@ header{
   .illustration-workflow{grid-template-columns:minmax(0,1fr)}
   #illustrationRefine,#illustrationGenerate{width:100%}
 }
+
+/* Long-book writer: separate real generated prose from old synopsis/exports. */
+.book-production{background:#fffefa;border:1px solid #ddc9ab;border-radius:13px;padding:clamp(16px,3vw,24px);margin:16px 0 24px}
+.book-production h3{font:normal clamp(20px,2.3vw,28px)/1.3 Georgia,serif;margin:0 0 15px;color:#34302b}
+.book-production strong{display:block;font-size:15px;color:#41362c;line-height:1.65}
+.book-production progress{display:block;width:100%;height:15px;margin:15px 0;accent-color:#9b764a}
+.book-production .actions{margin:14px 0}
+.book-production p{font-size:13px;line-height:1.7;color:#7b6b59;margin:13px 0 0}
+.book-preview-label{font-size:13px;font-weight:700;color:#795f42}
+#bookPreview[hidden],#bookDraftPreview[hidden],#bookSavedToolbar[hidden],#bookPrintWarning[hidden],#bookWarning[hidden],#bookPreviewLabel[hidden]{display:none!important}
+#bookDraftPreview .book-empty{font-size:14px;line-height:1.8}
+@media(max-width:680px){.book-production .actions button{width:100%;flex:1 1 100%}}
+@media print{.book-production,.book-preview-label{display:none!important}}
