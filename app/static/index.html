@@ -18,18 +18,41 @@
   </div>
   <p class="monitor-note">CPU/RAM/GPU показывает хостовый сборщик <code>achewiw-host-monitor.service</code>, а не Docker. Если нет данных, выполните <code>cd /1tbdisk/achewiw && bash scripts/achewiw-control.sh monitor-start</code>. «Нет данных» не означает нулевую нагрузку.</p>
 </section>
-<div id="editor" hidden><nav class="tabs"><button data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button></nav>
+<div id="editor" hidden><nav class="tabs"><button data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button><button data-tab="book">05 · Книга</button></nav>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2>Замысел произведения</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Жанр<input data-field="genre" placeholder="Фантастика / детектив / притча"></label><label>Атмосфера<textarea data-field="atmosphere" rows="2"></textarea></label><label>Аудитория<textarea data-field="audience" rows="2"></textarea></label><label>Целевой объём<input data-field="target_length" placeholder="15 минут / 3000 слов"></label><label>Способ восприятия<select data-field="format"><option value="reading">Чтение глазами</option><option value="performance">Выступление вслух</option></select></label><label class="wide">Замысел / центральный конфликт<textarea data-field="premise" rows="4"></textarea></label><label>Твист / загадка<textarea data-field="twist" rows="3"></textarea></label><label>Когда раскрыть<textarea data-field="reveal" rows="3"></textarea></label><label class="wide">Якоря мира<textarea data-field="anchors" rows="3" placeholder="Синий диван, рыжий кот, красный комод..."></textarea></label></div><div class="actions"><button class="primary" id="saveBrief">Сохранить ТЗ</button><button id="buildOutline">✦ Сгенерировать каркас</button></div></section>
 <section id="structure" class="tabpane" hidden><div class="sectionhead"><h2>Архитектура истории</h2><p>Каждая сцена — управляемый кадр внимания. Рекомендация: до пяти активных сущностей.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div></section>
-<section id="write" class="tabpane" hidden><div class="sectionhead"><h2>Литературный редактор</h2><p>ИИ пишет черновик отдельно. Вы решаете, переносить ли его в произведение.</p></div><label class="block">Сцена<select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea><div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><a id="export" href="#">Экспорт Markdown ↗</a></div></section>
-<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2>QA · Редактура</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div class="actions"><button id="runAudit">✦ Литературный аудит с ИИ</button></div></section>
-<div id="aiPanel" hidden><div class="aiHead"><strong>✦ Задание StoryEngine · сохранено на сервере</strong><button id="closeAI">×</button></div>
+<section id="write" class="tabpane" hidden><div class="sectionhead"><h2>Литературный редактор</h2><p>ИИ пишет черновик отдельно. Вы решаете, переносить ли его в произведение.</p></div><label class="block">Сцена<select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea><div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><button id="openBookFromEditor" type="button">Читать книгу из сцен ↗</button><a id="export" href="#">Скачать техпаспорт проекта (.md)</a></div></section>
+<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2>QA · Редактура</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div class="actions"><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p></section>
+<section id="book" class="tabpane" hidden aria-label="Книга: последовательное чтение написанных глав">
+  <div class="sectionhead"><h2>Космос истории — твоя книга</h2><p>Здесь только написанный и сохранённый художественный текст сцен в правильном порядке. Отчёты QA, промпты и технические поля в книгу не попадают.</p></div>
+  <div class="book-toolbar"><strong id="bookSummary">Загружаем рукопись…</strong><div class="actions"><a id="bookMarkdown" href="#">Скачать книгу .md</a><a id="bookEpub" href="#">Скачать EPUB</a><button id="bookEdit" type="button">Редактировать сцены</button></div></div>
+  <p id="bookWarning" class="book-warning"></p>
+  <article id="bookPreview" class="book-reader" aria-live="polite"></article>
+</section>
+<div id="aiPanel" hidden><div class="aiHead"><strong id="aiHeading">✦ Задание StoryEngine · сохранено на сервере</strong><button id="closeAI">×</button></div>
 <div class="ai-progress" aria-live="polite">
   <div class="ai-stage"><strong id="aiStage">Ожидание задания</strong><span id="aiPercent">—</span></div>
   <progress id="aiProgress" max="100" aria-label="Примерный процент генерации к лимиту токенов"></progress>
   <div id="aiEta" class="ai-eta">Процент считается приблизительно по полученному тексту; точное время окончания Ollama неизвестно.</div>
   <div id="aiJobId" class="ai-job-id"></div>
 </div>
-<div id="aiNotice"></div><pre id="aiOutput"></pre><div class="actions"><button id="applyAI" class="primary" hidden>Принять предложение</button><button id="copyAI">Копировать</button></div></div>
+<div id="aiNotice"></div><pre id="aiOutput"></pre>
+<section id="auditReview" class="audit-review" hidden>
+  <h3>Решение автора по QA</h3>
+  <p>Этот текст — список замечаний ИИ, а не глава книги. Ничего никуда вставлять не нужно: отчёт уже сохранён в SQLite. Отметь, что делать с рекомендациями, затем исправляй сцены вручную.</p>
+  <label for="auditDecision">Что делать с замечаниями?</label>
+  <select id="auditDecision">
+    <option value="unreviewed">Ещё не решил — оставить на рассмотрение</option>
+    <option value="in_progress">Принять отдельные замечания в работу</option>
+    <option value="completed">Проверил и внёс нужные исправления вручную</option>
+    <option value="reference">Оставить только как справочный отчёт</option>
+  </select>
+  <label for="auditNotes">Мои решения и заметки — что именно исправлять?</label>
+  <textarea id="auditNotes" rows="4" maxlength="3000" placeholder="Например: сцена 2 — уточнить причину посадки; повторы про якорь и клиффхэнгер отклонить."></textarea>
+  <div class="actions"><button id="saveAuditDecision" class="primary" type="button">Сохранить решение</button><a id="downloadAudit" href="#">Скачать QA-отчёт .md</a></div>
+  <small id="auditDecisionStatus">Решение ещё не сохранено</small>
+</section>
+<div class="actions" id="aiNextSteps" hidden><button id="aiGoStructure" type="button">02 · Исправить план сцен</button><button id="aiGoWriting" type="button">03 · Редактировать текст</button><button id="aiGoBook" class="primary" type="button">05 · Читать книгу</button></div>
+<div class="actions"><button id="applyAI" class="primary" hidden>Принять предложение</button><button id="copyAI">Копировать</button></div></div>
 <div class="footerbar"><span id="saveState">Все изменения сохраняйте кнопкой «Сохранить»</span><span id="meta"></span></div></div><div id="empty"><div class="emptyIcon">✍</div><h2>Пустая страница — это возможность.</h2><p>Создайте первый проект, чтобы начать проектирование истории.</p><button id="startProject" class="primary">+ Создать произведение</button></div></main></div>
 <div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js" defer></script><script src="/static/app.js" defer></script></body></html>
