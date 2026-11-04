@@ -31,6 +31,7 @@ printf '\n=== 2/4: проверка новых ресурсов ===\n'
 test -f app/static/index.html
 test -f app/static/style.css
 test -f app/static/app.js
+test -f scripts/monitor-v2.sh
 grep -Fq "editorial-v3" app/static/index.html || die "Нет новой версии ассетов"
 bash -n scripts/achewiw-control.sh
 
@@ -40,6 +41,13 @@ bash scripts/achewiw-control.sh rebuild
 printf '\n=== 4/4: проверка отсутствия HTTP Basic ===\n'
 bash scripts/achewiw-control.sh auth-check
 bash scripts/achewiw-control.sh status
+
+printf '\n=== Хостовый монитор без доступа к чужому user-unit ===\n'
+if bash scripts/monitor-v2.sh start; then
+  echo "ACHEWIW: монитор v2 запущен."
+else
+  echo "ВНИМАНИЕ: сборщик CPU/RAM/GPU не запущен. Диагностика: bash scripts/monitor-v2.sh status" >&2
+fi
 
 printf '\nACHEWIW: свежий редакционный дизайн загружен.\n'
 printf 'Откройте страницу с обновлением Ctrl+Shift+R, если вкладка открыта.\n'
