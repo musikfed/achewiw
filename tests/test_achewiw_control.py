@@ -73,6 +73,23 @@ case "$*" in
 esac
 '''
 
+
+FAKE_GIT = r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TEST_GIT_LOG"
+case "$*" in
+  *'remote get-url origin'*) echo "$TEST_GIT_ORIGIN" ;;
+  *'symbolic-ref --quiet --short HEAD'*) echo "$TEST_GIT_BRANCH" ;;
+  *'status --porcelain --untracked-files=normal'*)
+    if [[ "$TEST_GIT_DIRTY" == 1 ]]; then echo " M app/main.py"; fi ;;
+  *'rev-parse --short HEAD'*) cat "$TEST_GIT_SHA_FILE" ;;
+  *'fetch --no-tags origin'*) true ;;
+  *'merge-base --is-ancestor HEAD'*) [[ "$TEST_GIT_DIVERGED" != 1 ]] ;;
+  *'merge --ff-only'*) echo newsha > "$TEST_GIT_SHA_FILE" ;;
+  *) exit 66 ;;
+esac
+'''
+
 class ShutdownTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -87,7 +104,10 @@ class ShutdownTests(unittest.TestCase):
         self.script = root / "control.sh"
         self.script.write_text(SCRIPT.read_text().replace("/1tbdisk/achewiw", str(self.workspace)))
         self.unit_started = root / "unit.started"
-        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nif [[ \"$TEST_PORT_BUSY\" == 1 ]]; then echo LISTEN; fi\n"), ("systemctl", FAKE_SYSTEMCTL)):
+        self.gitlog = root / "git.log"
+        self.gitsha = root / "sha"
+        self.gitsha.write_text("oldsha\n")
+        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nif [[ \"$TEST_PORT_BUSY\" == 1 ]]; then echo LISTEN; fi\n"), ("systemctl", FAKE_SYSTEMCTL), ("git", FAKE_GIT)):
             file = root / name
             file.write_text(script, encoding="utf-8")
             file.chmod(0o755)
@@ -99,6 +119,10 @@ class ShutdownTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
                         TEST_WORKSPACE=str(self.workspace), TEST_PORT_BUSY="0", TEST_BAD_COMPOSE="0",
                         TEST_UNIT_STARTED=str(self.unit_started),
+                        TEST_GIT_LOG=str(self.gitlog), TEST_GIT_SHA_FILE=str(self.gitsha),
+                        TEST_GIT_ORIGIN="https://github.com/musikfed/achewiw.git",
+                        TEST_GIT_BRANCH="feature/technical-epub-first",
+                        TEST_GIT_DIRTY="0", TEST_GIT_DIVERGED="0",
                         TEST_LOG=str(self.log), TEST_STATE=str(self.state),
                         TEST_SYSTEMCTL_LOG=str(self.systemctl_log), TEST_UNIT_STOPPED=str(self.unit_stopped))
 
@@ -189,6 +213,37 @@ class ShutdownTests(unittest.TestCase):
         self.assertIn("restart --time 60 a11c0ffee", self.commands())
         self.assertTrue(self.unit_started.exists())
         self.assertNotIn("up -d", self.commands())
+
+    def test_update_stopped_only_git_fast_forward(self):
+        self.state.write_text("stopped")
+        result = self.run_switch("update")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.state.read_text(), "stopped")
+        self.assertNotIn("up -d", self.commands())
+        self.assertIn("merge --ff-only", self.gitlog.read_text())
+
+    def test_update_running_rebuilds_only_studio(self):
+        result = self.run_switch("update")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("up -d --build --no-deps studio", self.commands())
+        self.assertEqual(self.state.read_text(), "running")
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_update_refuses_uncommitted_wrong_branch_or_divergence(self):
+        variants = (
+            {"TEST_GIT_DIRTY": "1"},
+            {"TEST_GIT_ORIGIN": "https://github.com/other/achewiw.git"},
+            {"TEST_GIT_BRANCH": "main"},
+            {"TEST_GIT_DIVERGED": "1"},
+        )
+        for case in variants:
+            with self.subTest(case=case):
+                self.gitsha.write_text("oldsha\n")
+                self.log.unlink(missing_ok=True)
+                result = self.run_switch("update", **case)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self.gitsha.read_text().strip(), "oldsha")
+                self.assertNotIn("up -d", self.commands())
 
 if __name__ == "__main__":
     unittest.main()
