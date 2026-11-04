@@ -1201,9 +1201,11 @@ class BookPlanUpdate(BaseModel):
 
 
 @api.get("/projects/{project_id}/book-plan")
-def preview_chapter_plan(project_id: str):
+def preview_chapter_plan(project_id: str, suggested: bool = False):
     project = get_project(project_id)
     try:
+        if suggested:
+            return suggested_plan(project)
         with db() as connection:
             return get_plan(connection, project)
     except ValueError as exc:
