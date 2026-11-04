@@ -20,6 +20,13 @@ jobs:
         run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
       - name: Validate safe editorial-only update script
         run: bash -n scripts/update-editorial.sh scripts/monitor-v2.sh scripts/reinstall-studio-fresh.sh
+      - name: Optional ComfyUI RTX3060 runner is isolated and syntax-safe
+        run: |
+          bash -n scripts/comfyui-local.sh
+          python3 -m unittest discover -v -s tests -p 'test_comfyui_local.py'
+          grep -Fq "CUDA12.4" scripts/comfyui-local.sh
+          grep -Fq '127.0.0.1' scripts/comfyui-local.sh
+          grep -Fq 'model-sdxl' docs/COMFYUI-RTX3060-RU.md
       - name: Reproduce linked Ubuntu systemd user-unit and isolation checks
         run: python3 -m unittest discover -v -s tests -p 'test_monitor_v2_service.py'
       - name: Editorial layout, responsive rules and versioned assets
