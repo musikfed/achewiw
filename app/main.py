@@ -606,10 +606,19 @@ def download_audit_report(job_id: str):
 
 @api.get("/projects/{project_id}/ai/jobs")
 def project_generation_history(project_id: str,
-                               mode: Literal["outline", "scene", "audit"] | None = None):
+                               mode: Literal["outline", "scene", "audit"] | None = None,
+                               summary: bool = False):
     get_project(project_id)
     with db() as connection:
-        return recent_jobs(connection, project_id, mode=mode)
+        items = recent_jobs(connection, project_id, mode=mode)
+    if summary:
+        return [
+            {"id": j["id"], "mode": j["mode"], "status": j["status"],
+             "updated_at": j["updated_at"],
+             "author_decision": j.get("author_decision", "unreviewed")}
+            for j in items
+        ]
+    return items
 
 
 app.include_router(api)
