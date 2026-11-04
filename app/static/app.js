@@ -12,7 +12,39 @@ function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{pr
 async function save(){if(!project)return;updateBrief();project=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
 async function loadProject(id){if(isBusy)return;project=await api('/projects/'+id);try{localStorage.setItem('achewiw.activeProjectId',id)}catch{}pending=null;render();await restoreLatestGeneration()}
 async function createProject(){if(isBusy)return;const title=prompt('Название произведения','Новая история');if(title===null||!title.trim())return;project=await api('/projects',{method:'POST',body:JSON.stringify({title:title.trim()})});pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;await refreshProjects();render();showTab('brief')}
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit')renderStats();if(name==='book')renderBook()}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
+async function renderAuditHistory(){
+  if(!project)return;
+  const target=$('#auditHistory');
+  const projectId=project.id;
+  target.textContent='Получаем историю QA из SQLite…';
+  try{
+    const jobs=await api('/projects/'+projectId+'/ai/jobs?mode=audit&summary=true',{cache:'no-store'});
+    if(!project || projectId!==project.id)return;
+    target.replaceChildren();
+    if(!jobs.length){target.textContent='Ещё нет QA-отчётов для этой истории.';return}
+    for(const job of jobs){
+      const row=document.createElement('button');
+      row.type='button';
+      row.className='audit-history-item';
+      row.textContent=new Date(job.updated_at).toLocaleString()+' · '+
+        (job.status==='ready'?'Отчёт готов':job.status)+
+        ' · '+({
+          in_progress:'правки в работе',completed:'исправлено',reference:'справка',
+          unreviewed:'решение не принято'
+        }[job.author_decision]||'');
+      row.onclick=async()=>{
+        if(isBusy){toast('Сначала дождись окончания текущей генерации');return}
+        try{
+          const report=await api('/ai/jobs/'+job.id,{cache:'no-store'});
+          renderGeneration(report);
+          $('#aiPanel').scrollIntoView({behavior:'smooth',block:'start'});
+        }catch(e){toast('Не удалось открыть QA-отчёт: '+e.message)}
+      };
+      target.append(row);
+    }
+  }catch(e){target.textContent='Ошибка истории QA: '+e.message}
+}
 async function renderBook(){
   if(!project)return;
   const container=$('#bookPreview');
@@ -142,6 +174,7 @@ function renderGeneration(job){
       'Решение сохранено · '+new Date(job.reviewed_at).toLocaleString():
       'Отчёт сохранён, но решение автора ещё не указано.';
     $('#downloadAudit').href='/api/ai/jobs/'+job.id+'/report.md';
+    if(document.querySelector('#audit').hidden===false)renderAuditHistory();
   }
   if(!ongoing)activeGenerationJobId=null;
 }
