@@ -56,7 +56,7 @@ def _paragraphs(text: str) -> str:
     )
 
 
-def manuscript_epub(project) -> bytes:
+def manuscript_epub(project, illustrations=None) -> bytes:
     book = chapter_listing(project)
     if not book["chapters"]:
         raise ValueError("No authored scene texts to export")
@@ -67,10 +67,22 @@ def manuscript_epub(project) -> bytes:
     spine = []
     nav = []
     files = {}
+    images = list(illustrations or [])
     for sequence, chapter in enumerate(book["chapters"], 1):
         name = f"chapter-{sequence:03}.xhtml"
         chapter_title = escape(chapter["title"])
         inner = _paragraphs(chapter["text"])
+        for illustration in images:
+            if illustration["scene_id"] != chapter["scene_id"]:
+                continue
+            file_name = "image-" + illustration["id"] + ".png"
+            files["EPUB/" + file_name] = illustration["path"].read_bytes()
+            manifest.append('<item id="img' + illustration["id"] +
+                            '" href="' + file_name + '" media-type="image/png"/>')
+            inner = ('<figure><img src="' + file_name + '" alt="' +
+                     escape(illustration.get("caption") or chapter["title"], quote=True) +
+                     '"/><figcaption>' + escape(illustration.get("caption") or "") +
+                     '</figcaption></figure>') + inner
         files[f"EPUB/{name}"] = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<html xmlns="http://www.w3.org/1999/xhtml" lang="ru">'
@@ -93,6 +105,7 @@ def manuscript_epub(project) -> bytes:
     files["EPUB/style.css"] = (
         'body{font-family:serif;line-height:1.6;margin:1em;}'
         'h2{text-align:center;margin:2em 0 1em;}p{text-indent:1.2em;}'
+        'figure{text-align:center;margin:1.2em auto;}figure img{max-width:100%;height:auto;}figcaption{font-style:italic;font-size:.9em;}'
     )
     files["META-INF/container.xml"] = (
         '<?xml version="1.0"?>'
