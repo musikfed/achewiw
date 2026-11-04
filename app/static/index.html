@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-longbook-v10"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-longbook-v11"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -122,6 +122,20 @@
 <section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
   <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
   <p>На выход идут только сохранённые тексты глав или частей. QA-отчёты, технические промпты и незаконченные разделы не подмешиваются в книгу.</p></div>
+  <div class="book-production" id="bookProduction">
+    <h3>Полноценная книга по каркасу</h3>
+    <strong id="bookGenerationStatus" role="status" aria-live="polite">Проверяем генерацию и целевой объём…</strong>
+    <progress id="bookGenerationProgress" max="100" value="0" aria-label="Фактический процент сгенерированных слов"></progress>
+    <div class="actions">
+      <button id="bookGenerate" class="primary" type="button">✦ Написать полноценную книгу по каркасу</button>
+      <button id="bookResume" type="button" hidden>▶ Продолжить написание</button>
+      <button id="bookAccept" type="button" hidden>✓ Принять готовые главы в рукопись</button>
+      <button id="bookViewDraft" type="button" hidden>Читать сгенерированный текст</button>
+      <button id="bookViewSaved" type="button" hidden>Читать сохранённую рукопись</button>
+      <button id="bookDraftRefresh" type="button" hidden>Обновить текст черновика</button>
+    </div>
+    <p id="bookProductionHint">Текст старого каркаса — не книга. После запуска написанные главы сохраняются в SQLite. Экспорт PDF/EPUB использует только принятую автором рукопись.</p>
+  </div>
   <div class="book-toolbar"><strong id="bookSummary">Проверка рукописи…</strong>
     <div class="export-grid">
       <a id="bookEpub" class="export-format" href="#">EPUB 3 · электронная книга</a>
@@ -135,7 +149,9 @@
   </div>
   <p class="book-print-warning">PDF для типографии — реальный пагинированный файл с кириллическим шрифтом, но <strong>не сертифицированный PDF/X</strong>. Печатный выпуск требует согласования TrimBox, вылетов, ICC и предпечатной проверки.</p>
   <p id="bookWarning" class="book-warning"></p>
+  <p id="bookPreviewLabel" class="book-preview-label">Сохранённая авторская рукопись (не черновик ИИ)</p>
   <article id="bookPreview" class="book-reader" aria-live="polite"></article>
+  <article id="bookDraftPreview" class="book-reader" aria-live="polite" hidden></article>
 </section>
 <div id="aiPanel" hidden><div class="aiHead"><strong id="aiHeading">✦ Задание StoryEngine · сохранено на сервере</strong><button id="closeAI">×</button></div>
 <div class="ai-progress" aria-live="polite">
@@ -170,4 +186,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-longbook-v10" defer></script><script src="/static/app.js?v=20261105-longbook-v10" defer></script><script src="/static/writing_blocks.js?v=20261105-longbook-v10" defer></script><script src="/static/illustrations.js?v=20261105-longbook-v10" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-longbook-v11" defer></script><script src="/static/app.js?v=20261105-longbook-v11" defer></script><script src="/static/writing_blocks.js?v=20261105-longbook-v11" defer></script><script src="/static/illustrations.js?v=20261105-longbook-v11" defer></script></body></html>
