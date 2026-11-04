@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Reques
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
+from gpu_scheduling import init_gpu_leases, image_operation_active, reserve_gpu, release_gpu
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
@@ -90,6 +91,7 @@ def init_db() -> None:
             "(id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT NOT NULL)"
         )
         init_jobs(connection)
+        init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
 
@@ -554,50 +556,125 @@ class ImageGenerationRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2500)
     caption: str = Field(default="", max_length=1000)
     placement: Literal["start", "end"] = "start"
-    confirm_shared_gpu: bool = False
+    release_comfy_vram: bool = False
+
+
+class ImagePromptRequest(BaseModel):
+    description: str = Field(min_length=3, max_length=2000)
+    model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
+    confirm_shared_model: bool = False
+
+
+@api.post("/illustration-prompt/refine")
+async def refine_illustration_prompt(request: ImagePromptRequest):
+    """Optional one-pass Ollama translation/composition, BEFORE ComfyUI work.
+    Selected shared Ollama model is released with keep_alive=0 only on consent.
+    Author gets editable result and explicitly launches image generation later.
+    """
+    if not request.confirm_shared_model:
+        raise HTTPException(422, "Подтверди использование и последующую выгрузку общей Ollama-модели")
+    token = uuid.uuid4().hex
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection) or not reserve_gpu(connection, token, "prompt_refinement"):
+            raise HTTPException(409, "Другая задача ACHEWIW использует GPU; дождись окончания")
+    try:
+        prompt = (
+            "Write a concise high-quality ENGLISH image generation prompt for SDXL. "
+            "Return ONLY the visual prompt in plain text, no Markdown, no commentary. "
+            "Keep the exact characters, animals, objects, locations, era and factual details "
+            "provided by the author. Do not add extra characters, objects, text or fantasy "
+            "features. Specify composition, lighting, medium and book illustration style only "
+            "if the user's description implies them. Maximum 120 English words. "
+            "Source description (Russian or English):\n" + request.description
+        )
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=8, read=120, write=20, pool=10),
+            trust_env=False,
+        ) as client:
+            tags = await client.get(OLLAMA_BASE_URL + "/api/tags")
+            tags.raise_for_status()
+            names = [m.get("name") for m in tags.json().get("models", [])
+                     if isinstance(m, dict)]
+            if request.model not in names:
+                raise HTTPException(422, "Выбранной текстовой модели нет в Ollama")
+            response = await client.post(OLLAMA_BASE_URL + "/api/generate", json={
+                "model": request.model, "prompt": prompt,
+                "stream": False, "think": False, "keep_alive": 0,
+                "options": {"temperature": 0.2, "num_predict": 320},
+            })
+            response.raise_for_status()
+            prepared = response.json().get("response", "")
+            if not isinstance(prepared, str) or not prepared.strip():
+                raise HTTPException(502, "Ollama вернула пустой промпт")
+            prepared = prepared.strip().strip("`").strip()
+            if len(prepared) > 2500:
+                raise HTTPException(502, "Промпт модели слишком длинный")
+        return {
+            "prepared_prompt": prepared, "model": request.model,
+            "status": "author_review_required",
+            "note": "Промпт не передан ComfyUI до решения автора. keep_alive=0 запросил выгрузку выбранной LLM.",
+        }
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        raise HTTPException(502, "Не удалось подготовить описание через локальную Ollama") from exc
+    finally:
+        with db() as connection:
+            release_gpu(connection, token)
 
 
 @api.post("/projects/{project_id}/illustrations/generate", status_code=201)
 async def generate_book_illustration(project_id: str, request: ImageGenerationRequest):
-    """Generate a real image ONLY through explicitly available local ComfyUI.
-
-    Switching image diffusion checkpoints occurs inside ComfyUI; shared
-    host Ollama models are NEVER unloaded automatically or secretly.
-    """
+    """Sequential local image generation; never silently share loaded Ollama VRAM."""
     project = get_project(project_id)
     if request.scene_id not in {scene.id for scene in project.scenes}:
         raise HTTPException(422, "Укажи существующую главу")
+    token = uuid.uuid4().hex
     with db() as connection:
-        if active_job(connection):
-            raise HTTPException(409, "Дождись завершения текущей текстовой генерации")
-    engine = await illustration_engine_status()
-    if not engine.get("available"):
-        raise HTTPException(503, engine.get("reason", "Графический движок недоступен"))
-    if not request.confirm_shared_gpu:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection) or not reserve_gpu(connection, token, "comfyui_image"):
+            raise HTTPException(409, "Другая задача ACHEWIW использует GPU; дождись её окончания")
+    try:
+        engine = await illustration_engine_status()
+        if not engine.get("available"):
+            raise HTTPException(503, engine.get("reason", "Графический движок недоступен"))
+        # Fail CLOSED: no option to start diffusion while ANY Ollama model
+        # remains in GPU, because 12 GB may not fit both. This is a read-only
+        # query. Other host applications can still use GPU outside ACHEWIW.
         try:
-            async with httpx.AsyncClient(timeout=2.5) as client:
+            async with httpx.AsyncClient(timeout=3.5, trust_env=False) as client:
                 loaded = await client.get(OLLAMA_BASE_URL + "/api/ps")
                 loaded.raise_for_status()
-                if summarize_ollama_running(loaded.json()):
-                    raise HTTPException(
-                        409, "В общей Ollama загружены модели. Подтверди совместное использование GPU "
-                             "или вручную выгрузи выбранную модель. Автоматической выгрузки нет."
-                    )
+                present = summarize_ollama_running(loaded.json())
         except (httpx.HTTPError, ValueError, KeyError):
-            raise HTTPException(503, "Не удалось проверить занятость общей Ollama") from None
-    try:
-        png, checkpoint = await generate_illustration_image(request.prompt)
+            raise HTTPException(503, "Не удалось проверить общую Ollama. Изображение не запускаем") from None
+        if present:
+            raise HTTPException(
+                409, "Ollama ещё держит модель в GPU. Выгрузи нужную модель по отдельному подтверждению "
+                     "и повтори генерацию; одновременную загрузку не разрешаем."
+            )
+        try:
+            png, checkpoint = await generate_illustration_image(request.prompt)
+            with db() as connection:
+                result = save_illustration(DATA_DIR, connection,
+                    project_id=project_id, scene_id=request.scene_id,
+                    caption=request.caption, content=png,
+                    created_at=utc_now(), placement=request.placement)
+        except (ValueError, TimeoutError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, "ComfyUI не завершил генерацию") from exc
+        released = "not_requested"
+        if request.release_comfy_vram:
+            from image_engine import free_cached_models
+            released = await free_cached_models()
+        return {
+            "illustration": result, "checkpoint": checkpoint,
+            "prompt_used": request.prompt, "comfy_vram": released,
+            "note": "Картинка сохранена. Ollama не запускалась и не выгружалась в этом запросе.",
+        }
+    finally:
         with db() as connection:
-            result = save_illustration(DATA_DIR, connection,
-                 project_id=project_id, scene_id=request.scene_id, caption=request.caption,
-                 content=png, created_at=utc_now(), placement=request.placement)
-    except (ValueError, TimeoutError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, "Графический движок ComfyUI не завершил генерацию") from exc
-    return {"illustration": result, "checkpoint": checkpoint,
-            "note": "Изображение сохранено; модели Ollama не переключались и не выгружались"}
-
+            release_gpu(connection, token)
 
 
 @api.get("/projects/{project_id}/continuity")
@@ -944,8 +1021,8 @@ async def unload_model(request: UnloadRequest):
     if not request.confirm_shared_model:
         raise HTTPException(422, "Подтверди, что модель в общей Ollama может использоваться другими программами")
     with db() as connection:
-        if active_job(connection):
-            raise HTTPException(409, "Генерация ACHEWIW выполняется; освобождение памяти запрещено")
+        if active_job(connection) or image_operation_active(connection):
+            raise HTTPException(409, "В ACHEWIW занята GPU-задача; освобождение памяти запрещено")
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=3)) as client:
             state = await client.get(OLLAMA_BASE_URL + "/api/ps")
@@ -1057,6 +1134,9 @@ async def generate(request: AIRequest):
     job_id = uuid.uuid4().hex
     try:
         with db() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if image_operation_active(connection):
+                raise HTTPException(409, "Идёт подготовка иллюстрации или генерация ComfyUI. Дождись окончания.")
             record = create_job(connection, job_id, request.project_id,
                                 request.mode, request.model, request.scene_id,
                                 block_id=selected_block.id if selected_block else None,
