@@ -70,7 +70,9 @@ msg "1/5 — скачиваем новые изменения безопасно
 git fetch --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 git merge --ff-only "origin/$BRANCH"
 msg "2/5 — проверяем новую версию"
-bash -n scripts/achewiw-control.sh scripts/monitor-v2.sh scripts/comfyui-local.sh
+for script in scripts/achewiw-control.sh scripts/monitor-v2.sh scripts/comfyui-local.sh; do
+  bash -n "$script" || die "Неверный Bash-синтаксис в $script"
+done
 test -f app/static/illustrations.js
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
