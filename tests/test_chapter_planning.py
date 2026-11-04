@@ -120,6 +120,10 @@ def test_http_plan_save_and_generation_freezes_author_instructions(tmp_path,monk
         changed=client.put(url,json={"chapters":rows})
         assert changed.status_code==200,changed.text
         assert client.get(url).json()["chapters"][0]["target_words"]==rows[0]["target_words"]
+        proposed=client.get(url+"?suggested=true").json()
+        assert proposed["source"]=="suggested"
+        assert proposed["chapters"][0]["target_words"]!=rows[0]["target_words"]
+        assert client.get(url).json()["source"]=="author"  # refresh does not reset saved plan
         job=client.post("/api/books/generate",json={"project_id":p["id"],
                                                    "model":"qwen3:8b"})
         assert job.status_code==202,job.text
@@ -141,6 +145,7 @@ def test_http_plan_save_and_generation_freezes_author_instructions(tmp_path,monk
         assert "Главную тайну" not in prompt  # no invented answer
         assert "без ответа" in prompt.lower()
         assert "Сохраняй цель сцены" in prompt
+        assert "Старый краткий пересказ" in prompt
 
 
 def test_quality_guard_rejects_exact_prose_repetitions():
