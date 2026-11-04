@@ -237,9 +237,9 @@ auth_check() {
         --header "Host: $host:$PORT" --dump-header - --output /dev/null "$url")"; then
       die "Невозможно получить ответ от $label. Проверь docker compose ps и ss -ltnp."
     fi
-    status="$(printf '%s\\n' "$headers" | awk '/^HTTP\\// {code=$2} END {print code}')"
-    if [[ "$status" == 401 ]] || printf '%s\\n' "$headers" | grep -Eiq '^WWW-Authenticate:[[:space:]]*Basic'; then
-      printf 'ACHEWIW: %s возвращает HTTP %s с запросом пароля!\\n' "$label" "$status" >&2
+    status="$(printf '%s\n' "$headers" | awk '/^HTTP\// {code=$2} END {print code}')"
+    if [[ "$status" == 401 ]] || printf '%s\n' "$headers" | grep -Eiq '^WWW-Authenticate:[[:space:]]*Basic'; then
+      printf 'ACHEWIW: %s возвращает HTTP %s с запросом пароля!\n' "$label" "$status" >&2
       die "Это старая сборка либо другой HTTP-сервер/прокси на 7080. Не вводи пароль, проверь ss -ltnp и docker compose ps."
     fi
     if [[ "$status" != 200 ]]; then
@@ -270,7 +270,7 @@ run_rebuild() {
   if [[ -n "$current" ]]; then
     [[ ! -L "$WORKSPACE/data/.achewiw-deployed-commit" ]] ||
       die "Недопустимый симлинк маркера развёртывания"
-    printf '%s\\n' "$current" > "$WORKSPACE/data/.achewiw-deployed-commit"
+    printf '%s\n' "$current" > "$WORKSPACE/data/.achewiw-deployed-commit"
   fi
   echo "ACHEWIW: новая сборка подтверждена. Никаких паролей."
 }
