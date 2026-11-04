@@ -25,9 +25,10 @@ from illustrations_core import initialize as init_illustrations, save as save_il
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
+from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
-                             LIMIT, MAX_OUTPUT)
+                             LIMIT, MAX_OUTPUT, authored_revisions, revision_detail)
 
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
@@ -112,6 +113,20 @@ app = FastAPI(title="ACHEWIW StoryEngine", version="0.2.1", lifespan=lifespan)
 api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
 
 
+class SceneBlock(BaseModel):
+    """Author-described segment; generated text never auto-accepted."""
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, pattern=r"^[0-9a-f]{32}$")
+    description: str = Field(min_length=4, max_length=4000)
+    target_words: int = Field(default=350, ge=80, le=1000)
+    requires: list[str] = Field(default_factory=list, max_length=20)
+    introduces: list[str] = Field(default_factory=list, max_length=20)
+    caused_by: list[str] = Field(default_factory=list, max_length=15)
+    forbidden_inventions: list[str] = Field(default_factory=list, max_length=20)
+    style: str = Field(default="", max_length=1000)
+    accepted_job_id: str | None = None
+    accepted_at: str | None = None
+
+
 class Scene(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     title: str = Field(default="Новая сцена", max_length=200)
@@ -121,6 +136,7 @@ class Scene(BaseModel):
     reader_info: str = Field(default="", max_length=4000)
     hook: str = Field(default="", max_length=2000)
     text: str = Field(default="", max_length=150000)
+    blocks: list[SceneBlock] = Field(default_factory=list, max_length=80)
 
 
 class Project(BaseModel):
@@ -151,9 +167,10 @@ class CreateProject(BaseModel):
 
 class AIRequest(BaseModel):
     project_id: str
-    mode: Literal["outline", "scene", "audit"]
+    mode: Literal["outline", "scene", "audit", "block", "continuity", "polish"]
     model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
     scene_id: str | None = None
+    block_id: str | None = None
     instructions: str = Field(default="", max_length=2000)
 
 
