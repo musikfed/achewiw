@@ -14,6 +14,11 @@ def test_project_and_stats(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB_PATH", tmp_path / "test.sqlite3")
     # No password on trusted private network. No BasicAuth dialog.
     with TestClient(main.app, base_url="http://192.168.0.100:7080", client=("127.0.0.1", 12345)) as client:
+        landing = client.get("/")
+        assert landing.status_code == 200
+        assert landing.headers["x-achewiw-app"] == "studio"
+        assert landing.headers["x-achewiw-auth"] == "private-vpn-no-password"
+        assert "www-authenticate" not in landing.headers
         assert client.get("/api/projects").status_code == 200
         created = client.post("/api/projects", json={
             "title": "История", "work_type": "fiction"
