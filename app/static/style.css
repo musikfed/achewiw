@@ -99,3 +99,16 @@ main{background:linear-gradient(180deg,#f7f5f1,#f5f3ef)}
 #aiOutput{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
 @media(max-width:1000px){.export-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.quick-create,.export-grid{grid-template-columns:1fr}.work-navigator{gap:2px}.hero{display:block}}
+
+
+/* Readable, escaped AI manuscript / QA instead of raw Markdown source */
+#aiOutput.ai-document{white-space:normal;max-width:1100px;line-height:1.8;font:17px/1.8 Georgia,"Times New Roman",serif;color:#2c2c30}
+#aiOutput.ai-document p{margin:13px 0}
+#aiOutput.ai-document h2{font:normal 26px/1.35 Georgia,serif;margin:25px 0 12px}
+#aiOutput.ai-document h3{font:normal 22px/1.4 Georgia,serif;margin:20px 0 9px}
+#aiOutput.ai-document h4,#aiOutput.ai-document h5{font:bold 16px/1.45 Georgia,serif;margin:17px 0 8px}
+#aiOutput.ai-document strong{font-weight:bold}
+#aiOutput.ai-document ul{padding-left:24px}
+#aiOutput.ai-document li{margin-bottom:7px}
+#aiOutput.ai-document hr{border:0;border-top:1px solid #e7dacb;margin:25px 0}
+#modelGuide.model-guide{display:block;margin:10px 0;line-height:1.5;color:#907a60}
