@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v5"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v6"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -15,15 +15,21 @@
 <section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
   <div class="monitor-head">
     <div><h2>Состояние сервера</h2><p id="monitorSummary">Чтение датчиков CPU, RAM, GPU и Ollama...</p></div>
-    <button type="button" id="monitorRefresh" aria-label="Обновить мониторинг">↻ Обновить</button>
+    <div class="monitor-controls">
+      <button type="button" id="monitorToggle" aria-expanded="true" aria-controls="monitorGrid">Свернуть</button>
+      <button type="button" id="monitorRefresh" aria-label="Обновить мониторинг">↻ Обновить</button>
+    </div>
   </div>
-  <div class="monitor-grid">
+  <div class="monitor-grid" id="monitorGrid">
     <div class="monitor-item"><small>ПРОЦЕССОРЫ</small><strong id="monitorCpu">Нет данных</strong><span id="monitorCpuDetail">Датчик CPU не подключён</span></div>
     <div class="monitor-item"><small>ОПЕРАТИВНАЯ ПАМЯТЬ</small><strong id="monitorRam">Нет данных</strong><span id="monitorRamDetail">Датчик RAM не подключён</span></div>
     <div class="monitor-item"><small>ВИДЕОКАРТА / VRAM</small><strong id="monitorGpu">Нет данных</strong><span id="monitorGpuDetail">Ожидание nvidia-smi на хосте</span></div>
     <div class="monitor-item"><small>OLLAMA / LLM</small><strong id="monitorModel">Проверка...</strong><span id="monitorModelDetail">Какая модель выбрана и что загружено</span></div>
   </div>
-  <p class="monitor-note">Показания CPU/RAM/GPU собираются на хосте, без доступа контейнера к NVIDIA. Запуск собственного сборщика: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. Если GPU недоступна, откройте диагностику службы. «Нет данных» не означает нулевую нагрузку.</p>
+  <details class="monitor-help">
+    <summary>Диагностика датчиков и хостового сборщика</summary>
+    <p class="monitor-note">CPU/RAM/GPU собираются на Ubuntu, а не в Docker. Для запуска: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. При неисправности: <code>bash scripts/monitor-v2.sh status</code>. Если GPU недоступна, проверьте <code>nvidia-smi</code>. «Нет данных» не означает нулевую нагрузку.</p>
+  </details>
 </section>
 <div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button></nav>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
@@ -115,4 +121,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v5" defer></script><script src="/static/app.js?v=20261104-editorial-v5" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v5" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v6" defer></script><script src="/static/app.js?v=20261104-editorial-v6" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v6" defer></script></body></html>
