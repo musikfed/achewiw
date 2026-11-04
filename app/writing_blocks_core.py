@@ -151,31 +151,63 @@ def block_prompt(project: Any, scene: Any, block: Any, instructions: str) -> str
     return (system + json.dumps(instruction, ensure_ascii=False))[:34000]
 
 
-def review_prompt(project: Any, instructions: str, *, polish: bool) -> str:
+def review_prompt(project: Any, instructions: str, *,
+                  scene_id: str | None = None) -> str:
+    """Focus semantic review on one whole scene when possible, not arbitrary
+    first 1000 characters from all scenes. Explicitly warn about truncation.
+    """
     import json
-    sections = [{"scene_id": s.id, "title": s.title, "anchor": s.anchor,
-                 "active_objects": s.active_objects,
-                 "accepted_blocks": [{"id": b.id, "requires": b.requires,
-                                      "introduces": b.introduces,
-                                      "caused_by": b.caused_by} for b in s.blocks
-                                     if b.accepted_job_id],
-                 "text": s.text[:12000]} for s in project.scenes]
+    selected = next((i for i, s in enumerate(project.scenes) if s.id == scene_id), None)
+    if scene_id is not None and selected is None:
+        raise ValueError("Сцена для проверки не найдена")
+    if selected is None:
+        included = [(i, s, "outline") for i, s in enumerate(project.scenes)]
+    else:
+        included = [
+            (i, project.scenes[i], "context" if i != selected else "focus")
+            for i in range(max(0, selected-2), min(len(project.scenes), selected+2))
+        ]
+    sections = []
+    for i, scene, role in included:
+        raw = scene.text
+        if role == "focus":
+            limit = 22500
+            if len(raw) > limit:
+                text = raw[:11000] + "\n[ВНУТРЕННИЙ ФРАГМЕНТ ТЕКСТА ОПУЩЕН — проверка неполная]\n" + raw[-11000:]
+            else:
+                text = raw
+        else:
+            limit = 1300 if role == "outline" else 1800
+            text = (raw[:limit] if len(raw) <= limit else
+                    raw[:limit//2] + "\n[СРЕДИНА ОПУЩЕНА]\n" + raw[-limit//2:])
+        sections.append({
+            "scene_id": scene.id, "title": scene.title, "order": i+1,
+            "role": role, "anchor": scene.anchor, "active_objects": scene.active_objects,
+            "accepted_blocks": [
+                {"id": b.id, "requires": b.requires,
+                 "introduces": b.introduces, "caused_by": b.caused_by}
+                for b in scene.blocks if b.accepted_job_id
+            ],
+            "text": text, "truncated": len(raw) > limit
+        })
     context = json.dumps({"canon": project.anchors, "premise": project.premise,
                           "scenes": sections}, ensure_ascii=False)
-    if polish:
-        return ("Предложи литературную редактуру ТОЛЬКО указанного фрагмента. "
-                "Убирай признаки шаблонной генерации: одинаковые конструкции, штампованные "
-                "эмоции, безличные вводные, искусственные итоги. Сохраняй смысл, персонажей, "
-                "времена, имена, причинность, объекты и авторский голос. "
-                "Верни только готовую прозу, без отчёта. Автор сам решит, принимать ли текст. "
-                + instructions + "\nКонтекст: " + context)[:35000]
-    return ("Ты редактор причинно-следственной целостности. Проверь каждую сцену по полному "
-            "доступному тексту (не выдумывай недостающую часть) и явно заданным фактам. "
-            "Найди отсутствующие причины, самопоявляющиеся предметы, неожиданные способности, "
-            "нелогичные перемещения, нарушения хронологии, смену мотивов, исчезающие или "
-            "возникающие персонажи, повтор событий и стилистические штампы. "
-            "Для КАЖДОЙ гипотезы укажи scene_id, короткую точную цитату-доказательство, "
-            "почему это может быть противоречием, статус 'вероятно/нужно проверить', "
-            "и конкретную минимальную правку. Если доказательств нет, пиши 'не обнаружено'. "
-            "Не выдавай недостающий контекст за факт и не добавляй предметов, которых нет. "
-            "Не меняй рукопись. " + instructions + "\nКонтекст: " + context)[:35000]
+    if len(context) > 28000:
+        context = context[:28000] + "\n[КОНТЕКСТ ОБРЕЗАН — нельзя делать общие выводы]"
+    rule = (
+        "Ты литературный редактор причинно-следственной целостности. "
+        "Проверяй ТОЛЬКО доступный текст. Отделяй гипотезы от доказанных расхождений. "
+        "Ищи внезапное появление предметов, людей, способностей, неожиданные знания, "
+        "нарушения порядка событий, не мотивированные действия, исчезающие предметы, "
+        "ссылки на несостоявшиеся события, противоречия местоположениям, дубли событий. "
+        "Проверяй также повторяющиеся клише, искусственную назидательность, "
+        "механический ритм и речевую шаблонность, но не утверждай, что это ИИ-текст. "
+        "Для каждой гипотезы напиши ID сцены, точную краткую цитату, "
+        "что противоречит чему, уверенность 'подтверждено/предположение/неясно' "
+        "и минимальное предлагаемое исправление. Не обнаруженное не выдумывай. "
+        "Никогда не подменяй отчёт новой прозой и не изменяй авторский текст. "
+        "Если часть сцены отсутствует или помечена как усечённая, "
+        "не выдавай анализ за полную проверку. "
+    )
+    return (rule + "Пожелания автора: " + instructions[:2000] +
+            "\nКонтекст:\n" + context)[:35000]
