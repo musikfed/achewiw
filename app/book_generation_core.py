@@ -1,0 +1,141 @@
+"""Long-form book generation: volume planning and durable, unapproved chapter drafts.
+
+Every chapter is a separate SQLite checkpoint. Never write these drafts into an
+author's manuscript without a separate explicit acceptance transaction.
+"""
+from __future__ import annotations
+
+import math
+import re
+import sqlite3
+from datetime import datetime, timezone
+
+WORDS_PER_MINUTE = 150
+MIN_BOOK_WORDS = 500
+MAX_BOOK_WORDS = 60000
+CHUNK_WORDS = 800
+MAX_CHAPTER_WORDS = 12000
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def count_words(text: str) -> int:
+    return len(re.findall(r"[^\W_]+(?:[-’'][^\W_]+)*", text, flags=re.UNICODE))
+
+
+def target_words(raw: str, *, speech_minutes: int | None = None) -> int:
+    """Explicit words beat minutes. Bare numerals mean words, not tokens.
+
+    Examples: 20000, '20 000 слов', '150 минут', '150 min',
+    '150 минут / 20000 слов'. Missing and ambiguous units fail closed.
+    """
+    value = (raw or "").strip().lower().replace("\u00a0", " ")
+    word_match = re.search(r"(?<!\d)(\d[\d\s]*\d|\d+)\s*(?:слов(?:а|о)?|words?)(?!\w)", value)
+    minute_match = re.search(r"(?<!\d)(\d[\d\s]*\d|\d+)\s*(?:мин(?:ут(?:а|ы)?)?\.?|minutes?)(?!\w)", value)
+    if word_match:
+        count = int(re.sub(r"\s+", "", word_match.group(1)))
+    elif minute_match:
+        count = int(re.sub(r"\s+", "", minute_match.group(1))) * WORDS_PER_MINUTE
+    elif re.fullmatch(r"\d[\d\s]*", value):
+        count = int(re.sub(r"\s+", "", value))
+    elif not value and speech_minutes is not None:
+        count = speech_minutes * WORDS_PER_MINUTE
+    else:
+        raise ValueError("Укажи объём числом: например, «20000 слов» или «150 минут»")
+    if not MIN_BOOK_WORDS <= count <= MAX_BOOK_WORDS:
+        raise ValueError(f"Объём книги должен быть от {MIN_BOOK_WORDS} до {MAX_BOOK_WORDS} слов")
+    return count
+
+
+def distribute_words(total: int, scene_ids: list[str]) -> list[int]:
+    """Deterministic distribution across approved chapter cards."""
+    if not scene_ids:
+        raise ValueError("Сначала утверди каркас: в нём нет глав")
+    parts = len(scene_ids)
+    base, remainder = divmod(total, parts)
+    if base + bool(remainder) > MAX_CHAPTER_WORDS:
+        raise ValueError("Для такого объёма добавь больше глав в каркас")
+    if base < 150:
+        raise ValueError("Слишком много глав для заданного объёма: минимум 150 слов на главу")
+    return [base + (i < remainder) for i in range(parts)]
+
+
+def chunk_size(remaining: int) -> int:
+    return min(CHUNK_WORDS, max(180, remaining))
+
+
+def max_attempts(chapter_target: int) -> int:
+    # Guard against a model that returns only a sentence for every call.
+    return min(60, max(4, math.ceil(chapter_target / 350) + 4))
+
+
+def init_book_tables(db: sqlite3.Connection) -> None:
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS ai_book_chapters (
+            job_id TEXT NOT NULL, scene_id TEXT NOT NULL,
+            scene_index INTEGER NOT NULL, title TEXT NOT NULL,
+            target_words INTEGER NOT NULL,
+            original_sha256 TEXT NOT NULL,
+            text TEXT NOT NULL DEFAULT '',
+            word_count INTEGER NOT NULL DEFAULT 0,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            complete INTEGER NOT NULL DEFAULT 0,
+            accepted_at TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, scene_id)
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS ai_book_chapters_job "
+               "ON ai_book_chapters(job_id, scene_index)")
+
+
+def create_book_chapters(db: sqlite3.Connection, job_id: str, chapters: list[dict]) -> None:
+    for index, item in enumerate(chapters):
+        db.execute("""
+            INSERT INTO ai_book_chapters
+                (job_id,scene_id,scene_index,title,target_words,original_sha256,updated_at)
+            VALUES (?,?,?,?,?,?,?)
+        """, (job_id, item["id"], index, item["title"], item["target_words"],
+              item["original_sha256"], now()))
+
+
+def chapters_for_job(db: sqlite3.Connection, job_id: str, *, include_text: bool = True) -> list[dict]:
+    columns = "*" if include_text else (
+        "job_id,scene_id,scene_index,title,target_words,word_count,"
+        "attempts,complete,accepted_at,updated_at"
+    )
+    return [dict(row) for row in db.execute(
+        f"SELECT {columns} FROM ai_book_chapters WHERE job_id=? ORDER BY scene_index",
+        (job_id,)
+    ).fetchall()]
+
+
+def book_summary(db: sqlite3.Connection, job_id: str) -> dict:
+    chapters = chapters_for_job(db, job_id, include_text=False)
+    total_target = sum(c["target_words"] for c in chapters)
+    done = sum(c["word_count"] for c in chapters)
+    accepted = sum(c["accepted_at"] is not None for c in chapters)
+    return {
+        "target_words": total_target, "generated_words": done,
+        "minutes_read_aloud": round(done / WORDS_PER_MINUTE, 1),
+        "chapters": len(chapters),
+        "chapters_complete": sum(bool(c["complete"]) for c in chapters),
+        "chapters_accepted": accepted,
+        "shortfall": max(0, total_target - done),
+        "percent_words": round(done / total_target * 100, 1) if total_target else 0,
+    }
+
+
+def save_chapter(db: sqlite3.Connection, job_id: str, scene_id: str,
+                 text: str, attempts: int, *, complete: bool = False) -> None:
+    if len(text) > 150000:
+        raise ValueError("Глава превысила предел 150000 символов; разбей её на части")
+    db.execute("""
+        UPDATE ai_book_chapters
+        SET text=?, word_count=?, attempts=?, complete=?, updated_at=?
+        WHERE job_id=? AND scene_id=? AND accepted_at IS NULL
+    """, (text, count_words(text), attempts, int(complete), now(), job_id, scene_id))
+    if db.execute("SELECT changes()").fetchone()[0] != 1:
+        raise ValueError("Глава не найдена или уже принята автором")
