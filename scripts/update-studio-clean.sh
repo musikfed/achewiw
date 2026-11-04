@@ -56,7 +56,7 @@ PY
 
 msg "Каталог: $ROOT; ветка: $BRANCH."
 msg "Защищены: SQLite, data/, .env, рукописи, ComfyUI, Ollama, NVIDIA и другие проекты."
-msg "Обновим страницу через новую версию ресурсов editorial-v9; браузерное хранилище не стираем."
+msg "Обновим страницу через новую версию ресурсов longbook-v11; браузерное хранилище не стираем."
 msg "Docker studio будет пересобран без старых слоёв build cache, но без глобального prune."
 if [[ "$ACTION" == preview ]]; then
   msg "PREVIEW — ничего не меняем"
@@ -83,7 +83,7 @@ for name in ('app/main.py', 'scripts/comfyui_control_agent.py'):
 PY
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
-grep -Fq '20261105-longbook-v10' app/static/index.html ||
+grep -Fq '20261105-longbook-v11' app/static/index.html ||
   die "Нет новых ассетов; отмена пересборки"
 msg "3/5 — удаляем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
