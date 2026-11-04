@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
+from image_engine import status as illustration_engine_status, generate as generate_illustration_image
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
@@ -458,6 +459,62 @@ def illustrations_delete(project_id: str, asset_id: str):
 def illustrations_for_book(project_id: str) -> list[dict]:
     with db() as connection:
         return export_illustrations(DATA_DIR, connection, project_id)
+
+
+@api.get("/illustration-engine")
+async def get_illustration_engine():
+    """Only local image-generation engines; Ollama vision models are not image creators."""
+    return await illustration_engine_status()
+
+
+class ImageGenerationRequest(BaseModel):
+    scene_id: str
+    prompt: str = Field(min_length=1, max_length=2500)
+    caption: str = Field(default="", max_length=1000)
+    placement: Literal["start", "end"] = "start"
+    confirm_shared_gpu: bool = False
+
+
+@api.post("/projects/{project_id}/illustrations/generate", status_code=201)
+async def generate_book_illustration(project_id: str, request: ImageGenerationRequest):
+    """Generate a real image ONLY through explicitly available local ComfyUI.
+
+    Switching image diffusion checkpoints occurs inside ComfyUI; shared
+    host Ollama models are NEVER unloaded automatically or secretly.
+    """
+    project = get_project(project_id)
+    if request.scene_id not in {scene.id for scene in project.scenes}:
+        raise HTTPException(422, "Укажи существующую главу")
+    with db() as connection:
+        if active_job(connection):
+            raise HTTPException(409, "Дождись завершения текущей текстовой генерации")
+    engine = await illustration_engine_status()
+    if not engine.get("available"):
+        raise HTTPException(503, engine.get("reason", "Графический движок недоступен"))
+    if not request.confirm_shared_gpu:
+        try:
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                loaded = await client.get(OLLAMA_BASE_URL + "/api/ps")
+                loaded.raise_for_status()
+                if summarize_ollama_running(loaded.json()):
+                    raise HTTPException(
+                        409, "В общей Ollama загружены модели. Подтверди совместное использование GPU "
+                             "или вручную выгрузи выбранную модель. Автоматической выгрузки нет."
+                    )
+        except (httpx.HTTPError, ValueError, KeyError):
+            raise HTTPException(503, "Не удалось проверить занятость общей Ollama") from None
+    try:
+        png, checkpoint = await generate_illustration_image(request.prompt)
+        with db() as connection:
+            result = save_illustration(DATA_DIR, connection,
+                 project_id=project_id, scene_id=request.scene_id, caption=request.caption,
+                 content=png, created_at=utc_now(), placement=request.placement)
+    except (ValueError, TimeoutError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "Графический движок ComfyUI не завершил генерацию") from exc
+    return {"illustration": result, "checkpoint": checkpoint,
+            "note": "Изображение сохранено; модели Ollama не переключались и не выгружались"}
 
 
 @api.get("/projects/{project_id}/stats")
