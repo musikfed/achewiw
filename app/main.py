@@ -613,8 +613,8 @@ def accept_written_proposal(job_id: str, request: AcceptanceRequest):
     with db() as connection:
         connection.execute("BEGIN IMMEDIATE")
         job = get_job(connection, job_id)
-        if not job or job["status"] != "ready" or job["mode"] not in ("block", "polish"):
-            raise HTTPException(422, "Можно принять только готовый блок или литературную редактуру")
+        if not job or job["status"] != "ready" or job["mode"] not in ("block", "polish", "scene"):
+            raise HTTPException(422, "Можно принять только завершённую генерацию сцены, блока или редактуру")
         if job.get("accepted"):
             raise HTTPException(409, "Это предложение уже принималось")
         row = connection.execute("SELECT data FROM projects WHERE id=?", (job["project_id"],)).fetchone()
