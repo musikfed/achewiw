@@ -36,6 +36,7 @@ DB_PATH = DATA_DIR / "achewiw.sqlite3"
 STATIC_DIR = Path(__file__).parent / "static"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 DEFAULT_MODEL = os.getenv("ACHEWIW_MODEL", "qwen3:8b")
+COMFYUI_CONTROL_URL = "http://127.0.0.1:8190"
 # Password-free private LAN/VPN mode. No unauthenticated access from public IPs.
 # Connections forwarded by a reverse proxy must preserve a trusted source address;
 # X-Forwarded-For is intentionally ignored.
@@ -549,6 +550,70 @@ def illustrations_for_book(project_id: str) -> list[dict]:
 async def get_illustration_engine():
     """Only local image-generation engines; Ollama vision models are not image creators."""
     return await illustration_engine_status()
+
+
+class ComfyUIControlRequest(BaseModel):
+    action: Literal["install", "model-sdxl", "start", "stop"]
+
+
+async def _comfyui_control_request(method: str, path: str,
+                                   payload: dict | None = None) -> dict:
+    token_path = DATA_DIR / "comfyui-control.token"
+    if token_path.is_symlink() or not token_path.is_file():
+        raise HTTPException(
+            503, "Кнопочное управление ComfyUI ещё не установлено. Обнови ACHEWIW с GitHub."
+        )
+    try:
+        token = token_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        raise HTTPException(503, "Не удалось прочитать закрытый токен host-control") from None
+    if len(token) < 40:
+        raise HTTPException(503, "Некорректный токен host-control")
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=2.0, read=20.0, write=5.0, pool=2.0),
+            trust_env=False,
+        ) as client:
+            response = await client.request(
+                method, COMFYUI_CONTROL_URL + path,
+                headers={"X-ACHEWIW-Control-Token": token}, json=payload,
+            )
+    except httpx.HTTPError:
+        raise HTTPException(
+            503, "Хостовый контроллер ComfyUI недоступен. Проверь обновление ACHEWIW."
+        ) from None
+    try:
+        result = response.json()
+    except ValueError:
+        result = {"detail": "Хостовый контроллер вернул некорректный ответ"}
+    if response.status_code >= 400:
+        raise HTTPException(response.status_code,
+                            result.get("detail", "Команда ComfyUI не выполнена"))
+    return result
+
+
+@api.get("/illustration-engine/control")
+async def illustration_engine_control_status():
+    return await _comfyui_control_request("GET", "/status")
+
+
+@api.post("/illustration-engine/control", status_code=202)
+async def illustration_engine_control(request: ComfyUIControlRequest):
+    with db() as connection:
+        if active_job(connection) or image_operation_active(connection):
+            raise HTTPException(
+                409, "Сначала дождись окончания текущей задачи ACHEWIW на GPU."
+            )
+    return await _comfyui_control_request(
+        "POST", "/control", {"action": request.action}
+    )
+
+
+@api.get("/illustration-engine/control/jobs/{job_id}")
+async def illustration_engine_control_job(job_id: str):
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(404, "Задача управления не найдена")
+    return await _comfyui_control_request("GET", "/jobs/" + job_id)
 
 
 class ImageGenerationRequest(BaseModel):

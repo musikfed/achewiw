@@ -70,13 +70,20 @@ msg "1/5 — скачиваем новые изменения безопасно
 git fetch --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 git merge --ff-only "origin/$BRANCH"
 msg "2/5 — проверяем новую версию"
-for script in scripts/achewiw-control.sh scripts/monitor-v2.sh scripts/comfyui-local.sh; do
+for script in scripts/achewiw-control.sh scripts/monitor-v2.sh scripts/comfyui-local.sh scripts/comfyui-control-agent.sh; do
   bash -n "$script" || die "Неверный Bash-синтаксис в $script"
 done
 test -f app/static/illustrations.js
+test -f scripts/comfyui_control_agent.py
+python3 - <<'PY'
+import ast
+from pathlib import Path
+for name in ('app/main.py', 'scripts/comfyui_control_agent.py'):
+    ast.parse(Path(name).read_text(encoding='utf-8'), filename=name)
+PY
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
-grep -Fq '20261104-editorial-v8' app/static/index.html ||
+grep -Fq '20261104-editorial-v9' app/static/index.html ||
   die "Нет новых ассетов; отмена пересборки"
 msg "3/5 — удаляем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
@@ -85,6 +92,11 @@ msg "4/5 — пересборка без кэша только подтверж�
 bash scripts/achewiw-control.sh rebuild-fresh
 msg "5/5 — проверяем веб-приложение и мониторинг"
 bash scripts/achewiw-control.sh auth-check
+if bash scripts/comfyui-control-agent.sh start; then
+  msg "Кнопочное управление ComfyUI подключено"
+else
+  msg "ВНИМАНИЕ: host-control ComfyUI не запущен; проверь scripts/comfyui-control-agent.sh status"
+fi
 if bash scripts/monitor-v2.sh start; then
   msg "Монитор CPU/RAM/GPU запущен"
 else

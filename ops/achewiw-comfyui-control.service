@@ -1,0 +1,21 @@
+[Unit]
+Description=ACHEWIW loopback-only ComfyUI host control
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/1tbdisk/achewiw
+ExecStart=/usr/bin/python3 /1tbdisk/achewiw/scripts/comfyui_control_agent.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/1tbdisk/achewiw/data/comfyui-runtime /1tbdisk/achewiw/data/comfyui-control-jobs
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+UMask=0077
+KillMode=process
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=UV_CACHE_DIR=/1tbdisk/achewiw/data/comfyui-runtime/uv-cache

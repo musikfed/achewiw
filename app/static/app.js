@@ -145,7 +145,7 @@ async function deleteCurrentProject(){
   toast('Работа удалена. Резервная копия SQLite сохранена.');
  }catch(e){toast('Удаление не выполнено: '+e.message)}
 }
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook()}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book')renderBook();document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
 async function renderAuditHistory(){
   if(!project)return;
   const target=$('#auditHistory');

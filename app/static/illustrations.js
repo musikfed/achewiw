@@ -4,6 +4,8 @@
   const el = id => document.getElementById(id);
   const current = () => typeof project === 'object' ? project : null;
   let imageBusy = false;
+  let engineControlBusy = false;
+  let controlStatus = null;
   let activeProjectId = null;
 
   async function json(url, options = {}) {
@@ -91,6 +93,123 @@
     return card;
   }
 
+  function renderEngineControls(engine, control) {
+    const prepare = el('illustrationEnginePrepare');
+    const stop = el('illustrationEngineStop');
+    if (!control) {
+      prepare.disabled = true;
+      prepare.textContent = 'Контроллер не подключён';
+      stop.disabled = true;
+      el('illustrationEngineStatus').textContent = engine.available ?
+        'ComfyUI отвечает, но кнопочное управление ещё не установлено.' :
+        'Нет связи с ComfyUI и host-control. Обнови ACHEWIW с GitHub.';
+      return;
+    }
+    if (control.busy) {
+      prepare.disabled = true;
+      prepare.textContent = 'Выполняется: ' + (control.active_action || 'ComfyUI');
+      stop.disabled = true;
+      el('illustrationEngineStatus').textContent =
+        'Выполняется команда ComfyUI. Можно обновить статус, не запуская вторую команду.';
+      return;
+    }
+    if (!control.installed) prepare.textContent = 'Установить ComfyUI';
+    else if (!control.model_present) prepare.textContent = 'Загрузить SDXL (~7 ГБ)';
+    else if (!control.api_ready) prepare.textContent = 'Запустить ComfyUI';
+    else prepare.textContent = 'ComfyUI запущен';
+    const foreignPort = control.port_busy && !control.owned_running && !control.api_ready;
+    prepare.disabled = engineControlBusy || Boolean(control.api_ready && engine.available) ||
+      Boolean(foreignPort) || Boolean(control.owned_running && !control.api_ready);
+    stop.disabled = engineControlBusy || !control.owned_running;
+    if (engine.available && control.api_ready) {
+      el('illustrationEngineStatus').textContent = control.owned_running ?
+        '● ComfyUI готов · SDXL доступен · сервер ACHEWIW' :
+        '● ComfyUI отвечает · процесс принадлежит другому владельцу; не останавливаем его';
+    } else if (foreignPort) {
+      el('illustrationEngineStatus').textContent =
+        'Порт 8188 занят неидентифицированным процессом. ACHEWIW его не трогает.';
+    } else if (!control.installed) {
+      el('illustrationEngineStatus').textContent =
+        'ComfyUI не установлен. Нажми «Установить ComfyUI» для изолированной установки.';
+    } else if (!control.model_present) {
+      el('illustrationEngineStatus').textContent =
+        'SDXL checkpoint отсутствует. Нажми кнопку загрузки; файл около 7 ГБ.';
+    } else if (control.owned_running && !control.api_ready) {
+      el('illustrationEngineStatus').textContent =
+        'Наш процесс ComfyUI найден, но API не отвечает. Останови его и запусти снова.';
+    } else {
+      el('illustrationEngineStatus').textContent =
+        'ComfyUI остановлен · SDXL установлен. Нажми «Запустить ComfyUI».';
+    }
+  }
+
+  async function runControlJob(action, label) {
+    const started = await json('/api/illustration-engine/control', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action})
+    });
+    if (!started.job_id) throw new Error('Контроллер не вернул идентификатор задачи');
+    while (true) {
+      const job = await json('/api/illustration-engine/control/jobs/' +
+        encodeURIComponent(started.job_id));
+      const tail = (job.output || '').split(/[\r\n]+/).filter(Boolean).slice(-3).join(' · ');
+      setStatus(tail ? label + ' ' + tail : label);
+      if (job.status === 'succeeded') return job;
+      if (job.status === 'failed') throw new Error(tail || 'Команда ' + action + ' завершилась с ошибкой');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+  }
+
+  async function prepareEngine() {
+    if (engineControlBusy) return;
+    engineControlBusy = true;
+    renderEngineControls({available:false}, controlStatus);
+    try {
+      let state = await json('/api/illustration-engine/control');
+      controlStatus = state;
+      if (state.busy) throw new Error('Уже выполняется команда ComfyUI');
+      if (!state.installed) {
+        if (!confirm('Установить ComfyUI в отдельный каталог ACHEWIW? Будут загружены Python-зависимости и PyTorch CUDA 12.4.')) return;
+        await runControlJob('install', 'Устанавливаем ComfyUI в отдельное окружение…');
+      }
+      state = await json('/api/illustration-engine/control');
+      controlStatus = state;
+      if (!state.model_present) {
+        if (!confirm('Загрузить официальный SDXL Base checkpoint (~7 ГБ) в каталог ACHEWIW? Загрузка выполняется только после этого подтверждения.')) return;
+        await runControlJob('model-sdxl', 'Загружаем SDXL (~7 ГБ), проверяем SHA-256…');
+      }
+      state = await json('/api/illustration-engine/control');
+      controlStatus = state;
+      if (state.port_busy && !state.owned_running && !state.api_ready) {
+        throw new Error('Порт 8188 занят чужим процессом. Его не останавливаем.');
+      }
+      if (!state.api_ready) {
+        await runControlJob('start', 'Запускаем ComfyUI только на localhost:8188…');
+      }
+      setStatus('ComfyUI запущен. SDXL будет загружен в VRAM при первой генерации.');
+    } catch (err) {
+      setStatus('Не удалось подготовить генератор: ' + err.message);
+    } finally {
+      engineControlBusy = false;
+      await refresh();
+    }
+  }
+
+  async function stopEngine() {
+    if (engineControlBusy || !controlStatus?.owned_running) return;
+    if (!confirm('Остановить только подтверждённый процесс ComfyUI ACHEWIW? Другие процессы и Ollama не затрагиваются.')) return;
+    engineControlBusy = true;
+    try {
+      await runControlJob('stop', 'Останавливаем только собственный ComfyUI…');
+      setStatus('ComfyUI остановлен. Общая Ollama и другие проекты не затронуты.');
+    } catch (err) {
+      setStatus('Не удалось остановить ComfyUI: ' + err.message);
+    } finally {
+      engineControlBusy = false;
+      await refresh();
+    }
+  }
+
   async function refresh() {
     const p = current();
     if (!p) return;
@@ -109,31 +228,28 @@
     el('illustrationUpload').disabled = !p.scenes.length || imageBusy;
     el('illustrationGenerate').disabled = true;
     el('illustrationRefine').disabled = imageBusy;
-    if(!p.scenes.length) {
-      grid.textContent = 'Сначала добавь главу в разделе «02 · План».';
-      return;
-    }
-    grid.textContent = 'Загружаем иллюстрации…';
+    grid.textContent = p.scenes.length ? 'Загружаем иллюстрации…' :
+      'Сначала добавь главу в разделе «02 · План».';
     try {
-      const [items,engine]=await Promise.all([
-        json('/api/projects/'+projectId+'/illustrations'),
-        json('/api/illustration-engine'),
+      const [items,engine,control]=await Promise.all([
+        p.scenes.length ? json('/api/projects/'+projectId+'/illustrations') : Promise.resolve([]),
+        json('/api/illustration-engine').catch(err=>({available:false,reason:err.message})),
+        json('/api/illustration-engine/control').catch(()=>null),
       ]);
       if(!current() || current().id!==projectId) return;
-      el('illustrationEngineStatus').textContent=engine.available ?
-        '● ComfyUI готов · автоматически выбран checkpoint: '+engine.model :
-        'Генерация пока недоступна: '+(engine.reason||'нет графической модели');
-      el('illustrationGenerate').disabled=!engine.available||imageBusy;
+      controlStatus=control;
+      renderEngineControls(engine,control);
+      if(!p.scenes.length) return;
       grid.replaceChildren();
       if(!items.length)grid.textContent=
         'Изображений пока нет. Выбери главу, загрузи PNG/JPEG/WebP или создай рисунок.';
       for(const item of items)grid.append(imageCard(projectId,item,p.scenes));
+      el('illustrationGenerate').disabled=!engine.available||imageBusy;
     }catch(err){
       grid.textContent='Ошибка загрузки: '+err.message;
       el('illustrationEngineStatus').textContent='Не удалось проверить ComfyUI';
     }
   }
-
   async function upload() {
     const p=current(), file=el('illustrationFile').files[0];
     if(!p) return;
@@ -223,8 +339,13 @@
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify(body)
       });
-      setStatus('3/3 · Рисунок сохранён. ComfyUI VRAM: '+result.comfy_vram+
-        '. Ollama без запроса не трогали.');
+      const releaseText={
+        free_requested:'кэш ComfyUI освобождён',
+        skipped_comfyui_queue_busy:'кэш не трогали: очередь ComfyUI занята',
+        free_request_failed:'не удалось подтвердить освобождение кэша',
+        not_requested:'освобождение кэша не запрашивалось'
+      }[result.comfy_vram]||result.comfy_vram;
+      setStatus('3/3 · Рисунок сохранён · '+releaseText+'. Ollama без запроса не трогали.');
       el('illustrationEngineStatus').textContent='Иллюстрация готова: '+result.checkpoint;
       alert('Изображение сохранено в книге. Модель: '+result.checkpoint);
     }catch(err){
@@ -251,11 +372,15 @@
   el('illustrationUpload').addEventListener('click',upload);
   el('illustrationRefine').addEventListener('click',refine);
   el('illustrationGenerate').addEventListener('click',generate);
-  document.querySelector('[data-tab="illustrations"]').addEventListener('click',refresh);
+  el('illustrationEnginePrepare').addEventListener('click',prepareEngine);
+  el('illustrationEngineStop').addEventListener('click',stopEngine);
+  el('illustrationEngineRefresh').addEventListener('click',refresh);
+  document.addEventListener('achewiw:tab-shown',event=>{
+    if(event.detail?.name==='illustrations') refresh();
+  });
   el('openIllustrations').addEventListener('click',()=>{
     if(!current())return;
     showTab('illustrations');
-    refresh();
     el('illustrations').scrollIntoView({behavior:'smooth',block:'start'});
   });
   el('openTypography').addEventListener('click',()=>{
