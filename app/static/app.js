@@ -137,7 +137,7 @@ function renderGeneration(job){
   $('#aiHeading').textContent=job.mode==='audit'?
     '✦ Редакторский отчёт QA · не текст книги':
     job.mode==='outline'?'✦ Предложение структуры истории':'✦ Черновик художественной сцены';
-  $('#aiStage').textContent=job.stage||'Ожидание генерации';
+  $('#aiStage').textContent=job.status==='ready'&&job.mode==='audit'?'QA-отчёт готов · выбери решение автора ниже':job.stage||'Ожидание генерации';
   $('#aiJobId').textContent='Задание '+job.id.slice(0,12)+' · '+job.model+' · '+new Date(job.updated_at).toLocaleTimeString();
   $('#aiOutput').textContent=job.result||'Ожидание первого фрагмента текста от Ollama…';
   const progress=$('#aiProgress');
