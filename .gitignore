@@ -4,3 +4,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.sqlite3
+
+# Local CLI lock; Git updates must never accidentally stage it
+.achewiw-control.lock
