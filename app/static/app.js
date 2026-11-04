@@ -2,6 +2,7 @@ const $=s=>document.querySelector(s);
 let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, previousSceneId=null;
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 let draftSaveTimer=null;
+let bookJobId=null, bookPollBusy=false;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
 // Browser UI state is separate from SQLite manuscript data.
@@ -130,7 +131,7 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -427,6 +428,91 @@ async function restoreLatestGeneration(){
     }
   }catch(e){toast('Не удалось восстановить журнал генерации: '+e.message)}
 }
+
+function renderFullBookJob(job){
+ if(!project||job.project_id!==project.id)return;
+ bookJobId=job.id;
+ safeSet(localStorage,uiKey('bookJob'),job.id);
+ const b=job.book||{}, chapters=job.book_chapters||[];
+ const active=['queued','running'].includes(job.status);
+ const accepted=chapters.length&&chapters.every(c=>c.accepted_at);
+ $('#generateFullBook').disabled=active||isBusy;
+ $('#resumeFullBook').hidden=!['interrupted','error'].includes(job.status);
+ $('#acceptFullBook').hidden=job.status!=='ready'||!!accepted;
+ const progress=$('#fullBookProgress');
+ progress.hidden=false;progress.value=Math.min(100,b.percent_words||0);
+ $('#fullBookStatus').textContent=
+   (job.stage||job.status)+' · '+(b.generated_words||0).toLocaleString('ru-RU')+
+   ' / '+(b.target_words||0).toLocaleString('ru-RU')+
+   ' слов ('+(b.percent_words||0)+'%); глав: '+(b.chapters_complete||0)+'/'+(b.chapters||0)+
+   (job.error?' · '+job.error:'')+
+   (accepted?' · Принято в рукопись.':' · Черновики отдельно от рукописи.');
+ $('#fullBookChapters').replaceChildren(...chapters.map(c=>{
+   const p=document.createElement('p');
+   p.textContent=(c.scene_index+1)+'. '+c.title+': '+c.word_count+' / '+c.target_words+
+      ' слов · '+(c.accepted_at?'принято':c.complete?'готово':'черновик, '+c.attempts+' фрагментов');
+   return p;
+ }));
+}
+async function refreshFullBook(){
+ if(!project||!bookJobId||bookPollBusy)return;
+ bookPollBusy=true;
+ try{
+   const job=await api('/books/jobs/'+bookJobId,{cache:'no-store'});
+   renderFullBookJob(job);
+ }catch(e){$('#fullBookStatus').textContent='Не удалось проверить книгу: '+e.message}
+ finally{bookPollBusy=false}
+}
+async function restoreLatestBook(){
+ if(!project)return;
+ bookJobId=null;
+ $('#fullBookStatus').textContent='Проверяем сохранённую генерацию книги…';
+ const jobs=await api('/projects/'+project.id+'/ai/jobs?mode=book',{cache:'no-store'});
+ if(jobs.length){
+   bookJobId=jobs[0].id;
+   await refreshFullBook();
+ }else{
+   $('#fullBookStatus').textContent='Укажи целевой объём, утверди каркас и нажми «Написать всю книгу».';
+   $('#fullBookChapters').textContent='';
+   $('#fullBookProgress').hidden=true;
+   $('#resumeFullBook').hidden=true;
+   $('#acceptFullBook').hidden=true;
+   $('#generateFullBook').disabled=false;
+ }
+}
+async function startFullBook(){
+ if(!project||isBusy)return;
+ if(!project.scenes.length){toast('Сначала создай и утверди каркас');return}
+ if(!confirm('Начать поэтапное написание всех глав по целевому объёму? Рукопись не заменяется до отдельного принятия.'))return;
+ try{
+   await save();
+   const job=await api('/books/generate',{method:'POST',
+      body:JSON.stringify({project_id:project.id,model})});
+   renderFullBookJob(job);
+   toast('Запущено написание книги по главам; можно обновлять страницу.');
+ }catch(e){toast('Книга не запущена: '+e.message)}
+}
+async function resumeFullBook(){
+ if(!bookJobId)return;
+ try{
+   const job=await api('/books/jobs/'+bookJobId+'/resume',{method:'POST',body:'{}'});
+   renderFullBookJob(job);
+   toast('Генерация продолжена с сохранённого текста.');
+ }catch(e){toast('Не удалось продолжить: '+e.message)}
+}
+async function acceptFullBook(){
+ if(!bookJobId||!project)return;
+ if(!confirm('Заменить тексты ВСЕХ глав готовой книгой? Исходные тексты будут сохранены как ревизии для отката.'))return;
+ try{
+   // Do not save stale browser copies after a server change; acceptance uses hashes.
+   const result=await api('/books/jobs/'+bookJobId+'/accept',
+     {method:'POST',body:JSON.stringify({confirm:true})});
+   project=await api('/projects/'+project.id);
+   render();await refreshFullBook();
+   toast('Принято '+result.chapters+' глав · '+result.words+' слов. Ревизии сохранены.');
+ }catch(e){toast('Принятие отменено: '+e.message)}
+}
+
 async function ai(mode, extras={}){
   if(!project||isBusy)return;
   updateBrief();collectScenes();collectText();
@@ -521,6 +607,9 @@ $('#saveText').onclick=()=>{collectText();save().catch(e=>toast(e.message))};
 $('#addScene').onclick=()=>{collectScenes();project.scenes.push({id:crypto.randomUUID().replaceAll('-',''),title:'Новая сцена',active_objects:[],anchor:'',tempo:'Ровный',reader_info:'',hook:'',text:''});renderScenes();renderWriting()};
 $('#writingScene').onchange=()=>{collectText();switchWriting()};
 $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
+ $('#generateFullBook').onclick=startFullBook;
+ $('#resumeFullBook').onclick=resumeFullBook;
+ $('#acceptFullBook').onclick=acceptFullBook;
 $('#generateScene').onclick=()=>ai('scene');
 $('#runAudit').onclick=()=>ai('audit');
 $('#applyAI').onclick=applyAI;
@@ -535,7 +624,7 @@ $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
 $('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
 $('#model').onchange=e=>{model=e.target.value;safeSet(localStorage,'achewiw.v8.selectedModel',model)};
 $('#unloadModel').onclick=releaseSelectedModel;
-setInterval(()=>{if(!document.hidden)refreshGeneration()},1500);
+setInterval(()=>{if(!document.hidden){refreshGeneration();refreshFullBook()}},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshGeneration()});
 // Keep unsaved editor fields in this browser tab across refresh without
 // pushing drafts to the server. Revision matching prevents stale overwrite.
