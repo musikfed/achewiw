@@ -9,9 +9,8 @@ from html import escape
 from io import BytesIO
 import re
 import uuid
+from datetime import datetime, timezone
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
-
-EPUB_NS = "http://www.idpf.org/2007/opf"
 
 
 def chapter_listing(project) -> dict:
@@ -101,6 +100,7 @@ def manuscript_epub(project) -> bytes:
         '<rootfiles><rootfile full-path="EPUB/content.opf" '
         'media-type="application/oebps-package+xml"/></rootfiles></container>'
     )
+    modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     files["EPUB/content.opf"] = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" '
@@ -108,6 +108,7 @@ def manuscript_epub(project) -> bytes:
         '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
         '<dc:identifier id="bookid">urn:uuid:' + str(identifier) + '</dc:identifier>'
         '<dc:title>' + title + '</dc:title><dc:language>ru</dc:language>'
+        '<meta property="dcterms:modified">' + modified + '</meta>'
         '</metadata><manifest>' + "".join(manifest) +
         '</manifest><spine>' + "".join(spine) + '</spine></package>'
     )
