@@ -116,3 +116,27 @@ async def generate(prompt: str) -> tuple[bytes, str]:
             if job.get("status", {}).get("status_str") == "error":
                 raise ValueError("ComfyUI завершил генерацию с ошибкой")
     raise TimeoutError("ComfyUI не закончил генерацию за 3 минуты")
+
+async def free_cached_models() -> str:
+    """Optional /free on loopback ComfyUI. Never clear external queued jobs.
+
+    ComfyUI can be a shared server: require explicit opt-in in the UI and
+    skip if any request is running or pending. This call only addresses ComfyUI,
+    not Ollama or a global CUDA reset.
+    """
+    try:
+        async with httpx.AsyncClient(
+            timeout=6.0, trust_env=False
+        ) as client:
+            queue = await client.get(engine_url() + "/queue")
+            queue.raise_for_status()
+            state = queue.json()
+            if state.get("queue_running") or state.get("queue_pending"):
+                return "skipped_comfyui_queue_busy"
+            response = await client.post(engine_url() + "/free", json={
+                "unload_models": True, "free_memory": True,
+            })
+            response.raise_for_status()
+            return "free_requested"
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return "free_request_failed"
