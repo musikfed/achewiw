@@ -125,6 +125,7 @@ class SceneBlock(BaseModel):
     style: str = Field(default="", max_length=1000)
     accepted_job_id: str | None = None
     accepted_at: str | None = None
+    evidence_stale: bool = False
 
 
 class Scene(BaseModel):
@@ -423,6 +424,15 @@ def update_project(project_id: str, project: Project):
                 if block.accepted_job_id and (
                         accepted is None or accepted.model_dump() != block.model_dump()):
                     raise HTTPException(409, "Принятые блоки нельзя незаметно менять в плане. Создай новый фрагмент.")
+        # Direct author editing can remove a previously introduced object.
+        # Do not silently treat the old accepted-block ledger as fresh.
+        original_scenes={s.id:s for s in previous.scenes}
+        for scene in project.scenes:
+            old_scene=original_scenes.get(scene.id)
+            if old_scene and old_scene.text != scene.text:
+                for block in scene.blocks:
+                    if block.accepted_job_id:
+                        block.evidence_stale = True
         project.updated_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         connection.execute(
             "UPDATE projects SET data=?,updated_at=? WHERE id=?",
@@ -638,8 +648,15 @@ def accept_written_proposal(job_id: str, request: AcceptanceRequest):
             scene.text = (scene.text.rstrip() + "\n\n" + proposed).strip()
             selected.accepted_job_id = job_id
             selected.accepted_at = utc_now()
+            selected.evidence_stale = False
         else:
             scene.text = proposed
+            # Rewriting the scene invalidates evidence anchored in older
+            # block versions; keep history but require revalidation.
+            if proposed != original:
+                for earlier in scene.blocks:
+                    if earlier.accepted_job_id:
+                        earlier.evidence_stale = True
         if len(scene.text) > 150000:
             raise HTTPException(422, "Сцена превышает предельный размер")
         revision_id = uuid.uuid4().hex
@@ -700,6 +717,11 @@ def restore_scene_revision(project_id: str, scene_id: str, revision_id: str,
             if block.accepted_job_id == record["job_id"]:
                 block.accepted_job_id = None
                 block.accepted_at = None
+                block.evidence_stale = False
+        # Previously accepted facts need revalidation after any text restore.
+        for block in scene.blocks:
+            if block.accepted_job_id:
+                block.evidence_stale = True
         # Retain the old revision as evidence, but a fresh acceptance must
         # create a new job. This undo itself is also recorded and reversible.
         undo_id = uuid.uuid4().hex
