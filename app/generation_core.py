@@ -172,7 +172,7 @@ def recent_jobs(connection: sqlite3.Connection, project_id: str,
             (project_id,),
         ).fetchall()
     else:
-        if mode not in ("outline", "scene", "audit", "block", "continuity", "polish"):
+        if mode not in ("outline", "scene", "audit", "block", "continuity", "polish", "book"):
             raise ValueError("Unknown job mode")
         ids = connection.execute(
             "SELECT id FROM ai_jobs WHERE project_id=? AND mode=? "
