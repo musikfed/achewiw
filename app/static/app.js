@@ -332,6 +332,20 @@ function renderGeneration(job){
         'Черновик готов. Исходный проект не изменён до принятия предложения.'):
       'Генерация '+(job.status==='interrupted'?'прервана':'завершилась ошибкой')+
         '. Полученный текст сохранён. '+(job.error||'');
+  if(job.status==='ready' && job.mode==='block' && job.result){
+    const scene=project.scenes.find(s=>s.id===job.scene_id);
+    const block=scene?.blocks?.find(b=>b.id===job.block_id);
+    const actual=(job.result.match(/[\p{L}\p{N}]+(?:[-’'][\p{L}\p{N}]+)*/gu)||[]).length;
+    const target=block?.target_words;
+    const deviation=target?Math.round((actual-target)/target*100):null;
+    $('#aiNotice').textContent+=' Получено '+actual+' слов'+
+      (target?' при цели '+target+' ('+(deviation>0?'+':'')+deviation+'%)'+
+       (Math.abs(deviation)>15?' · объём вне допуска ±15%, решает автор':''):'')+
+      '. Ничего не добавлено в рукопись без принятия.';
+  }
+  if(job.status==='ready' && job.mode==='polish'){
+    $('#aiNotice').textContent+=' Сравни новую формулировку с исходником: модель может незаметно менять смысл.';
+  }
   pending=job.status==='ready'?{
     mode:job.mode,model:job.model,result:job.result,
     suggested_scenes:job.suggested_scenes,sceneId:job.scene_id,
