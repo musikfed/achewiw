@@ -824,3 +824,17 @@ header{
   .block-plan-buttons button,.planned-block-actions button,.writing-refine > button{width:100%;flex:1 1 100%}
   .writing-block-planner{padding:16px}
 }
+
+
+/* Author-guided reworking, not one-click AI style removal */
+.writing-refine-prompt{flex:1 1 100%;display:grid;gap:9px;max-width:900px;
+  font:600 12px/1.6 var(--ui);color:#756b5d}
+.writing-refine-prompt textarea,.continuity-prompt input{
+  width:100%;min-width:0;min-height:44px;margin:0;
+  padding:11px 14px;border:1px solid var(--hairline);border-radius:8px;
+  background:var(--sheet);font:13px/1.6 var(--ui);resize:vertical
+}
+.continuity-scope,.continuity-prompt{display:grid;gap:8px;flex:1 1 270px;
+  font:600 12px/1.6 var(--ui);color:#766955}
+.continuity-scope select{width:100%;min-height:44px;padding:10px 12px;
+  border-radius:8px;border:1px solid var(--hairline);background:var(--sheet)}
