@@ -113,55 +113,7 @@ preflight_all() {
   # Also check fixed container name: do not replace an unrelated/legacy container.
   local candidates named id
   candidates="$(containers true)" || die "Не удалось получить контейнеры ACHEWIW"
-  named="$(docker ps -a --no-trunc --filter 'name=^/achewiw-studio
-if [[ "$ACTION" == status ]]; then
-  ids="$(containers true)" || die "Не удалось прочитать Docker containers"
-  if [[ -z "$ids" ]]; then
-    echo "Контейнеров с Compose-проектом ACHEWIW не найдено."
-  else
-    while IFS= read -r id; do
-      [[ -z "$id" ]] && continue
-      if verify_owned "$id"; then
-        echo "Подтверждённый ACHEWIW-контейнер: $id"
-      else
-        echo "ВНИМАНИЕ: контейнер с похожим Compose-именем НЕ подтверждён: $id (не останавливать)"
-      fi
-    done <<< "$ids"
-  fi
-  port_status
-  exit 0
-fi
-
-ids="$(containers false)" || die "Не удалось получить список контейнеров — выключение отменено"
-if [[ -z "$ids" ]]; then
-  echo "Управляемые Docker-контейнеры ACHEWIW уже остановлены или ещё не созданы."
-else
-  # Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
-  owned=()
-  while IFS= read -r id; do
-    [[ -z "$id" ]] && continue
-    verify_owned "$id" || die "Контейнер $id не имеет ВСЕХ разрешающих меток ACHEWIW. НИЧЕГО не останавливаем."
-    owned+=("$id")
-  done <<< "$ids"
-
-  printf 'Проверено %d контейнер(ов) ACHEWIW. Остановка только их.\n' "${#owned[@]}"
-  for id in "${owned[@]}"; do
-    verify_owned "$id" || die "Метки контейнера $id изменились. Остановка прервана."
-    docker stop --time 60 "$id"
-  done
-fi
-
-remaining="$(containers false)" || die "Не удалось проверить результат выключения"
-[[ -z "$remaining" ]] || die "Есть запущенные контейнеры с проектным именем ACHEWIW. Проверьте вручную."
-if [[ "$unit_owned" == true ]]; then
-  # This unit is explicitly linked from /1tbdisk/achewiw/ops.
-  systemctl --user stop "$UNIT" || die "ACHEWIW Docker остановлен, но собственный монитор не удалось остановить."
-  echo "Остановлен собственный хостовый монитор ACHEWIW."
-fi
-echo "Управляемые контейнеры ACHEWIW остановлены; база, образы и файлы не удалены."
-port_status
-echo "Запуска и управления другими службами этот скрипт не выполняет."
- --format '{{.ID}}')" ||
+  named="$(docker ps -a --no-trunc --filter "name=^/achewiw-studio$" --format '{{.ID}}')" ||
     die "Нельзя проверить занятость имени achewiw-studio"
   for id in $candidates $named; do
     verify_owned "$id" || die "Неизвестный или устаревший контейнер $id: никаких изменений"
