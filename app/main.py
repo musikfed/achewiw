@@ -287,8 +287,8 @@ def build_prompt(project: Project, request: AIRequest) -> str:
     if request.mode == "continuity":
         if project.work_type != "fiction":
             raise HTTPException(422, "Сюжетная проверка предназначена для художественной прозы")
-        findings = story_preflight(project)
-        return (review_prompt(project, request.instructions, polish=False) +
+        findings = story_preflight(project, request.scene_id)
+        return (review_prompt(project, request.instructions, scene_id=request.scene_id) +
                 "\nРеестр явно заявленных автором фактов (не доказательства ошибок):\n" +
                 json.dumps(findings, ensure_ascii=False))[:35000]
     if request.mode == "outline":
