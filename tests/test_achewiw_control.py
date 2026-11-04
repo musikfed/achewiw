@@ -20,7 +20,7 @@ case "${1:-}" in
     echo 28.0
     ;;
   ps)
-    [[ "$*" == *'label=com.docker.compose.project=achewiw'* ]] || exit 52
+    [[ "$*" == *'label=com.docker.compose.project=achewiw'* || "$*" == *'name=^/achewiw-studio'* ]] || exit 52
     [[ "$*" == *" -a "* || "$(cat "$TEST_STATE")" == running ]] || exit 0
     printf 'a11c0ffee\n'
     if [[ "${TEST_ROGUE:-}" == 1 ]]; then printf 'r0gue\n'; fi
@@ -30,11 +30,11 @@ case "${1:-}" in
     if [[ "$id" == r0gue ]]; then
       printf 'achewiw|/other/workspace|studio|managed|/other/workspace\n'
     elif [[ "${TEST_LEGACY:-}" == 1 ]]; then
-      printf 'achewiw|$TEST_WORKSPACE|studio|<no value>|<no value>\n'
+      printf "achewiw|$TEST_WORKSPACE|studio|<no value>|<no value>\n"
     elif [[ "${TEST_WRONG_ROLE:-}" == 1 ]]; then
       printf 'achewiw|/1tbdisk/achewiw|unregistered|managed|$TEST_WORKSPACE\n'
     else
-      printf 'achewiw|$TEST_WORKSPACE|studio|managed|$TEST_WORKSPACE\n'
+      printf "achewiw|$TEST_WORKSPACE|studio|managed|$TEST_WORKSPACE\n"
     fi
     ;;
   compose)
