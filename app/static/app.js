@@ -44,6 +44,26 @@ function updateWorkCopy(){
  document.querySelectorAll('[data-only-kind]').forEach(el=>el.hidden=!el.dataset.onlyKind.split(' ').includes(kind));
 }
 async function api(path,options={}){const r=await fetch('/api'+path,{headers:{'Content-Type':'application/json'},...options});if(!r.ok){let detail='Ошибка '+r.status;try{detail=(await r.json()).detail||detail}catch{}throw Error(detail)}if(r.status===204)return null;return r.json()}
+function renderAIText(source){
+  // Escape BEFORE inserting typographic markup; never execute generated HTML/JS.
+  let markup=escaped(source||'').replace(/\r/g,'');
+  markup=markup.replace(/^######\s+(.+)$/gm,'<h5>$1</h5>')
+    .replace(/^#####\s+(.+)$/gm,'<h5>$1</h5>')
+    .replace(/^####\s+(.+)$/gm,'<h4>$1</h4>')
+    .replace(/^###\s+(.+)$/gm,'<h3>$1</h3>')
+    .replace(/^##\s+(.+)$/gm,'<h2>$1</h2>')
+    .replace(/^#\s+(.+)$/gm,'<h2>$1</h2>')
+    .replace(/\*\*([^\n*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^\n*]+)\*/g,'$1<em>$2</em>')
+    .replace(/^(?:---+|___+)$/gm,'<hr/>');
+  return markup.split(/\n\s*\n/).map(part=>{
+    const lines=part.split('\n').filter(x=>x.trim());
+    if(!lines.length)return '';
+    if(lines.length===1 && /^<(?:h[2-5]|hr)/.test(lines[0]))return lines[0];
+    if(lines.every(line=>/^\s*[-•]\s+/.test(line)))return '<ul>'+lines.map(line=>'<li>'+line.replace(/^\s*[-•]\s+/,'')+'</li>').join('')+'</ul>';
+    return '<p>'+lines.join('<br/>')+'</p>';
+  }).join('\n');
+}
 function toast(message){const t=$('#toast');t.textContent=message;t.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.style.display='none',5000)}
 function setBusy(value){isBusy=value;document.querySelectorAll('button').forEach(b=>{if(['generateScene','buildOutline','buildOutline2','runAudit','unloadModel'].includes(b.id))b.disabled=value});$('#status').textContent=value?'Идёт генерация StoryEngine · сохраняется на сервере':'Студия готова'}
 function renderProjects(){
@@ -245,7 +265,11 @@ function renderGeneration(job){
     job.mode==='outline'?'✦ Предложение структуры истории':'✦ Черновик художественной сцены';
   $('#aiStage').textContent=job.status==='ready'&&job.mode==='audit'?'QA-отчёт готов · выбери решение автора ниже':job.stage||'Ожидание генерации';
   $('#aiJobId').textContent='Задание '+job.id.slice(0,12)+' · '+job.model+' · '+new Date(job.updated_at).toLocaleTimeString();
-  $('#aiOutput').textContent=job.result||'Ожидание первого фрагмента текста от Ollama…';
+  if(job.status==='ready' && job.result){
+    $('#aiOutput').innerHTML=renderAIText(job.result);
+  }else{
+    $('#aiOutput').textContent=job.result||'Ожидание первого фрагмента текста от Ollama…';
+  }
   const progress=$('#aiProgress');
   if(Number.isFinite(job.percent))progress.value=job.percent;
   else progress.removeAttribute('value');
@@ -381,7 +405,7 @@ $('#openBookFromAudit').onclick=()=>gotoTab('book');
 $('#openBookFromEditor').onclick=saveAndReadBook;
 $('#bookEdit').onclick=()=>gotoTab('write');
 $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
-$('#copyAI').onclick=()=>navigator.clipboard.writeText($('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
+$('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
 $('#model').onchange=e=>model=e.target.value;
 $('#unloadModel').onclick=releaseSelectedModel;
 setInterval(()=>{if(!document.hidden)refreshGeneration()},1500);
