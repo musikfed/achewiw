@@ -9,8 +9,9 @@
 
 ```bash
 cd /1tbdisk/achewiw
-bash scripts/achewiw-control.sh status     # только чтение
-bash scripts/achewiw-control.sh start      # запуск только studio
+bash scripts/achewiw-control.sh status     # только чтение, свежесть host CPU/RAM/GPU
+bash scripts/achewiw-control.sh start      # запуск studio и попытка включить собственный монитор
+bash scripts/achewiw-control.sh monitor-start # включить только user-systemd монитор CPU/RAM/NVIDIA
 bash scripts/achewiw-control.sh restart    # перезапуск только studio
 bash scripts/achewiw-control.sh stop       # остановка только подтверждённых контейнеров
 bash scripts/achewiw-control.sh update     # Git fetch + fast-forward; работающий studio пересобирается
@@ -71,6 +72,24 @@ bash scripts/achewiw-control.sh update
 - Если новых коммитов нет, контейнер повторно не запускается и не пересобирается.
 - При неудачной сборке Git-код уже мог обновиться. Скрипт сообщает об ошибке и не удаляет `data/`; восстановление предыдущей версии — отдельная проверенная оператором операция, **не автоматический hard reset**.
 - Обновление не переключает ветки, не удаляет историю, не запускает Ollama, не управляет GPU и не очищает Docker images.
+
+## Мониторинг, генерации и VRAM
+
+Хостовые показатели CPU/RAM/RTX 3060 поступают из user-systemd сборщика в `data/monitor/host.json`. Когда `monitor-start` выполнен успешно, веб-карточки обновляются каждые 10 секунд. Если unit отсутствует, `start` попробует подключить только свой `ops/achewiw-host-monitor.service`, не создавая чужих служб и не вмешиваясь в Ollama. Для диагностики:
+
+```bash
+cd /1tbdisk/achewiw
+bash scripts/achewiw-control.sh monitor-start
+systemctl --user status achewiw-host-monitor.service --no-pager
+journalctl --user -u achewiw-host-monitor.service -n 30 --no-pager
+nvidia-smi
+```
+
+Сгенерированный текст сохраняется в **SQLite** в `data/achewiw.sqlite3`: проект и очередные задания находятся в таблицах `projects` и `ai_jobs`. После обновления вкладки задача продолжается на сервере, текст и примерные проценты восстанавливаются. При перезапуске контейнера задание прерывается, но записанные фрагменты остаются. PostgreSQL для этого не требуется.
+
+Кнопка «Освободить VRAM модели» выгружает только подтверждённую выбранную модель общей хостовой Ollama и предупреждает о возможном влиянии на другие приложения, работающие с этой же моделью; не производит общий GPU reset.
+
+[Полное руководство: мониторинг, прогресс, SQLite и безопасность VRAM](RUNTIME-GENERATION-GPU-SQLITE-RU.md).
 
 ## Почему на GitHub 7 веток
 
