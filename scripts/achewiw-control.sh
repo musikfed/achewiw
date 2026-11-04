@@ -230,22 +230,23 @@ run_restart() {
 # still challenging with WWW-Authenticate: Basic. No other services are touched.
 auth_check() {
   command -v curl >/dev/null 2>&1 || die "Нужен curl для проверки входа без пароля"
-  local host="192.168.0.100" url headers status label
+  local host="192.168.0.100" url headers status
   for url in "http://127.0.0.1:$PORT/" "http://$host:$PORT/"; do
-    label="$url"
     if ! headers="$(curl --silent --show-error --max-time 8 --noproxy '*' \
         --header "Host: $host:$PORT" --dump-header - --output /dev/null "$url")"; then
-      die "Невозможно получить ответ от $label. Проверь docker compose ps и ss -ltnp."
+      die "Нет ответа от $url. Проверь docker compose ps и ss -ltnp."
     fi
-    status="$(printf '%s\n' "$headers" | awk '/^HTTP\// {code=$2} END {print code}')"
+    status="$(printf '%s\n' "$headers" | awk '/^HTTP/ {code=$2} END {print code}')"
     if [[ "$status" == 401 ]] || printf '%s\n' "$headers" | grep -Eiq '^WWW-Authenticate:[[:space:]]*Basic'; then
-      printf 'ACHEWIW: %s возвращает HTTP %s с запросом пароля!\n' "$label" "$status" >&2
-      die "Это старая сборка либо другой HTTP-сервер/прокси на 7080. Не вводи пароль, проверь ss -ltnp и docker compose ps."
+      printf 'ACHEWIW: %s возвращает HTTP %s с запросом пароля!\n' "$url" "$status" >&2
+      die "Старая сборка или другой сервер/прокси на 7080. Ничего постороннего не останавливаем."
     fi
-    if [[ "$status" != 200 ]]; then
-      die "HTTP $status на $label: отсутствие Basic ещё не означает рабочую страницу ACHEWIW."
+    [[ "$status" == 200 ]] || die "HTTP $status от $url — сайт не готов"
+    if ! printf '%s\n' "$headers" | grep -Fqi 'X-ACHEWIW-App: studio' ||
+       ! printf '%s\n' "$headers" | grep -Fqi 'X-ACHEWIW-Auth: private-vpn-no-password'; then
+      die "$url отвечает HTTP 200, но НЕ подтверждает новую ACHEWIW Studio."
     fi
-    if ! printf '%s\n' "$headers" | grep -Eiq '^X-ACHEWIW-App:[[:space:]]*studio[[:space:]]*
+    echo "ACHEWIW: $url: HTTP 200; новая Studio без HTTP Basic подтверждена."
   done
 }
 
