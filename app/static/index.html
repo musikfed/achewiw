@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v7"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261104-editorial-v8"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -79,9 +79,18 @@
  <div class="illustration-input">
   <h3>Локальная генерация изображений</h3>
   <p id="illustrationEngineStatus">Проверка локального генератора...</p>
-  <label>Описание иллюстрации<textarea id="illustrationPrompt" rows="4" maxlength="2500" placeholder="Фотореализм или книжная гравюра, ракурс, композиция, свет..."></textarea></label>
-  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseLLM"> Перед генерацией запросить выгрузку выбранной текстовой модели из общей Ollama (только с моим подтверждением)</label>
+  <label>Опиши рисунок обычными словами (можно на русском)
+    <textarea id="illustrationPrompt" rows="4" maxlength="2500" placeholder="Миирус — чёрный кот на московской улице в 1964 году. Раннее утро, реалистичная книжная иллюстрация."></textarea>
+  </label>
+  <button type="button" id="illustrationRefine">✦ Уточнить описание через выбранную Ollama</button>
+  <p class="illustration-refine-note">Необязательно. Текстовая модель подготовит английский промпт для SDXL, затем запросит выгрузку только себя с твоего подтверждения. Результат редактируемый. Без этой кнопки исходное описание сразу идёт в ComfyUI.</p>
+  <label>Подготовленный промпт для SDXL (можно исправлять вручную)
+    <textarea id="illustrationPreparedPrompt" rows="4" maxlength="2500" placeholder="Оставь пустым для отправки простого описания без Ollama."></textarea>
+  </label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseLLM"> Если модель Ollama осталась в GPU — запросить её выгрузку перед рисунком (с отдельным подтверждением)</label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseComfy" checked> После рисунка запросить освобождение VRAM ComfyUI (только если его очередь пуста)</label>
   <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
+  <p id="illustrationStepStatus" role="status" aria-live="polite">Этапы: описание → при необходимости Ollama → проверка VRAM → ComfyUI → иллюстрация.</p>
   <p class="illustration-disclaimer">Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
  </div>
  </div>
@@ -142,4 +151,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v7" defer></script><script src="/static/app.js?v=20261104-editorial-v7" defer></script><script src="/static/writing_blocks.js?v=20261104-editorial-v7" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v7" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261104-editorial-v8" defer></script><script src="/static/app.js?v=20261104-editorial-v8" defer></script><script src="/static/writing_blocks.js?v=20261104-editorial-v8" defer></script><script src="/static/illustrations.js?v=20261104-editorial-v8" defer></script></body></html>
