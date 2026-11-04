@@ -38,7 +38,7 @@ bash scripts/achewiw-control.sh update
 - [Зарегистрированный user-systemd unit](ops/achewiw-host-monitor.service)
 - [Тесты мониторинга](tests/test_monitoring.py)
 
-**Состояние:** код добавлен в рабочую ветку; мониторинг на физическом Ubuntu-сервере **ещё не включён**, само приложение **не запускается**. Включение сборщика/студии — отдельный согласованный этап. Выключатель ACHEWIW останавливает подтверждённый мониторинговый user-unit и только собственные контейнеры.
+**Состояние:** код и CLI-запуск добавлены в рабочую ветку; на физическом Ubuntu-сервере мониторинг и приложение **не запускались из GitHub**. Включение сборщика/студии — отдельный согласованный этап. Выключатель ACHEWIW останавливает подтверждённый мониторинговый user-unit и только собственные контейнеры.
 
 ## Выключатель ACHEWIW (отдельно от Ollama и остальных проектов)
 
@@ -91,17 +91,16 @@ bash scripts/achewiw-control.sh update
 
 ```bash
 cd /1tbdisk
-git clone https://github.com/musikfed/achewiw.git
+git clone --branch feature/technical-epub-first https://github.com/musikfed/achewiw.git
 cd achewiw
-git checkout feature/storyengine-mvp
 cp .env.example .env
 # Откройте .env и задайте непустой длинный случайный ACHEWIW_PASSWORD
 nano .env
 mkdir -p data
 # Если ваш uid/gid не 1000: поменяйте ACHEWIW_UID/GID в .env
 sudo chown "$(id -u):$(id -g)" data
-docker compose up -d --build
-docker compose ps
+bash scripts/achewiw-control.sh start
+bash scripts/achewiw-control.sh status
 curl http://127.0.0.1:7080/api/health
 ```
 
@@ -119,7 +118,7 @@ ollama list
 
 Если Ubuntu Firewall разрешает VPN-подсеть, нужен доступ по TCP 7080 только через VPN. **Не открывайте 7080 в публичный интернет:** в MVP HTTP Basic Auth без TLS, поэтому используй VPN, который шифрует транспорт. Существующие сертификаты `~/crt-cert` приложению не нужны; в репозиторий их **не добавлять**.
 
-Логи: `docker compose logs -f --tail=100`. Остановка: `docker compose down` (папка `./data` останется на диске). Резервная копия: `cp data/achewiw.sqlite3 backup.sqlite3` при остановленном контейнере (или SQLite backup API при работающем).
+Логи: `docker compose logs -f --tail=100 studio`. Остановка: `bash scripts/achewiw-control.sh stop` (папка `./data` и SQLite останутся на диске); обновление: `bash scripts/achewiw-control.sh update`. Резервная копия: `cp data/achewiw.sqlite3 backup.sqlite3` при остановленном контейнере (или SQLite backup API при работающем).
 
 ## Возможности v0.1
 
