@@ -23,7 +23,7 @@
     <div class="monitor-item"><small>ВИДЕОКАРТА / VRAM</small><strong id="monitorGpu">Нет данных</strong><span id="monitorGpuDetail">Ожидание nvidia-smi на хосте</span></div>
     <div class="monitor-item"><small>OLLAMA / LLM</small><strong id="monitorModel">Проверка...</strong><span id="monitorModelDetail">Какая модель выбрана и что загружено</span></div>
   </div>
-  <p class="monitor-note">CPU/RAM/GPU показывает хостовый сборщик <code>achewiw-host-monitor.service</code>, а не Docker. Если нет данных, выполните <code>cd /1tbdisk/achewiw && bash scripts/achewiw-control.sh monitor-start</code>. «Нет данных» не означает нулевую нагрузку.</p>
+  <p class="monitor-note">Показания CPU/RAM/GPU собираются на хосте, без доступа контейнера к NVIDIA. Запуск собственного сборщика: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. Если GPU недоступна, откройте диагностику службы. «Нет данных» не означает нулевую нагрузку.</p>
 </section>
 <div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button data-tab="audit">04 · Анализ</button><button data-tab="book">05 · Книга</button></nav>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
