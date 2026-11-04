@@ -838,3 +838,22 @@ header{
   font:600 12px/1.6 var(--ui);color:#766955}
 .continuity-scope select{width:100%;min-height:44px;padding:10px 12px;
   border-radius:8px;border:1px solid var(--hairline);background:var(--sheet)}
+
+
+/* v0.6 illustrated publishing: readable separate LLM and diffusion stages */
+.illustration-refine-note{font:12px/1.65 var(--ui,Inter,sans-serif);
+  color:#7c7165;margin:9px 0 14px;max-width:67ch}
+#illustrationStepStatus{padding:12px 15px;margin-top:16px;border-radius:8px;
+  background:#f6f1e9;color:#755c3d;border-left:3px solid #c6a16c;
+  font:12px/1.6 var(--ui,Inter,sans-serif)}
+#illustrationRefine{min-height:44px;margin:12px 0 2px;
+  border-color:#d6c6b1;background:#fffaf3}
+#illustrationPreparedPrompt{min-height:116px}
+.illustration-input .illustration-vram-option{display:flex;
+  align-items:flex-start;gap:10px;line-height:1.65;font-weight:400}
+.illustration-vram-option input[type=checkbox]{flex:0 0 auto;width:18px;
+  height:18px;margin-top:3px}
+@media(max-width:680px){
+  .illustration-workflow{grid-template-columns:minmax(0,1fr)}
+  #illustrationRefine,#illustrationGenerate{width:100%}
+}
