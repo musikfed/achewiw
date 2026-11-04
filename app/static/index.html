@@ -88,7 +88,7 @@
     <textarea id="illustrationPreparedPrompt" rows="4" maxlength="2500" placeholder="Оставь пустым для отправки простого описания без Ollama."></textarea>
   </label>
   <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseLLM"> Если модель Ollama осталась в GPU — запросить её выгрузку перед рисунком (с отдельным подтверждением)</label>
-  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseComfy" checked> После рисунка запросить освобождение VRAM ComfyUI (только если его очередь пуста)</label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseComfy"> После рисунка запросить освобождение VRAM ComfyUI (только если его очередь пуста)</label>
   <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
   <p id="illustrationStepStatus" role="status" aria-live="polite">Этапы: описание → при необходимости Ollama → проверка VRAM → ComfyUI → иллюстрация.</p>
   <p class="illustration-disclaimer">Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
