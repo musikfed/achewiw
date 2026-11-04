@@ -6,6 +6,8 @@
   let imageBusy = false;
   let engineControlBusy = false;
   let controlStatus = null;
+  let watchedControlJob = null;
+  const controlJobKey = 'achewiw.v9.comfyControlJob';
   let activeProjectId = null;
 
   async function json(url, options = {}) {
@@ -143,21 +145,66 @@
     }
   }
 
+  function savedControlJob() {
+    try {
+      const row = JSON.parse(sessionStorage.getItem(controlJobKey) || 'null');
+      return row && /^[0-9a-f]{32}$/.test(row.job_id) ? row : null;
+    } catch { return null; }
+  }
+
+  function saveControlJob(job_id, action) {
+    try { sessionStorage.setItem(controlJobKey, JSON.stringify({job_id, action})); } catch {}
+  }
+
+  function clearControlJob(job_id) {
+    try {
+      if (savedControlJob()?.job_id === job_id) sessionStorage.removeItem(controlJobKey);
+    } catch {}
+  }
+
+  function watchControlJob(job_id, action, label) {
+    if (watchedControlJob?.job_id === job_id) return watchedControlJob.promise;
+    const promise = (async () => {
+      while (true) {
+        const job = await json('/api/illustration-engine/control/jobs/' +
+          encodeURIComponent(job_id));
+        const tail = (job.output || '').split(/[\r\n]+/).filter(Boolean).slice(-3).join(' · ');
+        setStatus(tail ? label + ' ' + tail : label);
+        if (job.status === 'succeeded') return job;
+        if (job.status === 'failed') {
+          throw new Error(tail || 'Команда ' + action + ' завершилась с ошибкой');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    })();
+    watchedControlJob = {job_id, promise};
+    return promise.finally(async () => {
+      if (watchedControlJob?.job_id === job_id) watchedControlJob = null;
+      clearControlJob(job_id);
+      await refresh();
+    });
+  }
+
+  function resumeControlJob(control) {
+    if (!control) return;
+    const persisted = savedControlJob();
+    const job_id = control.active_job_id || persisted?.job_id;
+    if (!job_id || watchedControlJob?.job_id === job_id) return;
+    const action = control.active_action || persisted?.action || 'ComfyUI';
+    saveControlJob(job_id, action);
+    watchControlJob(job_id, action, 'Команда ComfyUI (' + action + ') выполняется…')
+      .then(job => setStatus('Команда ComfyUI (' + job.action + ') завершена.'))
+      .catch(err => setStatus('Команда ComfyUI (' + action + '): ' + err.message));
+  }
+
   async function runControlJob(action, label) {
     const started = await json('/api/illustration-engine/control', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action})
     });
     if (!started.job_id) throw new Error('Контроллер не вернул идентификатор задачи');
-    while (true) {
-      const job = await json('/api/illustration-engine/control/jobs/' +
-        encodeURIComponent(started.job_id));
-      const tail = (job.output || '').split(/[\r\n]+/).filter(Boolean).slice(-3).join(' · ');
-      setStatus(tail ? label + ' ' + tail : label);
-      if (job.status === 'succeeded') return job;
-      if (job.status === 'failed') throw new Error(tail || 'Команда ' + action + ' завершилась с ошибкой');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-    }
+    saveControlJob(started.job_id, action);
+    return await watchControlJob(started.job_id, action, label);
   }
 
   async function prepareEngine() {
@@ -239,6 +286,7 @@
       if(!current() || current().id!==projectId) return;
       controlStatus=control;
       renderEngineControls(engine,control);
+      resumeControlJob(control);
       if(!p.scenes.length) return;
       grid.replaceChildren();
       if(!items.length)grid.textContent=
@@ -340,7 +388,7 @@
         body:JSON.stringify(body)
       });
       const releaseText={
-        free_requested:'кэш ComfyUI освобождён',
+        free_requested:'ComfyUI принял запрос на выгрузку модели и освобождение VRAM',
         skipped_comfyui_queue_busy:'кэш не трогали: очередь ComfyUI занята',
         free_request_failed:'не удалось подтвердить освобождение кэша',
         not_requested:'освобождение кэша не запрашивалось'
@@ -378,6 +426,7 @@
   document.addEventListener('achewiw:tab-shown',event=>{
     if(event.detail?.name==='illustrations') refresh();
   });
+  if (!el('illustrations').hidden && current()) refresh();
   el('openIllustrations').addEventListener('click',()=>{
     if(!current())return;
     showTab('illustrations');
