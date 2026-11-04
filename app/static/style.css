@@ -644,3 +644,33 @@ header{
   .tabpane{padding:0}
   .book-chapter{break-inside:avoid}
 }
+
+/* Book illustration studio: manuscript page placement and actual asset gallery */
+.release-actions{display:flex;flex-wrap:wrap;gap:13px 16px;margin:25px 0 0}
+.release-actions button{min-height:47px;padding:11px 19px;border:1px solid #ddcbb0}
+.release-actions button.primary{border-color:#343b42}
+.illustration-workflow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:23px}
+.illustration-input{min-width:0;padding:clamp(19px,2vw,31px);border:1px solid var(--hairline);border-radius:11px;background:var(--sheet)}
+.illustration-input h3,.illustration-library-title{font:400 clamp(23px,1.7vw,30px)/1.35 var(--book);margin:0 0 19px}
+.illustration-input label{display:block;color:#746957;font-size:13px;font-weight:600;margin:17px 0}
+.illustration-input input,.illustration-input select,.illustration-input textarea{
+  display:block;width:100%;min-height:43px;margin:8px 0 0;padding:11px 13px;
+  border-radius:8px;border:1px solid #dcd4c9;background:#fff}
+.illustration-input button{margin-top:10px;padding:11px 18px;max-width:100%}
+.illustration-input button:disabled{opacity:.45;cursor:not-allowed}
+.illustration-disclaimer,#illustrationEngineStatus{color:#817365;font:12px/1.7 var(--ui)}
+.illustration-disclaimer{margin-top:18px;padding-top:14px;border-top:1px solid #e8ddce}
+.illustration-library-title{margin-top:39px}
+.illustration-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,255px),1fr));gap:20px}
+.illustration-card{overflow:hidden;border:1px solid var(--hairline);background:var(--sheet);border-radius:9px}
+.illustration-card figure{margin:0;padding:14px}
+.illustration-card figure img{display:block;width:100%;height:205px;object-fit:contain;background:#f0ede7}
+.illustration-card figcaption{padding:10px 0 0;color:#403c37;font:italic 14px/1.5 var(--book)}
+.illustration-meta{border-top:1px solid var(--hairline);padding:15px}
+.illustration-meta p{font-size:12px;color:#847461;line-height:1.6;margin:0 0 13px}
+.illustration-meta button{font-size:12px;min-height:39px}
+.book-reader figure{margin:24px auto;max-width:85%;text-align:center}
+.book-reader figure img{max-width:100%;max-height:560px;object-fit:contain}
+.book-reader figcaption{font:italic 13px/1.6 var(--book);color:#857465;margin-top:10px}
+@media(max-width:980px){.illustration-workflow{grid-template-columns:1fr}}
+@media(max-width:430px){.release-actions button{width:100%}}
