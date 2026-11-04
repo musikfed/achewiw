@@ -114,14 +114,37 @@ prepare_compose() {
   [[ "$services" == studio ]] || die "Разрешена только служба studio"
 }
 
+# Legacy migration is restricted to THIS old Docker Compose studio only.
+# Reuse its verified network, volume and full Compose ownership; never adopt
+# a similarly named container from a different project or old workspace.
+verify_legacy_studio() {
+  local id="$1" labels project directory service managed scope runtime
+  labels="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.project.working_dir" }}|{{ index .Config.Labels "com.docker.compose.service" }}|{{ index .Config.Labels "org.achewiw.lifecycle" }}|{{ index .Config.Labels "org.achewiw.workspace" }}' "$id")" || return 1
+  IFS='|' read -r project directory service managed scope <<< "$labels"
+  [[ "$project" == "$PROJECT" && "$directory" == "$WORKSPACE" &&
+     "$service" == studio ]] || return 1
+  # A partially labeled container is ambiguous, not a legacy candidate.
+  [[ "$managed" == "<no value>" && "$scope" == "<no value>" ]] || return 1
+  runtime="$(docker inspect --format '{{.Name}}|{{.HostConfig.NetworkMode}}|{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$id")" || return 1
+  [[ "$runtime" == "/achewiw-studio|host|$WORKSPACE/data" ]]
+}
+
 preflight_all() {
-  # Also check fixed container name: do not replace an unrelated/legacy container.
-  local candidates named id
+  local mode="${1:-strict}" candidates named id
+  [[ "$mode" == strict || "$mode" == migrate-legacy ]] ||
+    die "Недопустимый режим проверки контейнеров"
   candidates="$(containers true)" || die "Не удалось получить контейнеры ACHEWIW"
   named="$(docker ps -a --no-trunc --filter "name=^/achewiw-studio$" --format '{{.ID}}')" ||
     die "Нельзя проверить занятость имени achewiw-studio"
   for id in $candidates $named; do
-    verify_owned "$id" || die "Неизвестный или устаревший контейнер $id: никаких изменений"
+    if verify_owned "$id"; then
+      continue
+    fi
+    if [[ "$mode" == migrate-legacy ]] && verify_legacy_studio "$id"; then
+      echo "Обнаружен подтверждённый старый контейнер ACHEWIW: $id; разрешена только пересборка studio"
+      continue
+    fi
+    die "Контейнер $id НЕ подтверждён как собственный ACHEWIW: никаких изменений"
   done
 }
 port_free() {
@@ -253,7 +276,7 @@ auth_check() {
 # Unlike restart, rebuild explicitly creates a NEW image and recreates ONLY the
 # verified ACHEWIW studio container. No docker compose down, no pruning.
 run_rebuild() {
-  preflight_all
+  preflight_all migrate-legacy
   prepare_compose
   local running current
   running="$(containers false)" || die "Не удаётся прочитать собственные контейнеры"
@@ -279,7 +302,7 @@ run_rebuild() {
 run_update() {
   command -v git >/dev/null 2>&1 || die "Git не установлен"
   [[ -d "$WORKSPACE/.git" && ! -L "$WORKSPACE/.git" ]] || die "Не найден Git checkout"
-  preflight_all
+  preflight_all migrate-legacy
   local origin branch dirty running before after
   origin="$(git -C "$WORKSPACE" remote get-url origin)" || die "Нет origin"
   case "$origin" in
@@ -310,7 +333,7 @@ run_update() {
   fi
   echo "ACHEWIW: Git $before -> $after; .env, data/, Ollama не изменены"
   if [[ -n "$running" && ( "$before" != "$after" || "$deployed" != "$after" ) ]]; then
-    preflight_all
+    preflight_all migrate-legacy
     prepare_compose
     compose up -d --build --force-recreate --no-deps studio ||
       die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
