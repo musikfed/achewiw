@@ -42,7 +42,7 @@ case "${1:-}" in
       [[ "$TEST_BAD_COMPOSE" != 1 ]] || exit 33
     elif [[ "$*" == *" config --services" ]]; then
       echo studio
-    elif [[ "$*" == *" up -d --build --no-deps studio" ]]; then
+    elif [[ "$*" == *" up -d --build --no-deps studio" || "$*" == *" up -d --build --force-recreate --no-deps studio" ]]; then
       printf running > "$TEST_STATE"
     else exit 55; fi
     ;;
@@ -57,6 +57,17 @@ case "${1:-}" in
     ;;
   *) exit 54 ;;
 esac
+'''
+
+FAKE_CURL = r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TEST_CURL_LOG"
+if [[ "${TEST_HTTP_FAIL:-}" == 1 ]]; then exit 7; fi
+if [[ "${TEST_HTTP_BASIC:-}" == 1 ]]; then
+  printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="ACHEWIW"\r\n\r\n'
+else
+  printf 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'
+fi
 '''
 
 FAKE_SYSTEMCTL = r'''#!/usr/bin/env bash
@@ -112,10 +123,11 @@ class ShutdownTests(unittest.TestCase):
         self.gitlog = root / "git.log"
         self.gitsha = root / "sha"
         self.gitsha.write_text("oldsha\n")
-        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nif [[ \"$TEST_PORT_BUSY\" == 1 ]]; then echo LISTEN; fi\n"), ("systemctl", FAKE_SYSTEMCTL), ("git", FAKE_GIT)):
+        for name, script in (("docker", FAKE_DOCKER), ("ss", "#!/bin/bash\nif [[ \"$TEST_PORT_BUSY\" == 1 ]]; then echo LISTEN; fi\n"), ("systemctl", FAKE_SYSTEMCTL), ("git", FAKE_GIT), ("curl", FAKE_CURL)):
             file = root / name
             file.write_text(script, encoding="utf-8")
             file.chmod(0o755)
+        self.curl_log = root / "curl.log"
         self.log = root / "docker.log"
         self.systemctl_log = root / "systemctl.log"
         self.unit_stopped = root / "unit.stopped"
@@ -129,6 +141,7 @@ class ShutdownTests(unittest.TestCase):
                         TEST_GIT_BRANCH="feature/technical-epub-first",
                         TEST_GIT_DIRTY="0", TEST_GIT_DIVERGED="0",
                         TEST_LOG=str(self.log), TEST_STATE=str(self.state),
+                        TEST_CURL_LOG=str(self.curl_log),
                         TEST_SYSTEMCTL_LOG=str(self.systemctl_log), TEST_UNIT_STOPPED=str(self.unit_stopped))
 
     def run_switch(self, action="stop", **env):
@@ -256,8 +269,43 @@ class ShutdownTests(unittest.TestCase):
     def test_update_running_rebuilds_only_studio(self):
         result = self.run_switch("update")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("up -d --build --no-deps studio", self.commands())
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
         self.assertEqual(self.state.read_text(), "running")
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_auth_check_no_password_on_local_and_vpn_listener(self):
+        result = self.run_switch("auth-check")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("без HTTP Basic", result.stdout)
+        self.assertEqual(self.curl_log.read_text().count("http://"), 2)
+        self.assertNotIn("up -d", self.commands())
+
+    def test_auth_check_detects_old_basic_image(self):
+        result = self.run_switch("auth-check", TEST_HTTP_BASIC="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("запросом пароля", result.stderr)
+        self.assertNotIn("up -d", self.commands())
+        self.assertNotIn("stop --time", self.commands())
+
+    def test_rebuild_recreates_only_achewiw_studio(self):
+        result = self.run_switch("rebuild")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("up -d --build --force-recreate --no-deps studio", self.commands())
+        self.assertNotIn("stop --time", self.commands())
+        self.assertTrue((self.workspace/"data/.achewiw-deployed-commit").exists())
+
+    def test_rebuild_refuses_foreign_or_legacy_container(self):
+        for extra in ({"TEST_ROGUE":"1"}, {"TEST_LEGACY":"1"}):
+            with self.subTest(extra=extra):
+                self.log.unlink(missing_ok=True)
+                result = self.run_switch("rebuild", **extra)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("up -d", self.commands())
+
+    def test_rebuild_fails_if_basic_still_present(self):
+        result = self.run_switch("rebuild", TEST_HTTP_BASIC="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("запросом пароля", result.stderr)
         self.assertNotIn("stop --time", self.commands())
 
     def test_update_refuses_uncommitted_wrong_branch_or_divergence(self):
