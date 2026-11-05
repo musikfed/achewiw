@@ -37,7 +37,8 @@ from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
     add_edge as memory_add_edge, nodes as memory_nodes, edges as memory_edges,
     branches as memory_branches, create_branch as memory_create_branch,
     erase_node as memory_erase_node, audit_graph, erase_project as erase_story_memory)
-from editor_workspace import initialize as initialize_workspace, sync_search, checkpoint_work, status as storage_status
+from editor_workspace import (initialize as initialize_workspace, sync_search,
+    checkpoint_work, search_snippets, status as storage_status)
 from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
@@ -113,7 +114,13 @@ def init_db() -> None:
         init_illustrations(connection)
         mark_interrupted(connection)
     # Derived search/work databases are additive, the existing manuscript stays put.
-    initialize_workspace(DATA_DIR)
+    # Optional caches must not block reading old approved manuscripts.
+    try:
+        initialize_workspace(DATA_DIR)
+        with db() as connection:
+            sync_search(DATA_DIR,connection)
+    except (OSError,sqlite3.Error,ValueError):
+        pass
 
 
 _background_tasks: set[asyncio.Task] = set()
@@ -1510,8 +1517,19 @@ async def execute_book(job_id: str) -> None:
                     " ".join(scene.active_objects),project.premise[:600],chapter.get("editorial_goal","")])
                 with db() as connection:
                     packet=retrieve_story(connection,project.id,job_id,index,memory_query)
+                # Search cache and graph are logical single context. A stale or
+                # missing derived cache never hides canonical facts from Ollama.
+                try:
+                    snippets=search_snippets(DATA_DIR,project.id,job_id,index,memory_query)
+                except (sqlite3.Error,OSError,ValueError):
+                    snippets=[]
+                context=context_text(packet,max_chars=4800)
+                if snippets:
+                    context+="\\nДополнительные релевантные цитаты FTS5 (не новые факты):\\n"+json.dumps(
+                        [{"kind":x["source_kind"],"excerpt":x["excerpt"][:350],
+                          "scene":x["scene_index"]+1} for x in snippets],ensure_ascii=False)[:900]
                 prompt = _book_prompt(project, scene, index, chapter["target_words"],
-                                      previous, text, requested, chapter,context_text(packet))
+                                      previous, text, requested, chapter,context)
                 payload = {
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
@@ -1574,16 +1592,18 @@ async def execute_book(job_id: str) -> None:
                     save_chapter(connection, job_id, scene.id, text, attempts,
                                  complete=book_words(text) >= chapter["target_words"])
                     index_chunk(connection,project.id,"main",job_id,"draft",scene.id,index,attempts,generated)
-                try:
-                    checkpoint_work(DATA_DIR, project.id, job_id, scene.id, text, book_words(text))
-                except (OSError, sqlite3.Error, ValueError):
-                    # Workspace mirror is derived: failed cache must never discard prose.
-                    pass
                     summary = book_summary(connection, job_id)
                     update_job(connection, job_id,
                                stage=f"Глава {index+1}/{len(project.scenes)} · {book_words(text)}/{chapter['target_words']} слов",
                                output="Генерация книги: главы сохраняются отдельно; ждут принятия автором.",
                                percent=min(99, round(summary["percent_words"])))
+                try:
+                    checkpoint_work(DATA_DIR, project.id, job_id, scene.id, text, book_words(text))
+                    with db() as connection:
+                        sync_search(DATA_DIR,connection,project.id)
+                except (OSError, sqlite3.Error, ValueError):
+                    # Working/search caches are derived; never discard prose on cache error.
+                    pass
             if book_words(text) < chapter["target_words"]:
                 raise ValueError(f"Глава {index+1} не достигла объёма: {book_words(text)}/{chapter['target_words']} слов. "
                                  "Результат сохранён. Продолжи задание после проверки качества.")
