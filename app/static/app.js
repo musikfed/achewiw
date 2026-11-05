@@ -149,6 +149,7 @@ function renderProjects(){
 async function refreshProjects(){projects=await api('/projects');renderProjects()}
 function render(){
  const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;
+ renderProjects();
  $('#heading').textContent=active?project.title:'Выберите мастерскую';
  updateWorkCopy();if(!active)return;
  document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');
@@ -160,6 +161,19 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.dataset.field==='publication_year'?(el.value?Number(el.value):null):el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
+function goHome(){
+ if(project){
+   updateBrief();collectScenes();collectText();
+   stashUnsavedProject();
+ }
+ // The model job remains running on the server; only UI context changes.
+ project=null;
+ pending=null;
+ $('#aiPanel').hidden=true;
+ $('#meta').textContent='';
+ render();
+ window.scrollTo({top:0,behavior:'instant'});
+}
 async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
@@ -1310,13 +1324,13 @@ async function applyAI(){
 }
 async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}const saved=safeGet(localStorage,'achewiw.v8.selectedModel');if(saved&&data.models.includes(saved))model=saved;else if(!data.models.includes(model))model=(data.models.includes(modelPicks[project?.work_type||'fiction']?.name)?modelPicks[project?.work_type||'fiction'].name:data.models[0]);if(model)select.value=model;recommendModel(false);$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
+$('#goHome').onclick=goHome;
 $('#newProject').onclick=$('#startProject').onclick=()=>createProject();
 document.querySelectorAll('[data-create-kind]').forEach(b=>b.onclick=()=>createProject(b.dataset.createKind));
 document.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{
   const kind=b.dataset.kindFilter;setKindFilter(kind);
-  const matching=kind==='all'?projects[0]:projects.find(p=>(p.work_type||'fiction')===kind);
-  if(matching)loadProject(matching.id);
-  else{project=null;render()}
+  // Browsing a category never opens a manuscript without an explicit click.
+  goHome();
 });
 $('#workType').onchange=e=>{if(!project)return;project.work_type=e.target.value;updateWorkCopy();renderProjects()};
 $('#saveBrief').onclick=async()=>{try{await save();await loadChapterPlan()}catch(e){toast(e.message)}};
@@ -1396,4 +1410,4 @@ window.addEventListener('scroll',()=>{
   const now=Date.now();if(now-lastScrollAt<300)return;lastScrollAt=now;
   safeSet(sessionStorage,uiKey('scroll'),String(window.scrollY));
 },{passive:true});
-(async()=>{try{await resetBrowserAfterFreshLibrary();const kind=safeGet(localStorage,'achewiw.v8.kindFilter');if(kind&&workModes[kind]||kind==='all')activeKind=kind;await refreshProjects();$('#status').textContent='Студия готова';if(projects.length){let previous=null;try{previous=localStorage.getItem('achewiw.activeProjectId')}catch{}await loadProject(projects.find(p=>p.id===previous)?.id||projects[0].id)}await detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
+(async()=>{try{await resetBrowserAfterFreshLibrary();const kind=safeGet(localStorage,'achewiw.v8.kindFilter');if(kind&&workModes[kind]||kind==='all')activeKind=kind;await refreshProjects();$('#status').textContent='Студия готова';render();await detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
