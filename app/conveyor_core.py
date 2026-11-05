@@ -166,9 +166,9 @@ def artifact(db: sqlite3.Connection, job_id: str, stage: str, asset_key: str) ->
 
 def stage_done(db: sqlite3.Connection, job_id: str, stage: str,
                output_sha: str, note: str="") -> None:
-    row=db.execute("SELECT current_step FROM production_jobs WHERE id=?", (job_id,)).fetchone()
-    if not row or STAGES[row["current_step"]]!=stage:
-        raise ValueError("Out-of-order completion")
+    row=db.execute("SELECT current_step,state,cancel_requested FROM production_jobs WHERE id=?", (job_id,)).fetchone()
+    if not row or row["state"]!="running" or row["cancel_requested"] or row["current_step"]>=len(STAGES) or STAGES[row["current_step"]]!=stage:
+        raise ValueError("Stage cancelled or out-of-order completion")
     db.execute("""UPDATE production_steps SET status='done',output_sha=?,
                   note=?,updated_at=? WHERE job_id=? AND stage=? AND status='running'""",
                (output_sha,note[:1500],now(),job_id,stage))
