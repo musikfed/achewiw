@@ -37,8 +37,11 @@ def test_trim_only_word_for_word_tail_echo_and_keep_new_prose():
 
 
 def test_small_chunks_and_distinct_recovery_strategies():
-    assert chunk_size(1200) == 420
+    assert chunk_size(1200) == 900
     assert chunk_size(117) == 180
+    assert chunk_size(2500,1650) == 1500
+    from book_generation_core import predict_output_tokens
+    assert predict_output_tokens(900)>2600
     notes=[continuation_repair_note(i,"Первое событие. Затем открылась дверь.")
            for i in range(6)]
     assert notes[0]==""
