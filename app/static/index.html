@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Типография в кармане · Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-editorial-v19"></head>
+<body><header><button class="brand home-brand" id="goHome" type="button" title="На главную страницу" aria-label="ACHEWIW — на главную"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></button><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
+<div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
+<div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
+<button type="button" data-kind-filter="fiction">✦ Фантастика и проза</button>
+<button type="button" data-kind-filter="technical">▣ Технические книги</button>
+<button type="button" data-kind-filter="speech">◈ Выступления</button>
+<button type="button" data-kind-filter="nonfiction">▤ Нонфикшн</button>
+<button type="button" class="nav-all selected" data-kind-filter="all">Все произведения</button>
+</div><div class="sidehead"><span>БИБЛИОТЕКА</span><button type="button" id="newProject">+ Новая</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW · ИЗДАНИЕ <span>v0.5</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
+<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Типография в кармане</h1><p id="workIntro">Закулисная мастерская рассказов, книг и выступлений: идея, сюжет, редактура и выпуск книги в PDF, DOCX и EPUB. Автор остаётся автором.</p><div class="release-actions"><button type="button" id="openTypography" class="primary">06 · Типография: PDF / DOCX / EPUB</button><button type="button" id="openIllustrations">04 · Иллюстрации</button></div></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
+<button type="button" id="unloadModel" class="model-unload" title="Выгрузить только выбранную LLM из общей Ollama" disabled>Освободить VRAM модели</button>
+<small class="model-warning">Не сбрасывает RTX 3060. Выгрузка выбранной модели может затронуть другие приложения, использующие ту же Ollama.</small></div></div>
+<section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
+  <div class="monitor-head">
+    <div><h2>Состояние сервера</h2><p id="monitorSummary">Чтение датчиков CPU, RAM, GPU и Ollama...</p></div>
+    <div class="monitor-controls">
+      <button type="button" id="monitorToggle" aria-expanded="true" aria-controls="monitorGrid">Свернуть</button>
+      <button type="button" id="monitorRefresh" aria-label="Обновить мониторинг">↻ Обновить</button>
+    </div>
+  </div>
+  <div class="monitor-grid" id="monitorGrid">
+    <div class="monitor-item"><small>ПРОЦЕССОРЫ</small><strong id="monitorCpu">Нет данных</strong><span id="monitorCpuDetail">Датчик CPU не подключён</span></div>
+    <div class="monitor-item"><small>ОПЕРАТИВНАЯ ПАМЯТЬ</small><strong id="monitorRam">Нет данных</strong><span id="monitorRamDetail">Датчик RAM не подключён</span></div>
+    <div class="monitor-item"><small>ВИДЕОКАРТА / VRAM</small><strong id="monitorGpu">Нет данных</strong><span id="monitorGpuDetail">Ожидание nvidia-smi на хосте</span></div>
+    <div class="monitor-item"><small>OLLAMA / LLM</small><strong id="monitorModel">Проверка...</strong><span id="monitorModelDetail">Какая модель выбрана и что загружено</span></div>
+  </div>
+  <details class="monitor-help">
+    <summary>Диагностика датчиков и хостового сборщика</summary>
+    <p class="monitor-note">CPU/RAM/GPU собираются на Ubuntu, а не в Docker. Для запуска: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. При неисправности: <code>bash scripts/monitor-v2.sh status</code>. Если GPU недоступна, проверьте <code>nvidia-smi</code>. «Нет данных» не означает нулевую нагрузку.</p>
+  </details>
+</section>
+<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button></nav>
+<div id="bookLiveBar" class="book-live-bar" role="region" aria-label="Сохранённая генерация книги" hidden>
+ <div class="book-live-heading"><strong id="bookLiveStatus">Проверяем состояние книги на сервере…</strong><small id="bookLiveJob">Задание хранится в SQLite</small></div>
+ <progress id="bookLiveProgress" max="100" value="0" aria-label="Написано слов по сравнению с планом"></progress>
+ <div class="actions">
+  <button type="button" id="bookLiveJump">Перейти к генерации</button>
+  <button type="button" id="bookLiveDraft">Читать текущие главы</button>
+  <a id="bookLivePdf" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF · написанные страницы</a>
+  <button type="button" id="bookLiveResume" hidden>▶ Продолжить после остановки</button>
+ </div>
+</div>
+<section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
+<option value="fiction">Фантастика, роман и художественная проза</option>
+<option value="technical">Техническая, инженерная и научная книга</option>
+<option value="speech">Выступление, лекция или доклад</option>
+<option value="nonfiction">Нонфикшн, учебная и деловая книга</option>
+</select></label><label>Жанр / специализация<input data-field="genre" placeholder="Фантастика / детектив / притча"></label><label>Имя автора<input data-field="author_name" maxlength="200" placeholder="Как указывать автора в книге"></label><label>Год выпуска<input data-field="publication_year" type="number" min="1900" max="2200" placeholder="2026"></label><label>Атмосфера<textarea data-field="atmosphere" rows="2"></textarea></label><label>Издательство / место издания (необязательно)<input data-field="publisher_name" maxlength="200"></label><label>Редакция книги<input data-field="edition_label" maxlength="200" placeholder="Первое издание"></label><label>Аудитория<textarea data-field="audience" rows="2"></textarea></label><label>Целевой объём<input data-field="target_length" placeholder="15 минут / 3000 слов"></label><label>Способ восприятия<select data-field="format"><option value="reading">Чтение глазами</option><option value="performance">Выступление вслух</option></select></label><label class="wide">Замысел / центральный конфликт<textarea data-field="premise" rows="4"></textarea></label><label data-only-kind="fiction">Твист / загадка<textarea data-field="twist" rows="3"></textarea></label><label data-only-kind="fiction">Когда раскрыть<textarea data-field="reveal" rows="3"></textarea></label><label class="wide" data-only-kind="fiction">Канон мира и постоянные детали<textarea data-field="anchors" rows="3" placeholder="Персонажи, мир, ограничения, сюжетные обещания..."></textarea></label>
+<label class="wide" data-only-kind="technical nonfiction">Источники автора / DOI / ссылки<textarea data-field="sources" rows="4" placeholder="По одному источнику на строку. Подтверждай DOI и факты: модель не должна выдумывать библиографию."></textarea></label>
+<label class="wide" data-only-kind="technical nonfiction">Ключевые тезисы, гипотезы и доказательства<textarea data-field="claims" rows="3" placeholder="Что доказать, что требует проверки, какие определения использовать"></textarea></label>
+<label data-only-kind="speech">Плановая длительность, минут<input data-field="duration_minutes" inputmode="numeric" type="number" min="1" max="480" value="10"></label>
+<label class="wide" data-only-kind="speech">Заметки для выступающего / паузы / слайды<textarea data-field="speaker_notes" rows="4" placeholder="Тайминг, интонации, тезисы для слайдов, требования сцены"></textarea></label></div><div class="actions"><button class="primary" id="saveBrief">Сохранить ТЗ</button><button type="button" id="deleteProject" class="danger-action">Удалить ненужную работу (с архивом)</button><button id="buildOutline">✦ Сгенерировать каркас</button></div></section>
+<section id="structure" class="tabpane" hidden><div class="sectionhead"><h2 id="structureHeading">План произведения</h2><p id="structureHint">Составьте главы и сцены; автор утверждает каждый раздел прежде, чем он попадёт в издание.</p></div><div id="sceneCards"></div><div class="actions"><button id="addScene">+ Добавить сцену</button><button id="buildOutline2">✦ Предложить структуру</button><button id="saveScenes" class="primary">Сохранить сцены</button></div>
+<div class="writing-block-planner" id="fullBookPanel">
+ <div class="block-plan-heading"><div><div class="eyebrow">ПОЛНОЦЕННАЯ РУКОПИСЬ</div>
+ <h3>Написать книгу по утверждённому каркасу</h3>
+ <p>Цель берётся из поля «Целевой объём»: 20000 слов или 150 минут (при 150 словах/мин). Каждая глава создаётся несколькими фрагментами, а не одним пересказом. Черновик сохраняется в SQLite, книга не заменяется без вашего согласия.</p>
+ </div></div>
+ <div class="chapter-editorial-plan">
+ <div class="chapter-plan-top"><div><h4>Режиссура глав — объём, ритм, интрига</h4>
+ <p>Каркас остаётся прежним. Здесь настраивается только раскрытие информации и глубина прозы для каждой главы. 1 страница ≈ 275 слов — условная оценка, не типографская норма.</p></div>
+ <div class="actions"><button id="recalculateChapterPlan" type="button">Предложить распределение</button>
+ <button id="balanceChapterPlan" type="button">Подогнать сумму под цель</button>
+ <button id="saveChapterPlan" type="button">Сохранить режиссуру глав</button></div></div>
+ <p id="chapterPlanSummary" role="status" aria-live="polite">План загружается…</p>
+ <div id="chapterPlanList" class="chapter-plan-list"></div>
+ <small>Сохранённые настройки хранятся в SQLite отдельно от каркаса. Перераспределение не меняет событий, порядок сцен или принятый текст. Полное раскрытие разрешай только в подготовленной главе.</small>
+ </div>
+ <section class="story-memory-panel" id="storyMemoryPanel" aria-label="Память сюжета и граф причин">
+   <div class="chapter-plan-top"><div><h4>Память сюжета · RAG + граф причин</h4>
+   <p>Авторский каркас становится последовательностью узлов графа. Ты можешь закрепить действующие факты, загадки, объекты и связи «причина → следствие». Черновик ИИ никогда автоматически не превращается в канон.</p></div>
+   <div class="actions"><button type="button" id="memoryReload">Обновить карту</button><button type="button" id="memoryReindex">Обновить RAG-индекс</button></div></div>
+   <p id="memoryStatus" role="status" aria-live="polite">Карта сюжета загружается…</p>
+   <p id="memoryStorage" role="status" aria-live="polite">Хранилища: проверяем канон, search и work SQLite…</p>
+   <p id="memoryRagRuntime" role="status" aria-live="polite">Фактические обращения генератора к RAG ещё не проверены.</p>
+   <label class="chapter-plan-field">Сюжетная ветка
+      <select id="memoryBranch"><option value="main">Основная история</option></select>
+   </label>
+   <div class="story-memory-layout">
+     <div class="story-memory-form">
+       <h5>Закрепить факт или событие</h5>
+       <label>Тип<select id="memoryNodeKind">
+         <option value="event">Событие</option><option value="character">Персонаж</option>
+         <option value="object">Предмет</option><option value="place">Место</option>
+         <option value="fact">Факт мира</option><option value="mystery">Загадка</option>
+         <option value="rule">Правило мира</option></select></label>
+       <label>Название<input id="memoryNodeTitle" maxlength="160" placeholder="Например, Миирус обнаружил передатчик"></label>
+       <label>Подтверждённая информация автора<textarea id="memoryNodeStatement" maxlength="2000" rows="3" placeholder="Что действительно произошло? Где? Откуда об этом известно?"></textarea></label>
+       <label>Первая глава появления<select id="memoryNodeScene"></select></label>
+       <button type="button" id="memoryAddNode">Закрепить в памяти</button>
+     </div>
+     <div class="story-memory-form">
+       <h5>Связать два узла</h5>
+       <label>Откуда<select id="memoryEdgeFrom"></select></label>
+       <label>Тип связи<select id="memoryEdgeKind">
+         <option value="causes">Вызывает →</option><option value="requires">Необходимо для →</option>
+         <option value="before">Происходит раньше →</option><option value="foreshadows">Предвещает →</option>
+         <option value="reveals">Раскрывает загадку →</option><option value="knows">Знает о →</option>
+         <option value="holds">Владеет →</option><option value="contradicts">Противоречит →</option>
+       </select></label>
+       <label>Куда<select id="memoryEdgeTo"></select></label>
+       <button type="button" id="memoryAddEdge">Добавить причинную связь</button>
+       <h5>Вариант развития событий</h5>
+       <label>Название альтернативы<input id="memoryBranchName" maxlength="120" placeholder="Что, если Миирус не вернулся?"></label>
+       <button type="button" id="memoryAddBranch">Создать изолированную ветку графа</button>
+       <small>Ветки графа изолированы. Генерация альтернативной рукописи по ветке — отдельный следующий этап; текущий генератор пишет только main.</small>
+     </div>
+   </div>
+   <details id="memoryDetails" open><summary>Узлы графа, причинные связи и нерешённые загадки <span id="memoryGraphCounts"></span></summary>
+     <div class="story-memory-layout"><div id="memoryNodeList"></div><div id="memoryEdgeList"></div></div>
+   </details>
+   <p id="memoryAudit" role="status" aria-live="polite"></p>
+   <small>RAG использует SQLite FTS5 и локальные векторы nomic-embed-text при доступности модели. План глав отображается как план, не как доказанные факты. События черновика проходят редакторское утверждение перед добавлением в канон.</small>
+ </section>
+ <div class="actions"><button id="generateFullBook" class="primary" type="button">✦ Написать всю книгу</button>
+ <button id="resumeFullBook" type="button" hidden>Продолжить прерванную генерацию</button>
+ <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button>
+ <a id="bookPartialPdfPlan" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF · посмотреть текущий черновик</a></div>
+ <p id="fullBookStatus" role="status" aria-live="polite">Утвердите каркас, укажите объём в редакционном задании и нажмите «Написать всю книгу».</p>
+ <progress id="fullBookProgress" max="100" aria-label="Процент полученного текста к целевому количеству слов" hidden></progress>
+ <div id="fullBookChapters"></div>
+ <small>Генерация работает на сервере независимо от вкладки браузера. После перезапуска сервера можно продолжить с сохранённых глав. Точный объём зависит от ответа модели: недостающие слова не объявляются готовой книгой.</small>
+</div></section>
+<section id="write" class="tabpane" hidden><div class="sectionhead"><h2 id="writingHeading">Редактор текста</h2><p id="writingHint">Сохранённый текст разделов — единственный источник рукописи. Черновик ИИ попадёт в текст только после вашего принятия.</p></div><label class="block"><span id="writingSectionLabel">Глава / часть</span><select id="writingScene"></select></label><textarea id="storyText" class="storytext" placeholder="Здесь начинается ваша история..." rows="16"></textarea>
+<section id="writingBlockPlanner" class="writing-block-planner" aria-label="Поблочная генерация рассказа" hidden>
+  <div class="block-plan-heading">
+    <div><div class="eyebrow">ПОСЦЕННАЯ ЛАБОРАТОРИЯ</div>
+      <h3>Фрагменты рассказа</h3>
+      <p>Для каждого фрагмента задай событие, приблизительный объём, предысторию предметов и запреты. ИИ предлагает кусок текста, но не меняет рукопись без твоего принятия.</p></div>
+    <div class="block-plan-buttons"><button id="saveBlockPlans" type="button">Сохранить план</button><button id="addWritingBlock" type="button">+ Фрагмент</button></div>
+  </div>
+  <div id="writingBlockList" class="writing-block-list" aria-live="polite"></div>
+  <small class="block-work-note">Объём — цель, а не обещание точного числа слов. «Принять» проверит текущую версию текста, добавит предложение и сохранит отдельную ревизию для отката.</small>
+</section>
+<div class="writing-refine">
+  <label class="writing-refine-prompt">Как именно доработать авторскую сцену?
+    <textarea id="polishInstructions" rows="3" maxlength="2000" placeholder="Например: убрать канцеляризмы; сохранить жёсткий ритм диалогов, не менять события и названия предметов."></textarea>
+  </label>
+  <button id="polishScene" type="button">✦ Литературная редактура без ИИ-штампов</button>
+  <button id="loadSceneRevisions" type="button">История принятых правок</button>
+  <div id="sceneRevisions" class="scene-revisions" hidden></div>
+</div>
+<div class="actions"><button id="generateScene">✦ Предложить текст сцены</button><button id="saveText" class="primary">Сохранить текст</button><button id="openBookFromEditor" type="button">Читать книгу из сцен ↗</button><a id="export" href="#">Скачать техпаспорт проекта (.md)</a></div></section>
+<section id="illustrations" class="tabpane" hidden>
+ <div class="sectionhead"><div class="eyebrow">ИЛЛЮСТРАЦИИ / ОБЛОЖКА / МАКЕТ</div>
+ <h2>Иллюстрации для издания</h2>
+ <p>Выбери главу или обложку. Для рисунка укажи место: после заголовка, конкретного абзаца или в конце главы. При экспорте порядок иллюстраций одинаковый в EPUB, DOCX, PDF и FB2.</p></div>
+ <div class="illustration-workflow">
+ <div class="illustration-input">
+  <h3>Изображение на страницу</h3>
+  <label>Глава или раздел<select id="illustrationScene"></select></label>
+  <label>Подпись к изображению<input id="illustrationCaption" maxlength="1000" placeholder="Рис. 1 — принципиальная схема"></label>
+  <label>Расположение<select id="illustrationPlacement"><option value="start">После заголовка главы</option><option value="paragraph">После выбранного абзаца</option><option value="end">После текста главы</option><option value="cover">Обложка (отдельная страница)</option></select></label><label id="illustrationParagraphWrap" hidden>После абзаца № (считая от 1)<input id="illustrationParagraphIndex" type="number" min="1" max="5000" value="1"></label>
+  <label>Файл PNG, JPEG или WebP (до 12 МиБ)<input type="file" id="illustrationFile" accept="image/png,image/jpeg,image/webp"></label>
+  <button type="button" class="primary" id="illustrationUpload">Загрузить в книгу</button>
+ </div>
+ <div class="illustration-input">
+  <h3>Локальная генерация изображений</h3>
+  <p id="illustrationEngineStatus">Проверка локального генератора...</p>
+  <div class="actions illustration-engine-actions">
+   <button type="button" id="illustrationEnginePrepare">Подготовить генератор</button>
+   <button type="button" id="illustrationEngineStop" disabled>Остановить ComfyUI</button>
+   <button type="button" id="illustrationEngineRefresh">Проверить состояние</button>
+  </div>
+  <p class="illustration-refine-note">Подготовка запускается только по кнопке: при необходимости установит ComfyUI, запросит подтверждение загрузки SDXL (~7 ГБ) и запустит локальный сервер. Сам checkpoint попадает в VRAM при генерации изображения.</p>
+  <label>Опиши рисунок обычными словами (можно на русском)
+    <textarea id="illustrationPrompt" rows="4" maxlength="2500" placeholder="Миирус — чёрный кот на московской улице в 1964 году. Раннее утро, реалистичная книжная иллюстрация."></textarea>
+  </label>
+  <button type="button" id="illustrationRefine">✦ Уточнить описание через выбранную Ollama</button>
+  <p class="illustration-refine-note">Необязательно. Текстовая модель подготовит английский промпт для SDXL, затем запросит выгрузку только себя с твоего подтверждения. Результат редактируемый. Без этой кнопки исходное описание сразу идёт в ComfyUI.</p>
+  <label>Подготовленный промпт для SDXL (можно исправлять вручную)
+    <textarea id="illustrationPreparedPrompt" rows="4" maxlength="2500" placeholder="Оставь пустым для отправки простого описания без Ollama."></textarea>
+  </label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseLLM"> Если модель Ollama осталась в GPU — запросить её выгрузку перед рисунком (с отдельным подтверждением)</label>
+  <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseComfy"> После рисунка запросить освобождение VRAM ComfyUI (только если его очередь пуста)</label>
+  <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
+  <p id="illustrationStepStatus" role="status" aria-live="polite">Этапы: описание → при необходимости Ollama → проверка VRAM → ComfyUI → иллюстрация.</p>
+  <p class="illustration-disclaimer">Обложку генерируй как художественное изображение без букв: заголовок, имя автора и год наносятся при экспорте отдельно. После рисунка проверь персонажей и детали мира. Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
+ </div>
+ </div>
+ <section class="visual-puzzle-editor">
+<h3>Визуальная загадка · подсказка сейчас, разгадка позже</h3>
+<p>Сначала создай или загрузи рисунок выше. Затем свяжи его с будущей главой, где читатель найдёт ответ. Разгадка хранится в редакторе, а на рисунке и в ранних главах не раскрывается.</p>
+<div class="editorial-version-choose">
+ <label>Иллюстрация-подсказка<select id="puzzleIllustration"><option value="">Выбери загруженный рисунок главы</option></select></label>
+ <label>Глава разгадки<select id="puzzleAnswerScene"><option value="">Выбери будущую главу</option></select></label>
+</div>
+<label>Название загадки<input id="puzzleTitle" maxlength="160" placeholder="Что изображено на старом передатчике?"></label>
+<label>Секретная разгадка для редактора<textarea id="puzzleAnswer" maxlength="1500" rows="3" placeholder="Какой факт будет раскрыт, почему он важен для сюжета?"></textarea></label>
+<div class="actions"><button id="puzzleSave" type="button">Связать подсказку с главой разгадки</button><button id="puzzleRefresh" type="button">Обновить загадки</button></div>
+<div id="puzzleStatus" role="status"></div><div id="puzzleList"></div>
+</section>
+<h3 class="illustration-library-title">Иллюстрации рукописи</h3>
+ <div id="illustrationGrid" class="illustration-grid"><p>Загрузка каталога...</p></div>
+</section>
+<section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div id="continuityFindings" class="continuity-findings"><p>Проверка фактов и причинных связей будет доступна для выбранной художественной истории.</p></div><div class="actions"><label class="continuity-scope">Область проверки <select id="continuityScene"><option value="">Вся история: обзор и реестр</option></select></label><label class="continuity-prompt">Что особенно проверить?
+  <input id="continuityInstructions" maxlength="2000" placeholder="Например: откуда появился ключ, кто знал о посадке и почему герой сменил решение.">
+</label><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><section id="editorialVersions" class="editorial-versions">
+ <h3>Редакции книги · проверка перед выпуском</h3>
+ <p>Сохраняй снимки даже недописанного черновика. Они хранятся отдельно в рабочей SQLite и не меняют рукопись. При одной редакции проверь её; при нескольких выбери и сравни.</p>
+ <div class="actions">
+  <input id="versionLabel" maxlength="160" placeholder="Название снимка, необязательно" aria-label="Название снимка редакции">
+  <button id="versionSaveDraft" type="button">Сохранить версию черновика</button>
+  <button id="versionSaveManuscript" type="button">Сохранить версию чистовика</button>
+  <button id="versionReload" type="button">Обновить версии</button>
+ </div>
+ <div class="editorial-version-choose">
+   <label>Редакция для проверки<select id="versionFirst"><option value="">Нет сохранённых редакций</option></select></label>
+   <label>С чем сравнить<select id="versionSecond"><option value="">Один черновик: проверяем его отдельно</option></select></label>
+ </div>
+ <div class="actions">
+   <button id="versionReview" type="button">Проверить нестыковки и готовность к выпуску</button>
+   <button id="versionCompare" type="button">Сравнить редакции</button>
+   <a id="versionProofPdf" class="book-live-pdf" target="_blank" rel="noopener" href="#" hidden>PDF · выбранная редакция</a>
+   <button id="versionProposeGraph" type="button">Предложить узлы графа из текста</button>
+ </div>
+ <div id="versionStatus" role="status" aria-live="polite">Версии хранятся в work.sqlite3. Рукопись не перезаписывается.</div>
+ <div id="versionReport" class="version-report" aria-live="polite"></div>
+ <div id="versionGraphProposals"></div>
+ </section>
+ <div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
+<section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
+  <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
+  <p>На выход идут только сохранённые тексты глав или частей. QA-отчёты, технические промпты и незаконченные разделы не подмешиваются в книгу.</p></div>
+  <details id="editionHelp" class="book-edition-fields"><summary><strong>Как сделать книгу с обложкой, иллюстрациями, содержанием и годом</strong></summary>
+  <ol><li>В «01 · Задание» укажи название, автора, год выпуска, редакцию и целевой объём. Сохрани.</li>
+  <li>В «02 · Story.prj» создай и утверди каркас, настрой число слов по главам, интриги и память сюжета.</li>
+  <li>Запусти «Написать всю книгу». Остановленная генерация возобновляется с сохранённых фрагментов — черновики не становятся чистовиком автоматически.</li>
+  <li>В «05 · Проверка» изучи логические ошибки. Прими написанные главы только после чтения.</li>
+  <li>В «04 · Иллюстрации» выбери «Обложка книги», опиши рисунок без букв и нажми «Подготовить генератор» → «Сгенерировать»; заголовок на титуле печатается отдельно.</li>
+  <li>Для рисунка внутри главы выбери главу, «После абзаца №» и номер абзаца, затем сгенерируй или загрузи изображение.</li>
+  <li>В «06 · Типография» проверь содержание, текст, год, обложку и каждую подпись; скачай EPUB, DOCX, FB2 или PDF A5.</li></ol>
+  <p>Экспортирует только авторский чистовик. PDF A5 — проба для чтения, не PDF/X для печатной машины. Работа RAG и графа не гарантирует художественную безошибочность.</p>
+  <p><a href="https://github.com/musikfed/achewiw/blob/feature/technical-epub-first/docs/USER-GUIDE-BOOK-EDITION-RU.md" target="_blank" rel="noopener noreferrer">Подробная инструкция</a></p>
+  </details>
+  <div class="book-production" id="bookProduction">
+    <h3>Полноценная книга по каркасу</h3>
+    <strong id="bookGenerationStatus" role="status" aria-live="polite">Проверяем генерацию и целевой объём…</strong>
+    <progress id="bookGenerationProgress" max="100" value="0" aria-label="Фактический процент сгенерированных слов"></progress>
+    <div class="actions">
+      <button id="bookOpenChapterPlan" type="button">Настроить объём и интригу глав</button>
+      <button id="bookGenerate" class="primary" type="button">✦ Написать полноценную книгу по каркасу</button>
+      <button id="bookResume" type="button" hidden>▶ Продолжить написание</button>
+      <button id="bookAccept" type="button" hidden>✓ Принять готовые главы в рукопись</button>
+      <button id="bookViewDraft" type="button" hidden>Читать сгенерированный текст</button>
+      <a id="bookPartialPdf" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF A5 · черновик во время генерации</a>
+      <button id="bookViewSaved" type="button" hidden>Читать сохранённую рукопись</button>
+      <button id="bookDraftRefresh" type="button" hidden>Обновить текст черновика</button>
+    </div>
+    <p id="bookProductionHint">Текст старого каркаса — не книга. После запуска написанные главы сохраняются в SQLite. Экспорт PDF/EPUB использует только принятую автором рукопись.</p>
+  </div>
+  <section id="conveyorSection" class="book-production" aria-label="Конвейер создания книги">
+    <div class="sectionhead"><h3>Издательский конвейер · RTX 3060 12 ГБ</h3>
+      <p>Писатель → независимый критик → редактор → художник → PDF-проба → автор → издание.
+      GPU занимается одной ролью за раз. Исходные главы и авторский текст не перезаписываются автоматически.</p></div>
+    <div class="formgrid">
+      <label>Писатель (Ollama)<select id="cvWriterModel" aria-label="Модель писателя"></select></label>
+      <label>Критик и редактор (Ollama)<select id="cvCriticModel" aria-label="Модель критика"></select></label>
+      <label>Иллюстрации<select id="cvImageMode">
+        <option value="none">Без новых рисунков</option>
+        <option value="cover" selected>Обложка (если отсутствует)</option>
+        <option value="cover_chapters">Обложка + рисунки к главам</option>
+      </select></label>
+      <label>Художественный стиль рисунков<input id="cvImageStyle" type="text" maxlength="400"
+        value="expressive ink and watercolor, vintage literary book illustration"></label>
+    </div>
+    <label class="checkbox-row"><input id="cvAllowUnload" type="checkbox">
+      Разрешаю ACHEWIW выгружать только выбранные для этой книги модели Ollama после их работы.
+      Другие модели и процессы не выгружать.</label>
+    <div class="actions">
+      <button id="cvStart" class="primary" type="button">Запустить конвейер по существующей книге / каркасу</button>
+      <button id="cvResume" type="button" hidden>Продолжить сохранённый этап</button>
+      <button id="cvRefresh" type="button">Обновить состояние</button>
+      <button id="cvCancel" type="button" hidden>Остановить после текущего шага</button>
+    </div>
+    <strong id="cvStatus" role="status" aria-live="polite">Ожидается запуск</strong>
+    <progress id="cvProgress" max="100" value="0" aria-label="Завершённые шаги конвейера"></progress>
+    <div id="cvSteps" class="cv-steps" aria-label="Этапы производства"></div>
+    <div id="cvFiles" class="actions" aria-label="Черновые и итоговые файлы"></div>
+    <div id="cvApproval" hidden><h4>Авторская приёмка редакций</h4>
+      <p>Выбери новую редакцию только после чтения. Если не отмечена, останется исходная версия
+      главы. Каждое принятие записывается в историю, а первоначальный AI-черновик остаётся.</p>
+      <div id="cvReviewItems"></div>
+      <button id="cvApprove" class="primary" type="button">Утвердить выбранные редакции и выпустить книгу</button>
+    </div>
+    <small>PDF A5 — проба для чтения, не PDF/X. Ни одна модель не загружается автоматически из интернета.</small>
+  </section>
+  <div class="book-edition-fields"><h3>Паспорт издания</h3><p>Укажи автора, год, редакцию и издателя в разделе «01 · Задание». Они попадут на титул, в выходные сведения и метаданные EPUB. Технология и версия ACHEWIW впишутся автоматически.</p><div id="bookEditionStatus" role="status"></div><button type="button" id="bookGoEdition">Изменить автора и год</button></div>
+  <div class="book-toolbar" id="bookSavedToolbar"><strong id="bookSummary">Проверка рукописи…</strong>
+    <div class="export-grid">
+      <a id="bookEpub" class="export-format" href="#">EPUB 3 · электронная книга</a>
+      <a id="bookFb2" class="export-format" href="#">FB2 · электронная книга</a>
+      <a id="bookPdf" class="export-format" href="#">PDF A5 · для чтения</a>
+      <a id="bookPrint" class="export-format" href="#">PDF A5 · проба для типографии</a>
+      <a id="bookDocx" class="export-format" href="#">DOCX · редактура издателя</a>
+      <a id="bookMarkdown" class="export-format" href="#">Markdown · исходный текст</a>
+    </div>
+    <div class="actions"><button id="bookEdit" type="button">Вернуться в редактор</button></div>
+  </div>
+  <p id="bookPrintWarning" class="book-print-warning">PDF для типографии — реальный пагинированный файл с кириллическим шрифтом, но <strong>не сертифицированный PDF/X</strong>. Печатный выпуск требует согласования TrimBox, вылетов, ICC и предпечатной проверки.</p>
+  <p id="bookWarning" class="book-warning"></p>
+  <p id="bookPreviewLabel" class="book-preview-label">Сохранённая авторская рукопись (не черновик ИИ)</p>
+  <article id="bookPreview" class="book-reader" aria-live="polite"></article>
+  <article id="bookDraftPreview" class="book-reader" aria-live="polite" hidden></article>
+</section>
+<div id="aiPanel" hidden><div class="aiHead"><strong id="aiHeading">✦ Задание StoryEngine · сохранено на сервере</strong><button id="closeAI">×</button></div>
+<div class="ai-progress" aria-live="polite">
+  <div class="ai-stage"><strong id="aiStage">Ожидание задания</strong><span id="aiPercent">—</span></div>
+  <progress id="aiProgress" max="100" aria-label="Примерный процент генерации к лимиту токенов"></progress>
+  <div id="aiEta" class="ai-eta">Процент считается приблизительно по полученному тексту; точное время окончания Ollama неизвестно.</div>
+  <div id="aiJobId" class="ai-job-id"></div>
+</div>
+<div id="aiNotice"></div><div id="aiOutput" class="ai-document" aria-live="polite"></div>
+<section id="auditReview" class="audit-review" hidden>
+  <h3>Решение автора по QA</h3>
+  <p>Этот текст — список замечаний ИИ, а не глава книги. Ничего никуда вставлять не нужно: отчёт уже сохранён в SQLite. Отметь, что делать с рекомендациями, затем исправляй сцены вручную.</p>
+  <label for="auditDecision">Что делать с замечаниями?</label>
+  <select id="auditDecision">
+    <option value="unreviewed">Ещё не решил — оставить на рассмотрение</option>
+    <option value="in_progress">Принять отдельные замечания в работу</option>
+    <option value="completed">Проверил и внёс нужные исправления вручную</option>
+    <option value="reference">Оставить только как справочный отчёт</option>
+  </select>
+  <label for="auditNotes">Мои решения и заметки — что именно исправлять?</label>
+  <textarea id="auditNotes" rows="4" maxlength="3000" placeholder="Например: сцена 2 — уточнить причину посадки; повторы про якорь и клиффхэнгер отклонить."></textarea>
+  <div class="actions"><button id="saveAuditDecision" class="primary" type="button">Сохранить решение</button><a id="downloadAudit" href="#">Скачать QA-отчёт .md</a></div>
+  <small id="auditDecisionStatus">Решение ещё не сохранено</small>
+</section>
+<div class="actions" id="aiNextSteps" hidden><button id="aiGoStructure" type="button">02 · Исправить план сцен</button><button id="aiGoWriting" type="button">03 · Редактировать текст</button><button id="aiGoBook" class="primary" type="button">06 · Читать книгу</button></div>
+<div class="actions"><button id="applyAI" class="primary" hidden>Принять предложение</button><button id="copyAI">Копировать</button></div></div>
+<div class="footerbar"><span id="saveState">Все изменения сохраняйте кнопкой «Сохранить»</span><span id="meta"></span></div></div><div id="empty" class="empty-studio"><div class="emptyIcon">✍</div><h2>Ваша книга начинается здесь</h2>
+<p>Выберите существующую работу в библиотеке слева или создайте новую. Студия не открывает последний черновик без вашего действия.</p>
+<div class="quick-create">
+<button data-create-kind="fiction"><strong>Фантастика и романы</strong><small>Мир, персонажи, главы и интрига</small></button>
+<button data-create-kind="technical"><strong>Техническая литература</strong><small>Тезисы, главы, источники и проверка фактов</small></button>
+<button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
+<button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
+</div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-editorial-v19" defer></script><script src="/static/app.js?v=20261105-editorial-v19" defer></script><script src="/static/writing_blocks.js?v=20261105-editorial-v19" defer></script><script src="/static/illustrations.js?v=20261105-editorial-v19" defer></script><script src="/static/conveyor.js?v=20261105-conveyor-v1" defer></script></body></html>

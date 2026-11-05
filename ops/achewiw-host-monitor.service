@@ -1,0 +1,21 @@
+[Unit]
+Description=ACHEWIW read-only host telemetry (CPU/RAM/NVIDIA)
+Documentation=https://github.com/musikfed/achewiw/blob/feature/technical-epub-first/docs/MONITORING.md
+# The unit must be linked from THIS repo; never change Docker or host Ollama.
+After=local-fs.target
+
+[Service]
+Type=simple
+WorkingDirectory=/1tbdisk/achewiw
+ExecStart=/usr/bin/python3 /1tbdisk/achewiw/scripts/achewiw_host_monitor.py --watch --interval 5
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/1tbdisk/achewiw/data
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+UMask=0077
+# No Install section: explicitly start only during future agreed project launch.

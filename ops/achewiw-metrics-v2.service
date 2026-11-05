@@ -1,0 +1,19 @@
+[Unit]
+Description=ACHEWIW v2 read-only hardware metrics (CPU RAM NVIDIA)
+Documentation=https://github.com/musikfed/achewiw
+After=local-fs.target
+
+[Service]
+Type=simple
+WorkingDirectory=/1tbdisk/achewiw
+ExecStart=/usr/bin/python3 /1tbdisk/achewiw/scripts/achewiw_host_monitor.py --watch --interval 5
+Restart=on-failure
+RestartSec=4
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/1tbdisk/achewiw/data
+ProtectHome=true
+UMask=0077
+
+# No Install: run only when specifically requested via scripts/monitor-v2.sh

@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "work_id": "demo-theatre",
+  "edition_id": "demo-vol1",
+  "description": "Иллюстрации могут быть черновыми; финальный выпуск требует проверок канона, оригинальности, применимого законодательства, прав и подписи редактора. Этот DAG не запускает задачи.",
+  "nodes": [
+    {
+      "id": "canon",
+      "label": "Канон: зафиксированные факты",
+      "kind": "canon.freeze",
+      "depends_on": [],
+      "resource": "none",
+      "status": "done"
+    },
+    {
+      "id": "story",
+      "label": "StoryGraph: версия интриги",
+      "kind": "story.select_branch",
+      "depends_on": [
+        "canon"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "rag",
+      "label": "RAG-контекст и проверка фактов",
+      "kind": "rag.retrieve",
+      "depends_on": [
+        "canon"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "text",
+      "label": "Сборка утверждённого текста",
+      "kind": "text.compile",
+      "depends_on": [
+        "story",
+        "rag"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "literaryqa",
+      "label": "Литературный QA",
+      "kind": "qa.literary",
+      "depends_on": [
+        "text"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "prompt",
+      "label": "Промпты иллюстраций",
+      "kind": "art.prompt",
+      "depends_on": [
+        "text",
+        "rag"
+      ],
+      "resource": "gpu",
+      "status": "pending"
+    },
+    {
+      "id": "render",
+      "label": "Иллюстрации · GPU lease",
+      "kind": "art.render",
+      "depends_on": [
+        "prompt"
+      ],
+      "resource": "gpu",
+      "status": "pending"
+    },
+    {
+      "id": "artapproval",
+      "label": "Приёмка иллюстраций автором",
+      "kind": "art.review",
+      "depends_on": [
+        "render"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "layout",
+      "label": "Вёрстка книги + обложка",
+      "kind": "layout.compose",
+      "depends_on": [
+        "editorialgate",
+        "artapproval"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "preflight",
+      "label": "Preflight для типографии",
+      "kind": "typeset.preflight",
+      "depends_on": [
+        "layout"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "print",
+      "label": "PDF/X, обложка и блок",
+      "kind": "publish.pdfx",
+      "depends_on": [
+        "preflight"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "ebook",
+      "label": "EPUB + PDF для чтения",
+      "kind": "publish.ebook",
+      "depends_on": [
+        "editorialgate",
+        "artapproval"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "editor",
+      "label": "Краткая версия для редактора",
+      "kind": "editor.synopsis",
+      "depends_on": [
+        "editorialgate"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "marketing",
+      "label": "Тизеры, флаеры, QR, мерч",
+      "kind": "marketing.package",
+      "depends_on": [
+        "editorialgate",
+        "artapproval"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "release",
+      "label": "Автор утверждает публикацию",
+      "kind": "release.approve",
+      "depends_on": [
+        "print",
+        "ebook",
+        "editor",
+        "marketing",
+        "editorialgate"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "canonqa",
+      "label": "Проверка канона, событий и POV",
+      "kind": "qa.canon",
+      "depends_on": [
+        "literaryqa",
+        "canon"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "originality",
+      "label": "Оригинальность и проверка заимствований",
+      "kind": "qa.originality",
+      "depends_on": [
+        "text"
+      ],
+      "resource": "cpu",
+      "status": "pending"
+    },
+    {
+      "id": "legal",
+      "label": "Применимые законы, возрастные нормы, контент",
+      "kind": "qa.jurisdictional_content",
+      "depends_on": [
+        "literaryqa",
+        "artapproval"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "rights",
+      "label": "Права: текст, иллюстрации, лицензии, шрифты",
+      "kind": "qa.rights",
+      "depends_on": [
+        "text",
+        "artapproval"
+      ],
+      "resource": "author",
+      "status": "pending"
+    },
+    {
+      "id": "editorialgate",
+      "label": "Редакционное утверждение снимка издания",
+      "kind": "release.editorial_gate",
+      "depends_on": [
+        "canonqa",
+        "originality",
+        "legal",
+        "rights"
+      ],
+      "resource": "author",
+      "status": "pending"
+    }
+  ]
+}
