@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 import conveyor_core as cv
 from prose_quality import quality_findings
 from narrative_direction import fiction_warnings
+from reader_engagement import lexical_findings as attention_findings, review_contract as attention_review_contract
 from gpu_scheduling import (image_operation_active, reserve_gpu, release_gpu,
                             refresh_gpu)
 from image_engine import generate as generate_picture, free_cached_models, status as image_status
@@ -231,6 +232,7 @@ def install(api: APIRouter, env: dict) -> None:
                 issues.append({"chapter":seq,**warning})
             if p.work_type=="fiction":
                 issues.extend({"chapter":seq,**w} for w in fiction_warnings(ch["text"]))
+                issues.extend({"chapter":seq,**w} for w in attention_findings(ch["text"]))
             for paragraph in re.split(r"\n\s*\n",ch["text"]):
                 norm=" ".join(paragraph.casefold().split())
                 if len(norm)>65 and norm in seen:
@@ -293,6 +295,9 @@ def install(api: APIRouter, env: dict) -> None:
                         "ЧАСТЬ "+str(part_index)+" ИЗ "+str(len(parts))+
                         " ГЛАВЫ "+key+"\n"
                         "ЗАДАНИЕ: "+p.premise[:900]+
+                        attention_review_contract(p,p.scenes[ch["scene_index"]],{
+                            "stage_name":ch.get("stage_name","development"),
+                            "reveal_level":ch.get("reveal_level","none")})+
                         "\nПЛАН РАЗГАДОК В ЭТОЙ ГЛАВЕ: "+reveal_checks+
                         "\nПРЕДЫДУЩАЯ ГЛАВА (КОНЕЦ): "+previous+
                         "\nФРАГМЕНТ ГЛАВЫ:\n"+part)
