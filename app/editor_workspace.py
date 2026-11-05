@@ -125,7 +125,7 @@ def search_snippets(data_dir: Path, project_id: str, job_id: str,
     import re
     from story_memory import STOPWORDS
     tokens=list(dict.fromkeys(x for x in re.findall(
-        r"[^\\W_]{3,}",question.casefold(),flags=re.UNICODE)
+        r"[^\W_]{3,}",question.casefold(),flags=re.UNICODE)
         if x not in STOPWORDS))[:12]
     if not tokens:
         return []
