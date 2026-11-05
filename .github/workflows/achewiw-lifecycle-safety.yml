@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate shutdown script syntax
-        run: bash -n scripts/achewiw-control.sh
+        run: bash -n scripts/achewiw-control.sh scripts/prune-legacy-branches.sh
       - name: Simulated Docker isolation tests
         run: python3 -m unittest discover -v -s tests -p 'test_achewiw_control.py'
       - name: Validate safe editorial-only update script
