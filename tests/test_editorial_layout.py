@@ -56,14 +56,14 @@ class EditorialLayoutTests(unittest.TestCase):
         self.assertTrue({"workspace", "page-shell", "work-navigator",
                          "hero-copy", "monitor-grid", "export-grid"} <= parser.classes)
         self.assertTrue({"editor", "bookPreview", "monitorCpu", "storyText",
-                         "bookProduction", "bookDraftPreview", "bookGenerate", "storyMemoryPanel", "memoryBranch", "memoryAddNode", "newProject", "monitorToggle", "monitorGrid", "writingBlockList", "runContinuity", "polishScene"} <= parser.ids)
+                         "bookProduction", "bookDraftPreview", "bookGenerate", "storyMemoryPanel", "memoryBranch", "memoryAddNode", "memoryReindex", "bookGoEdition", "illustrationParagraphIndex", "newProject", "monitorToggle", "monitorGrid", "writingBlockList", "runContinuity", "polishScene"} <= parser.ids)
 
     def test_all_assets_are_busted_to_one_visual_release(self):
         parser = Structure()
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
         self.assertEqual(len(urls), 5)
-        self.assertTrue(all("v=20261105-edition-v14" in u for u in urls))
+        self.assertTrue(all("v=20261105-edition-v15" in u for u in urls))
         self.assertTrue(all(u.startswith("/static/") for u in urls))
 
     def test_typography_and_responsive_layout_rules(self):
