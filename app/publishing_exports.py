@@ -103,8 +103,10 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     doc.add_page_break()
     doc.add_heading("Содержание",level=1)
     for ch in book["chapters"]:
-        doc.add_paragraph(f"{ch['index']}. {ch['title']}","TOC 1")
-    doc.add_paragraph("Выходные сведения","TOC 1")
+        entry=doc.add_paragraph(f"{ch['index']}. {ch['title']}")
+        entry.paragraph_format.left_indent=Cm(0.5)
+    credits_entry=doc.add_paragraph("Выходные сведения")
+    credits_entry.paragraph_format.left_indent=Cm(0.5)
     doc.add_page_break()
     def put_art(art):
         p=doc.add_paragraph()
