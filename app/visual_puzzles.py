@@ -56,8 +56,10 @@ def add(db,project,illustration_id,answer_scene_id,title,answer_note):
         (id,project_id,branch_id,kind,title,statement,scene_id,scene_index,status,created_at)
         VALUES (?,?,'main','mystery',?,?,?,?, 'approved',?)""",
         (mystery_id,project.id,title.strip(),
-         "Авторская визуальная загадка. Разгадка в главе "+str(answer+1)+
-         ": "+answer_note.strip(),answer_scene_id,answer,now()))
+         "Авторская визуальная загадка: подсказка в главе "+str(index+1)+
+         ", разгадка запланирована в главе "+str(answer+1)+
+         ". Секретный ответ хранится только в редакторских метаданных.",
+         answer_scene_id,answer,now()))
     for label,src in (("foreshadows",img["scene_id"]),("reveals",answer_scene_id)):
         db.execute("""INSERT INTO story_edges
             (id,project_id,branch_id,source_id,target_id,relation,note,created_at)
