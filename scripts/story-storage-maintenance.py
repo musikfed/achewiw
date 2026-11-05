@@ -68,8 +68,11 @@ def run(action: str) -> None:
         return
     if state["active_jobs"]:
         raise RuntimeError("Запущены задания: сначала дождись их завершения")
-    target=backup(data,canon)
-    print("Резервная копия SQLite:",target)
+    if not (data/"search.sqlite3").is_file() or not (data/"work.sqlite3").is_file():
+        target=backup(data,canon)
+        print("Резервная копия SQLite перед первым разделением:",target)
+    else:
+        print("Производные SQLite существуют: авторский canon не меняется, новый backup необязателен.")
     initialize(data)
     with sqlite3.connect(f"file:{canon}?mode=ro",uri=True,timeout=20) as origin:
         origin.row_factory=sqlite3.Row
