@@ -846,6 +846,33 @@ def editorial_version_details(project_id: str,version_id: str):
         raise HTTPException(404,str(exc)) from exc
 
 
+@api.get("/projects/{project_id}/editorial/versions/{version_id}/proof.pdf")
+def editorial_version_pdf(project_id: str,version_id: str):
+    """Read-only A5 PDF of EXACTLY the archived draft edition."""
+    source=get_project(project_id)
+    try:
+        version=get_book_version(DATA_DIR,project_id,version_id)
+    except ValueError as exc:
+        raise HTTPException(404,str(exc)) from exc
+    proof=source.model_copy(deep=True)
+    proof.scenes=[Scene(id=chapter["scene_id"],title=chapter["title"],
+                        text=chapter["text"]) for chapter in version["chapters"]
+                  if chapter["text"].strip()]
+    if not proof.scenes:
+        raise HTTPException(409,"В выбранной редакции нет написанных глав")
+    notice=("АРХИВНАЯ РЕДАКЦИЯ · "+version["label"]+
+            " · ЧЕРНОВИК ДЛЯ ПРОВЕРКИ, НЕ ДЛЯ ПУБЛИКАЦИИ")
+    try:
+        result=manuscript_pdf(proof,illustrations=illustrations_for_book(project_id),
+                             draft_notice=notice)
+    except (ValueError,RuntimeError) as exc:
+        raise HTTPException(422,str(exc)) from exc
+    return Response(content=result,media_type="application/pdf",headers={
+        "Content-Disposition":f'inline; filename="achewiw-version-{version_id[:12]}.pdf"',
+        "Cache-Control":"no-store",
+        "X-ACHEWIW-Export":"archived-editorial-version"})
+
+
 @api.get("/projects/{project_id}/editorial/compare")
 def editorial_compare_versions(project_id: str,left: str,right: str):
     get_project(project_id)
