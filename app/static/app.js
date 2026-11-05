@@ -11,6 +11,31 @@ let activeKind='all';
 const safeGet=(storage,key)=>{try{return storage.getItem(key)}catch{return null}};
 const safeSet=(storage,key,value)=>{try{storage.setItem(key,value)}catch{}};
 const uiKey=(name,id)=>'achewiw.v8.'+name+'.'+(id||project?.id||'none');
+// A full library wipe changes a server-side epoch. Invalidate ONLY this
+// application's stale drafts/tabs/projects on the next client visit.
+// Preserve ComfyUI control-job tracking (it is not part of the book library).
+async function resetBrowserAfterFreshLibrary(){
+  try{
+    const response=await fetch('/api/storage/reset-epoch',{cache:'no-store'});
+    if(!response.ok)return;
+    const payload=await response.json();
+    const epoch=payload.epoch;
+    if(typeof epoch!=='string'||!/^[0-9a-f]{40}$/.test(epoch))return;
+    if(safeGet(localStorage,'achewiw.libraryEpoch')===epoch)return;
+    for(const store of [localStorage,sessionStorage]){
+      const keys=[];
+      for(let i=0;i<store.length;i++){
+        const key=store.key(i);
+        if(key&&key.startsWith('achewiw.')&&key!=='achewiw.v9.comfyControlJob')
+          keys.push(key);
+      }
+      for(const key of keys)store.removeItem(key);
+    }
+    safeSet(localStorage,'achewiw.libraryEpoch',epoch);
+    // Remain on the empty project selector; no old draft is re-attached.
+  }catch(e){console.warn('Reset epoch check unavailable:',e)}
+}
+
 function stashUnsavedProject(){
   if(!project)return;
   updateBrief();collectScenes();collectText();
@@ -1089,4 +1114,4 @@ window.addEventListener('scroll',()=>{
   const now=Date.now();if(now-lastScrollAt<300)return;lastScrollAt=now;
   safeSet(sessionStorage,uiKey('scroll'),String(window.scrollY));
 },{passive:true});
-(async()=>{try{const kind=safeGet(localStorage,'achewiw.v8.kindFilter');if(kind&&workModes[kind]||kind==='all')activeKind=kind;await refreshProjects();$('#status').textContent='Студия готова';if(projects.length){let previous=null;try{previous=localStorage.getItem('achewiw.activeProjectId')}catch{}await loadProject(projects.find(p=>p.id===previous)?.id||projects[0].id)}await detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
+(async()=>{try{await resetBrowserAfterFreshLibrary();const kind=safeGet(localStorage,'achewiw.v8.kindFilter');if(kind&&workModes[kind]||kind==='all')activeKind=kind;await refreshProjects();$('#status').textContent='Студия готова';if(projects.length){let previous=null;try{previous=localStorage.getItem('achewiw.activeProjectId')}catch{}await loadProject(projects.find(p=>p.id===previous)?.id||projects[0].id)}await detectModels()}catch(e){$('#status').textContent='Ошибка соединения';toast(e.message)}})();
