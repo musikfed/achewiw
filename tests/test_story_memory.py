@@ -76,7 +76,7 @@ def test_causal_graph_prevents_backwards_causality_and_cycles():
             add_edge(db,"book","main",b["id"],a["id"],"foreshadows")
         before=audit_graph(db,"book")
         assert len(before["open_mysteries"])==1
-        add_edge(db,"book","main",c["id"],b["id"],"reveals")
+        add_edge(db,"book","main",b["id"],c["id"],"reveals")
         after=audit_graph(db,"book")
         assert not after["open_mysteries"]
         assert after["edges"]==2
@@ -159,3 +159,11 @@ def test_api_memory_never_auto_accepts_drafts(tmp_path,monkeypatch):
         no_change=api.post(prefix+"/nodes",json={"kind":"fact","title":"Новый",
                        "statement":"Пока генерируется нельзя менять граф"})
         assert no_change.status_code==409
+
+
+def test_prerequisite_after_event_is_rejected():
+    with connection() as db:
+        event=add_node(db,"book","main","event","Побег","Кот сбежал.","s0",0)
+        key=add_node(db,"book","main","object","Ключ","Ключ найден позднее.","s2",2)
+        with pytest.raises(ValueError,match="позже"):
+            add_edge(db,"book","main",event["id"],key["id"],"requires")
