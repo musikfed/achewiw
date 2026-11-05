@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "kind": "technical",
+  "title": "Один сервер — локальная литературная LLM",
+  "audience": "Администраторы Ubuntu и начинающие DevOps-инженеры",
+  "platform": {
+    "os": "Ubuntu 24.04",
+    "reference_environment": "Docker host networking on Linux and host Ollama",
+    "verification": "illustrative; instructions require independent testing"
+  },
+  "volumes": [
+    {
+      "id": "v1",
+      "title": "Практика локальных сервисов",
+      "chapters": [
+        {
+          "id": "c1",
+          "title": "Веб-приложение в контейнере и Ollama на хосте",
+          "sections": [
+            {
+              "id": "s1",
+              "title": "Система и сетевые границы",
+              "claims": [
+                "claim1"
+              ],
+              "diagrams": [
+                "diagram1"
+              ]
+            },
+            {
+              "id": "s2",
+              "title": "Проверка доступности API",
+              "code_examples": [
+                "snippet1"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "source1",
+      "kind": "vendor_doc",
+      "title": "Ollama API documentation",
+      "uri": "https://docs.ollama.com/api",
+      "license": "check on retrieval",
+      "retrieved_at": null
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim1",
+      "statement": "При сетевом режиме host на Linux контейнер использует сетевое пространство имён хоста",
+      "status": "proposed",
+      "evidence_ids": [],
+      "valid_for": "Docker Engine on Linux",
+      "review_note": "Требует ссылки на конкретную версию документации Docker и проверки в стенде"
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "diagram1",
+      "chapter_id": "c1",
+      "title": "Схема взаимодействия приложения и Ollama",
+      "format": "mermaid",
+      "source_text": "flowchart LR\n    A[Browser] --> B[ACHEWIW port 7080]\n    B --> C[Host Ollama 11434]\n    C --> D[GPU]\n",
+      "claim_ids": [
+        "claim1"
+      ],
+      "alt_text": "Браузер обращается к ACHEWIW на порту 7080. Веб-приложение обращается к Ollama на хосте через 11434; Ollama использует GPU.",
+      "status": "proposal"
+    }
+  ],
+  "code_examples": [
+    {
+      "id": "snippet1",
+      "chapter_id": "c1",
+      "language": "bash",
+      "source": "curl -fsS http://127.0.0.1:11434/api/tags",
+      "execution": "never executed by generation pipeline",
+      "result": "unverified",
+      "security_context": "run only by author on a trusted test host"
+    }
+  ],
+  "release_gate": {
+    "status": "blocked",
+    "reason": "No signed claim verification, source licenses, legal review, originality assessment or final author approval"
+  }
+}
