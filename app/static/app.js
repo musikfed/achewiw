@@ -1068,6 +1068,45 @@ const revealChoices={
  aftermath:'Последствия раскрытия'
 };
 const tensionLabels=['0 · спокойная','1 · лёгкая','2 · интерес','3 · развитие','4 · напряжение','5 · пик'];
+async function loadReaderEngagement(){
+ if(!project)return;
+ const id=project.id;
+ const status=$('#readerEngagementStatus'),target=$('#readerEngagementCards');
+ if(!status||!target)return;
+ status.textContent='Проверяем запланированные вопросы и развязки…';
+ target.replaceChildren();
+ try{
+  const map=await api('/projects/'+id+'/reader-engagement',{cache:'no-store'});
+  if(!project||project.id!==id)return;
+  if(!map.enabled){
+   status.textContent=map.reason||'Художественная воронка не применяется к этому типу работы.';
+   return;
+  }
+  status.textContent='Жанровый механизм: '+map.technique+
+   '. '+map.safeguard+
+   (!map.has_central_question?' · Центральная загадка ещё не задана автором.':'')+
+   (!map.has_authored_resolution?' · Финальный ответ ещё не закреплён автором.':'');
+  for(const item of map.chapters){
+   const card=document.createElement('section');card.className='engagement-beat';
+   const title=document.createElement('strong');
+   title.textContent=item.index+'. '+item.title+' · '+item.beat+' · напряжение '+item.tension+'/5';
+   card.append(title);
+   const line=document.createElement('p');
+   line.textContent='Задача: '+item.narrative_obligation+
+     ' · Раскрытие: '+item.disclosure_guard;
+   card.append(line);
+   const author=document.createElement('p');
+   author.textContent=(item.reader_question?
+     'Вопрос читателю (авторский): '+item.reader_question:
+     'Не указан отдельный вопрос в крючке главы; модель не должна выдумывать секрет.')+
+     (item.author_clue_or_event?' · Подготовка: '+item.author_clue_or_event:'');
+   card.append(author);
+   target.append(card);
+  }
+ }catch(e){
+  if(project&&project.id===id)status.textContent='Не удалось обновить воронку: '+e.message;
+ }
+}
 async function loadChapterPlan(suggested=false){
  if(!project)return;
  const projectId=project.id;
@@ -1084,6 +1123,7 @@ async function loadChapterPlan(suggested=false){
    if(!project||project.id!==projectId)return;
    chapterPlan=plan;
    renderChapterPlan();
+   await loadReaderEngagement();
  }catch(e){
    chapterPlan=null;
    $('#chapterPlanSummary').textContent='Не удаётся рассчитать объём глав: '+e.message;
@@ -1188,6 +1228,7 @@ async function saveChapterPlan(announce=true){
    method:'PUT',body:JSON.stringify({chapters:rows})
  });
  chapterPlan=data;renderChapterPlan();
+ await loadReaderEngagement();
  if(announce)toast('Режиссура глав сохранена в SQLite. Сам каркас не менялся.');
  return data;
 }
@@ -1349,6 +1390,7 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#bookGenerate').onclick=startFullBook;
  $('#bookOpenChapterPlan').onclick=()=>gotoTab('structure');
  $('#recalculateChapterPlan').onclick=async()=>{await save();await loadChapterPlan(true)};
+ $('#readerEngagementReload').onclick=()=>loadReaderEngagement();
  $('#memoryReload').onclick=()=>loadStoryMemory(storyMemory?.branch_id||'main');
  $('#memoryReindex').onclick=reindexStorySearch;
  $('#memoryBranch').onchange=e=>loadStoryMemory(e.target.value);
