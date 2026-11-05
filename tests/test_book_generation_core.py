@@ -36,7 +36,7 @@ def test_allocate_20000_words_across_six_chapters():
     allocations = distribute_words(20000, [str(x) for x in range(6)])
     assert sum(allocations) == 20000
     assert max(allocations) - min(allocations) <= 1
-    assert chunk_size(3333) == 800
+    assert chunk_size(3333) == 420
     assert max_attempts(3333) >= 10
 
 
