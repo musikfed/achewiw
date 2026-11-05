@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ACHEWIW — Типография в кармане | Локальный ИИ для книг, рассказов и EPUB</title>
+  <meta name="description" content="ACHEWIW — локальная издательская студия на Ollama, FastAPI и SQLite. Планируйте романы, интриги и загадки, проверяйте рукописи, создавайте иллюстрации и выпускайте PDF, DOCX, EPUB.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://musikfed.github.io/achewiw/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="ACHEWIW — Типография в кармане">
+  <meta property="og:description" content="Локальный ИИ-редактор, воронка внимания, RAG, иллюстрации и выпуск EPUB/PDF/DOCX. Автор контролирует рукопись.">
+  <meta property="og:url" content="https://musikfed.github.io/achewiw/">
+  <meta property="og:image" content="https://musikfed.github.io/achewiw/media/achewiw-social-preview.svg">
+  <meta name="theme-color" content="#283643">
+  <script type="application/ld+json">{
+    "@context":"https://schema.org",
+    "@type":"SoftwareSourceCode",
+    "name":"ACHEWIW — Типография в кармане",
+    "alternateName":"ACHEWIW StoryEngine",
+    "description":"Self-hosted book writing and publishing studio with Ollama, SQLite, RAG, author-controlled narrative QA, ComfyUI artwork and EPUB/PDF/DOCX exports.",
+    "codeRepository":"https://github.com/musikfed/achewiw",
+    "url":"https://musikfed.github.io/achewiw/",
+    "programmingLanguage":["Python","JavaScript"],
+    "keywords":"ollama, local AI writing, author-controlled editing, Russian books, EPUB, PDF, FastAPI, SQLite, ComfyUI"
+  }</script>
+  <style>
+  :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#283642;background:#f6f4ef}
+  *{box-sizing:border-box}body{margin:0}main{max-width:1050px;margin:auto;padding:clamp(20px,5vw,70px)}
+  header{background:#fff;border-bottom:1px solid #e1dbd1;padding:20px clamp(20px,5vw,70px)}
+  header a{font-family:Georgia,serif;color:#2c3b46;font-size:23px;letter-spacing:.12em;text-decoration:none}
+  h1,h2{font-family:Georgia,serif;font-weight:400}h1{font-size:clamp(42px,6vw,70px);margin:.4em 0 .3em}
+  h2{font-size:clamp(25px,3vw,34px)}.eyebrow{letter-spacing:.2em;color:#9a7342;font-size:12px;font-weight:700}
+  p{line-height:1.7;color:#56636b;font-size:17px}.intro{font-size:20px;max-width:780px}
+  .actions{display:flex;flex-wrap:wrap;gap:14px;margin:26px 0 45px}.actions a{display:inline-block;padding:13px 19px;border-radius:8px;border:1px solid #cbbca7;text-decoration:none;color:#604b37}
+  .actions .main{background:#2c3a45;border-color:#2c3a45;color:#fff}
+  img{display:block;max-width:100%;height:auto;border:1px solid #e4ddd2;border-radius:14px;background:white}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:22px 0}
+  .grid article{background:#fff;border:1px solid #e5ddd2;border-radius:13px;padding:18px}
+  .grid h3{font-size:18px;margin:4px 0}.grid p{margin:4px 0;font-size:15px}
+  .note{padding:22px;border-left:4px solid #ad8b5d;background:#fff;margin:40px 0}
+  footer{border-top:1px solid #e1dbd1;padding-top:25px;margin-top:50px;font-size:14px;color:#7e898d}
+  a{color:#946e42}a:focus-visible{outline:3px solid #bc8b4b;outline-offset:3px}
+  </style>
+</head>
+<body>
+<header><a href="https://github.com/musikfed/achewiw">✦ ACHEWIW</a></header>
+<main>
+  <div class="eyebrow">ЛОКАЛЬНАЯ ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ · OPEN SOURCE</div>
+  <h1>Типография в кармане</h1>
+  <p class="intro">Закулисная мастерская рассказов, книг и выступлений. Планируйте сюжет и канон, пишите и проверяйте главы, добавляйте загадки и иллюстрации, выпускайте PDF, DOCX и EPUB на собственном сервере.</p>
+  <p>ACHEWIW — self-hosted проект на Python, FastAPI, SQLite и Ollama. Вся работа с рукописью происходит локально. Модели и ComfyUI используют GPU последовательно, а автор утверждает предложенные изменения.</p>
+  <div class="actions">
+    <a class="main" href="https://github.com/musikfed/achewiw">Открыть исходники на GitHub</a>
+    <a href="https://github.com/musikfed/achewiw/blob/main/docs/CONVEYOR-RTX3060-RU.md">Как работает конвейер</a>
+    <a href="https://github.com/musikfed/achewiw/issues">Предложить улучшение</a>
+  </div>
+  <h2>Настоящая стартовая страница — без случайно открытой книги</h2>
+  <p>Здесь показан демонстрационный макет пустой библиотеки. Текст и изображения личных произведений не публикуются в этом разделе.</p>
+  <img src="media/achewiw-home.svg" alt="Главная ACHEWIW: выбор мастерской, пустая библиотека, создание книги с нуля" width="1600" height="900" loading="lazy">
+  <h2>Воронка внимания читателя</h2>
+  <p>Обещание → попытка расследования → проверяемая улика → переоценка → честная разгадка → последствия. Для детектива, прозы и серийных историй используются разные правила. Модели должны находить конкретные доказательства в тексте, а не добавлять интригу пустыми репликами.</p>
+  <img src="architecture/architecture-reader-attention.svg" alt="Воронка читательского внимания: крючок, улика, расследование, развязка и последствия" width="1330" height="1030" loading="lazy">
+  <div class="grid">
+    <article><h3>Сюжет и RAG</h3><p>Память персонажей, причинность, граф загадок и запланированные разгадки.</p></article>
+    <article><h3>Литературный QA</h3><p>Проверка повторов, пустых диалогов и неподтверждённых выводов.</p></article>
+    <article><h3>RTX 3060 12 ГБ</h3><p>Одна роль GPU за раз: писатель, критик, редактор и художник.</p></article>
+    <article><h3>Издательство</h3><p>PDF A5, DOCX, EPUB, FB2 и версия рукописи после решения автора.</p></article>
+  </div>
+  <h2>Как устроена локальная обработка</h2>
+  <img src="architecture/architecture-system.svg" alt="Архитектура ACHEWIW: локальный браузер, FastAPI, SQLite, Ollama, ComfyUI" width="1680" height="970" loading="lazy">
+  <p><a href="https://github.com/musikfed/achewiw/blob/main/docs/READER-RETENTION-MYSTERY-RU.md">Подробнее об интриге, сюжетных обещаниях и честных развязках</a></p>
+  <aside class="note"><strong>Автор остаётся автором.</strong> ACHEWIW помогает с подготовкой, генерацией и редактурой, но не гарантирует художественный результат. PDF A5 пока является пробой для чтения, не сертифицированным PDF/X и не подтверждённым полным соответствием ГОСТ.</aside>
+  <footer>© ACHEWIW · Открытый репозиторий <a href="https://github.com/musikfed/achewiw">github.com/musikfed/achewiw</a>. Эта страница — публичная документация. Она не подключается к локальной библиотеке рукописей и не раскрывает содержимое SQLite.</footer>
+</main>
+</body></html>
