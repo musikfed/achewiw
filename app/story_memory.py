@@ -301,9 +301,11 @@ def sync_outline(db: sqlite3.Connection, project) -> None:
             prev="outline:"+project.scenes[i-1].id
             eid="outline-order:"+scene.id
             order.add(eid)
-            db.execute("""INSERT OR IGNORE INTO story_edges
+            db.execute("""INSERT INTO story_edges
                 (id,project_id,branch_id,source_id,target_id,relation,note,created_at)
-                VALUES(? ,?,'main',?,?,'before','Порядок утверждённого каркаса',?)""",
+                VALUES(? ,?,'main',?,?,'before','Порядок утверждённого каркаса',?)
+                ON CONFLICT(id) DO UPDATE SET source_id=excluded.source_id,
+                    target_id=excluded.target_id""",
                 (eid,project.id,prev,uid,stamp()))
     # Remove only machine-maintained outline items, never author-entered facts.
     for row in db.execute("SELECT id FROM story_nodes WHERE project_id=? AND "
