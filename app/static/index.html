@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-storymemory-v13"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-edition-v14"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -37,7 +37,7 @@
 <option value="technical">Техническая, инженерная и научная книга</option>
 <option value="speech">Выступление, лекция или доклад</option>
 <option value="nonfiction">Нонфикшн, учебная и деловая книга</option>
-</select></label><label>Жанр / специализация<input data-field="genre" placeholder="Фантастика / детектив / притча"></label><label>Атмосфера<textarea data-field="atmosphere" rows="2"></textarea></label><label>Аудитория<textarea data-field="audience" rows="2"></textarea></label><label>Целевой объём<input data-field="target_length" placeholder="15 минут / 3000 слов"></label><label>Способ восприятия<select data-field="format"><option value="reading">Чтение глазами</option><option value="performance">Выступление вслух</option></select></label><label class="wide">Замысел / центральный конфликт<textarea data-field="premise" rows="4"></textarea></label><label data-only-kind="fiction">Твист / загадка<textarea data-field="twist" rows="3"></textarea></label><label data-only-kind="fiction">Когда раскрыть<textarea data-field="reveal" rows="3"></textarea></label><label class="wide" data-only-kind="fiction">Канон мира и постоянные детали<textarea data-field="anchors" rows="3" placeholder="Персонажи, мир, ограничения, сюжетные обещания..."></textarea></label>
+</select></label><label>Жанр / специализация<input data-field="genre" placeholder="Фантастика / детектив / притча"></label><label>Имя автора<input data-field="author_name" maxlength="200" placeholder="Как указывать автора в книге"></label><label>Год выпуска<input data-field="publication_year" type="number" min="1900" max="2200" placeholder="2026"></label><label>Атмосфера<textarea data-field="atmosphere" rows="2"></textarea></label><label>Издательство / место издания (необязательно)<input data-field="publisher_name" maxlength="200"></label><label>Редакция книги<input data-field="edition_label" maxlength="200" placeholder="Первое издание"></label><label>Аудитория<textarea data-field="audience" rows="2"></textarea></label><label>Целевой объём<input data-field="target_length" placeholder="15 минут / 3000 слов"></label><label>Способ восприятия<select data-field="format"><option value="reading">Чтение глазами</option><option value="performance">Выступление вслух</option></select></label><label class="wide">Замысел / центральный конфликт<textarea data-field="premise" rows="4"></textarea></label><label data-only-kind="fiction">Твист / загадка<textarea data-field="twist" rows="3"></textarea></label><label data-only-kind="fiction">Когда раскрыть<textarea data-field="reveal" rows="3"></textarea></label><label class="wide" data-only-kind="fiction">Канон мира и постоянные детали<textarea data-field="anchors" rows="3" placeholder="Персонажи, мир, ограничения, сюжетные обещания..."></textarea></label>
 <label class="wide" data-only-kind="technical nonfiction">Источники автора / DOI / ссылки<textarea data-field="sources" rows="4" placeholder="По одному источнику на строку. Подтверждай DOI и факты: модель не должна выдумывать библиографию."></textarea></label>
 <label class="wide" data-only-kind="technical nonfiction">Ключевые тезисы, гипотезы и доказательства<textarea data-field="claims" rows="3" placeholder="Что доказать, что требует проверки, какие определения использовать"></textarea></label>
 <label data-only-kind="speech">Плановая длительность, минут<input data-field="duration_minutes" inputmode="numeric" type="number" min="1" max="480" value="10"></label>
@@ -133,13 +133,13 @@
 <section id="illustrations" class="tabpane" hidden>
  <div class="sectionhead"><div class="eyebrow">ИЛЛЮСТРАЦИИ / ОБЛОЖКА / МАКЕТ</div>
  <h2>Иллюстрации для издания</h2>
- <p>Добавляй изображения в конкретные главы. Картинки войдут в EPUB, редактируемый DOCX и PDF A5. Хранятся только в каталоге ACHEWIW.</p></div>
+ <p>Выбери главу или обложку. Для рисунка укажи место: после заголовка, конкретного абзаца или в конце главы. При экспорте порядок иллюстраций одинаковый в EPUB, DOCX, PDF и FB2.</p></div>
  <div class="illustration-workflow">
  <div class="illustration-input">
   <h3>Изображение на страницу</h3>
   <label>Глава или раздел<select id="illustrationScene"></select></label>
   <label>Подпись к изображению<input id="illustrationCaption" maxlength="1000" placeholder="Рис. 1 — принципиальная схема"></label>
-  <label>Расположение<select id="illustrationPlacement"><option value="start">После заголовка главы</option><option value="end">После текста главы</option></select></label>
+  <label>Расположение<select id="illustrationPlacement"><option value="start">После заголовка главы</option><option value="paragraph">После выбранного абзаца</option><option value="end">После текста главы</option><option value="cover">Обложка (отдельная страница)</option></select></label><label id="illustrationParagraphWrap" hidden>После абзаца № (считая от 1)<input id="illustrationParagraphIndex" type="number" min="1" max="5000" value="1"></label>
   <label>Файл PNG, JPEG или WebP (до 12 МиБ)<input type="file" id="illustrationFile" accept="image/png,image/jpeg,image/webp"></label>
   <button type="button" class="primary" id="illustrationUpload">Загрузить в книгу</button>
  </div>
@@ -164,7 +164,7 @@
   <label class="illustration-vram-option"><input type="checkbox" id="illustrationReleaseComfy"> После рисунка запросить освобождение VRAM ComfyUI (только если его очередь пуста)</label>
   <button type="button" id="illustrationGenerate" disabled>Сгенерировать и добавить в главу</button>
   <p id="illustrationStepStatus" role="status" aria-live="polite">Этапы: описание → при необходимости Ollama → проверка VRAM → ComfyUI → иллюстрация.</p>
-  <p class="illustration-disclaimer">Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
+  <p class="illustration-disclaimer">Обложку генерируй как художественное изображение без букв: заголовок, имя автора и год наносятся при экспорте отдельно. После рисунка проверь персонажей и детали мира. Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
  </div>
  </div>
  <h3 class="illustration-library-title">Иллюстрации рукописи</h3>
@@ -191,6 +191,7 @@
     </div>
     <p id="bookProductionHint">Текст старого каркаса — не книга. После запуска написанные главы сохраняются в SQLite. Экспорт PDF/EPUB использует только принятую автором рукопись.</p>
   </div>
+  <div class="book-edition-fields"><h3>Паспорт издания</h3><p>Укажи автора, год, редакцию и издателя в разделе «01 · Задание». Они попадут на титул, в выходные сведения и метаданные EPUB. Технология и версия ACHEWIW впишутся автоматически.</p><div id="bookEditionStatus" role="status"></div><button type="button" id="bookGoEdition">Изменить автора и год</button></div>
   <div class="book-toolbar" id="bookSavedToolbar"><strong id="bookSummary">Проверка рукописи…</strong>
     <div class="export-grid">
       <a id="bookEpub" class="export-format" href="#">EPUB 3 · электронная книга</a>
@@ -241,4 +242,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-storymemory-v13" defer></script><script src="/static/app.js?v=20261105-storymemory-v13" defer></script><script src="/static/writing_blocks.js?v=20261105-storymemory-v13" defer></script><script src="/static/illustrations.js?v=20261105-storymemory-v13" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-edition-v14" defer></script><script src="/static/app.js?v=20261105-edition-v14" defer></script><script src="/static/writing_blocks.js?v=20261105-edition-v14" defer></script><script src="/static/illustrations.js?v=20261105-edition-v14" defer></script></body></html>
