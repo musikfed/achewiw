@@ -1,6 +1,6 @@
 # achewiw · Visual project showcase
 
-![Architecture and project workflow](overview.svg)
+![Исходный интерфейс студии](../media/achewiw-home.svg)
 
 **Локальная издательская студия · Local book publishing studio**
 
