@@ -101,50 +101,10 @@ test -f app/gpu_scheduling.py
 test -f app/editor_workspace.py
 test -f app/book_layout_core.py
 python3 -m py_compile scripts/story-storage-maintenance.py app/editor_workspace.py app/book_layout_core.py app/manuscript_core.py app/publishing_exports.py
-# Verify the VERSION ACTUALLY DECLARED by index.html, not a hardcoded version
-# from a potentially older updater. All five local assets must exist and share
-# the same cache-busting version; no browser storage is wiped.
-python3 - <<'PY'
-from html.parser import HTMLParser
-from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
-
-expected = {
-    "/static/style.css", "/static/app.js", "/static/monitor.js",
-    "/static/writing_blocks.js", "/static/illustrations.js",
-}
-
-class AssetParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.urls = []
-
-    def handle_starttag(self, tag, attrs):
-        a = dict(attrs)
-        if tag == "link" and a.get("rel") == "stylesheet":
-            self.urls.append(a.get("href", ""))
-        elif tag == "script" and a.get("src"):
-            self.urls.append(a["src"])
-
-parser = AssetParser()
-parser.feed(Path("app/static/index.html").read_text(encoding="utf-8"))
-if len(parser.urls) != len(expected):
-    raise SystemExit("ОСТАНОВЛЕНО: неожиданное число версионированных ресурсов")
-paths, versions = set(), set()
-for url in parser.urls:
-    parsed = urlsplit(url)
-    path = parsed.path
-    version = parse_qs(parsed.query).get("v", [])
-    if path not in expected or not (Path("app") / path.lstrip("/")).is_file():
-        raise SystemExit("ОСТАНОВЛЕНО: отсутствует или неизвестен статический ресурс")
-    if len(version) != 1 or not version[0] or len(version[0]) > 80:
-        raise SystemExit("ОСТАНОВЛЕНО: отсутствует версия ресурса")
-    paths.add(path)
-    versions.add(version[0])
-if paths != expected or len(versions) != 1:
-    raise SystemExit("ОСТАНОВЛЕНО: несовпадение версий JS/CSS")
-print("ACHEWIW clean-update: Статические ресурсы согласованы: " + next(iter(versions)))
-PY
+# The independent conveyor.js cache key may differ from the five editorial assets.
+# Verify all six without accepting missing/duplicate/foreign assets.
+python3 scripts/verify-versioned-assets.py ||
+  die "Проверка JS/CSS версии не пройдена; данные и остановленные сервисы сохранены"
 msg "3/5 — делаем безопасную миграцию/обновление поискового кэша"
 python3 scripts/story-storage-maintenance.py apply || die "Проверка/индексирование SQLite не прошла; сборка остановлена, существующие книги не удалены"
 msg "Очищаем только временные .pyc под app/ и tests/"
