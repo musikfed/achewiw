@@ -20,7 +20,7 @@
 
 ## Многоязычное портфолио и контакты
 
-[**Все публичные работы musikfed — 20 репозиториев, восемь языков**](https://musikfed.github.io/achewiw/works/): [Русский](https://musikfed.github.io/achewiw/works/) · [English](https://musikfed.github.io/achewiw/works/en/) · [简体中文](https://musikfed.github.io/achewiw/works/zh/) · [Deutsch](https://musikfed.github.io/achewiw/works/de/) · [हिन्दी](https://musikfed.github.io/achewiw/works/hi/) · [Français](https://musikfed.github.io/achewiw/works/fr/) · [Suomi](https://musikfed.github.io/achewiw/works/fi/) · [한국어](https://musikfed.github.io/achewiw/works/ko/).
+[**Все публичные работы musikfed — 20 репозиториев, 11 языков**](https://musikfed.github.io/achewiw/works/): [Русский](https://musikfed.github.io/achewiw/works/) · [English](https://musikfed.github.io/achewiw/works/en/) · [简体中文](https://musikfed.github.io/achewiw/works/zh/) · [Deutsch](https://musikfed.github.io/achewiw/works/de/) · [हिन्दी](https://musikfed.github.io/achewiw/works/hi/) · [Français](https://musikfed.github.io/achewiw/works/fr/) · [Suomi](https://musikfed.github.io/achewiw/works/fi/) · [한국어](https://musikfed.github.io/achewiw/works/ko/) · [日本語](https://musikfed.github.io/achewiw/works/ja/) · [Italiano](https://musikfed.github.io/achewiw/works/it/) · [Беларуская](https://musikfed.github.io/achewiw/works/be/).
 
 **Публичные контакты для сотрудничества:** [Telegram @Feudorlab1](https://t.me/Feudorlab1) · [+7 926 041 1145](tel:+79260411145) · [feudor.lab@yandex.ru](mailto:feudor.lab@yandex.ru) · [obzorniky@gmail.com](mailto:obzorniky@gmail.com) · [peginelab.ru](https://peginelab.ru/).
 
