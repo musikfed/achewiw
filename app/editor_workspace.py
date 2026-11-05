@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import struct
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
@@ -73,6 +75,12 @@ def initialize(data_dir: Path) -> dict:
             project_id TEXT NOT NULL, source_digest TEXT NOT NULL,
             words INTEGER NOT NULL, updated_at TEXT NOT NULL,
             PRIMARY KEY(job_id,scene_id));
+        CREATE TABLE IF NOT EXISTS work_story_state (
+            job_id TEXT NOT NULL, scene_id TEXT NOT NULL,
+            project_id TEXT NOT NULL, scene_index INTEGER NOT NULL,
+            source_digest TEXT NOT NULL, ending TEXT NOT NULL,
+            current_goal TEXT NOT NULL, words INTEGER NOT NULL,
+            updated_at TEXT NOT NULL, PRIMARY KEY(job_id,scene_id));
         """)
     return {"canon":str(data_dir/"achewiw.sqlite3"),"search":str(search_path),
             "work":str(work_path)}
@@ -156,6 +164,146 @@ def search_snippets(data_dir: Path, project_id: str, job_id: str,
         except sqlite3.OperationalError:
             return []
     return [dict(r) for r in rows]
+
+
+
+def pending_embeddings(data_dir: Path, project_id: str, job_id: str,
+                       model_id: str, limit: int = 12) -> list[dict]:
+    """Only source-approved and same-job drafts, never another draft or branch."""
+    path=data_dir/"search.sqlite3"
+    if not path.is_file() or path.is_symlink(): return []
+    with _open(path) as conn:
+        rows=conn.execute("""
+          SELECT m.source_id,m.digest,m.text
+            FROM search_manifest m
+            LEFT JOIN search_embeddings e
+              ON e.source_id=m.source_id AND e.model_id=? AND e.digest=m.digest
+           WHERE m.project_id=? AND m.branch_id='main'
+             AND ((m.revision_id='author' AND m.source_kind IN ('approved','synopsis'))
+               OR (m.revision_id=? AND m.source_kind='draft'))
+             AND e.source_id IS NULL
+           ORDER BY m.scene_index,m.indexed_at,m.source_id LIMIT ?""",
+          (model_id,project_id,job_id,max(1,min(32,limit)))).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _vector_blob(values: list[float]) -> bytes:
+    if not 8 <= len(values) <= 4096:
+        raise ValueError("Вектор embeddings имеет недопустимую размерность")
+    if any(not math.isfinite(value) for value in values):
+        raise ValueError("Embeddings содержит NaN/inf")
+    norm=math.sqrt(sum(float(v)*float(v) for v in values))
+    if norm < 1e-9: raise ValueError("Нулевой вектор embeddings")
+    return struct.pack("<"+str(len(values))+"f",*(float(x)/norm for x in values))
+
+
+def save_embeddings(data_dir: Path, model_id: str, items: list[dict],
+                    vectors: list[list[float]]) -> int:
+    """Cache immutable model/digest-qualified vectors; reject stale index sources."""
+    if len(items)!=len(vectors):
+        raise ValueError("Количество ответов embeddings не совпало с запросом")
+    path=data_dir/"search.sqlite3"
+    if not path.is_file() or path.is_symlink(): return 0
+    saved=0
+    with _open(path) as conn:
+        for item,vector in zip(items,vectors):
+            sid,digest=item["source_id"],item["digest"]
+            row=conn.execute("SELECT digest FROM search_manifest WHERE source_id=?",(sid,)).fetchone()
+            if not row or row["digest"]!=digest: continue
+            blob=_vector_blob(vector)
+            conn.execute("""INSERT INTO search_embeddings
+               (source_id,model_id,digest,dimension,vector) VALUES(?,?,?,?,?)
+               ON CONFLICT(source_id,model_id) DO UPDATE SET
+                 digest=excluded.digest,dimension=excluded.dimension,vector=excluded.vector""",
+                 (sid,model_id,digest,len(vector),blob))
+            saved+=1
+    return saved
+
+
+def semantic_snippets(data_dir: Path, project_id: str, job_id: str,
+                      scene_index: int, model_id: str, query_vector: list[float],
+                      limit: int = 4) -> list[dict]:
+    """Brute-force cosine on a single author's small SQLite corpus.
+
+    Every candidate is filtered by PROJECT, main branch, chapter timeline,
+    original source, *current job* and current digest BEFORE similarity ranking.
+    No ANN extension required: ~1000 chunks * 768 float32 is fine in RAM.
+    """
+    path=data_dir/"search.sqlite3"
+    if not path.is_file() or path.is_symlink(): return []
+    qblob=_vector_blob(query_vector)
+    dim=len(query_vector)
+    q=struct.unpack("<"+str(dim)+"f",qblob)
+    with _open(path) as conn:
+        rows=conn.execute("""
+          SELECT m.source_id,m.scene_index,m.source_kind,m.revision_id,
+                 m.digest,substr(m.text,1,850) AS excerpt,e.vector
+            FROM search_manifest m
+            JOIN search_embeddings e ON e.source_id=m.source_id
+             AND e.digest=m.digest AND e.model_id=? AND e.dimension=?
+           WHERE m.project_id=? AND m.branch_id='main' AND m.scene_index<=?
+             AND ((m.revision_id='author' AND m.source_kind IN ('approved','synopsis'))
+                OR (m.revision_id=? AND m.source_kind='draft'))
+           LIMIT 4000""",(model_id,dim,project_id,scene_index,job_id)).fetchall()
+    ranked=[]
+    for row in rows:
+        if len(row["vector"])!=dim*4:continue
+        v=struct.unpack("<"+str(dim)+"f",row["vector"])
+        score=sum(a*b for a,b in zip(q,v))
+        record={key:row[key] for key in ("source_id","scene_index","source_kind",
+                                         "revision_id","digest","excerpt")}
+        record["similarity"]=round(score,4)
+        ranked.append(record)
+    ranked.sort(key=lambda v:v["similarity"],reverse=True)
+    return ranked[:max(1,min(10,limit))]
+
+
+def checkpoint_story_state(data_dir: Path, project_id: str, job_id: str,
+                           scene_id: str, scene_index: int,
+                           text: str, current_goal: str) -> None:
+    """A provenance-checked rolling location, NOT model-invented world facts."""
+    paragraphs=[part.strip() for part in text.split("\n\n") if part.strip()]
+    ending="\n\n".join(paragraphs[-3:])[-2200:]
+    digest=hashlib.sha256(text.encode("utf-8")).hexdigest()
+    with _open(data_dir/"work.sqlite3") as db:
+        db.execute("""INSERT INTO work_story_state
+          (job_id,scene_id,project_id,scene_index,source_digest,ending,current_goal,words,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(job_id,scene_id) DO UPDATE SET
+            source_digest=excluded.source_digest,ending=excluded.ending,
+            current_goal=excluded.current_goal,words=excluded.words,
+            updated_at=excluded.updated_at""",
+          (job_id,scene_id,project_id,scene_index,digest,ending[:2200],
+           current_goal[:500],len(text.split()),utc()))
+
+
+def read_story_state(data_dir: Path, project_id: str, job_id: str,
+                     scene_id: str, current_text: str) -> dict | None:
+    path=data_dir/"work.sqlite3"
+    if not path.is_file() or path.is_symlink(): return None
+    with _open(path) as db:
+        row=db.execute("SELECT * FROM work_story_state WHERE project_id=? "
+                       "AND job_id=? AND scene_id=?",(project_id,job_id,scene_id)).fetchone()
+    if row and row["source_digest"]==hashlib.sha256(current_text.encode("utf-8")).hexdigest():
+        return dict(row)
+    return None
+
+
+def vector_index_status(data_dir: Path, project_id: str | None = None) -> dict:
+    """Actual vector counts and last-known model, never claim semantic RAG is active by schema alone."""
+    path=data_dir/"search.sqlite3"
+    if not path.is_file() or path.is_symlink():
+        return {"stored_vectors":0,"sources":0,"models":[]}
+    with _open(path) as db:
+        conditions=" WHERE project_id=?" if project_id else ""
+        args=(project_id,) if project_id else ()
+        count=db.execute("SELECT count(*) FROM search_manifest"+conditions,args).fetchone()[0]
+        rows=db.execute("""SELECT e.model_id,count(*) AS n FROM search_embeddings e
+             JOIN search_manifest m ON m.source_id=e.source_id AND m.digest=e.digest"""
+             +(" WHERE m.project_id=?" if project_id else "")+
+             " GROUP BY e.model_id ORDER BY e.model_id",args).fetchall()
+    return {"stored_vectors":sum(row["n"] for row in rows),"sources":count,
+            "models":[{"name":row["model_id"],"vectors":row["n"]} for row in rows]}
 
 
 def checkpoint_work(data_dir: Path, project_id: str, job_id: str, scene_id: str,
