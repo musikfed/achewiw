@@ -130,7 +130,7 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     return out.getvalue()
 
 
-def manuscript_pdf(project, *, print_proof=False, illustrations=None) -> bytes:
+def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_notice: str | None = None) -> bytes:
     """A5 Unicode PDF proof: real TOC page numbers via ReportLab multiBuild."""
     from pathlib import Path
     from PIL import Image as PILImage
@@ -188,6 +188,11 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None) -> bytes:
         put_art(cover,cover=True)
         story.append(PageBreak())
     story.extend([Spacer(1,25*mm),Paragraph(escape(book["title"]),title)])
+    if draft_notice:
+        proof_note=ParagraphStyle("DraftNotice",parent=center,
+            fontName="ACHEWIW-Serif-Bold",fontSize=10,
+            leading=15,textColor=colors.HexColor("#8A3434"),spaceAfter=18)
+        story.append(Paragraph(escape(draft_notice),proof_note))
     for field in (meta["author"],meta["edition"],meta["publisher"],
                   str(meta["year"]) if meta["year"] is not None else ""):
         if field:story.append(Paragraph(escape(field),center))
@@ -219,6 +224,11 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None) -> bytes:
         canvas.saveState();canvas.setFont("ACHEWIW-Serif",8)
         canvas.setFillColor(colors.grey)
         canvas.drawCentredString(A5[0]/2,11*mm,str(doc.page))
+        if draft_notice:
+            canvas.setFont("ACHEWIW-Serif",7)
+            canvas.setFillColor(colors.HexColor("#A04444"))
+            canvas.drawCentredString(A5[0]/2,A5[1]-11*mm,
+                "ЧЕРНОВИК ИИ — НЕ ДЛЯ ПУБЛИКАЦИИ")
         canvas.restoreState()
 
     doc.multiBuild(story,onFirstPage=footer,onLaterPages=footer)
