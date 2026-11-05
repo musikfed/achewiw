@@ -13,6 +13,7 @@ import sqlite3
 import uuid
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from book_layout_core import COVER_SCENE_ID
 
 ID = re.compile(r"^[0-9a-f]{32}$")
 MAX_UPLOAD = 12 * 1024 * 1024
@@ -27,12 +28,15 @@ def initialize(conn: sqlite3.Connection) -> None:
             scene_id TEXT NOT NULL,
             caption TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            placement TEXT NOT NULL DEFAULT "start"
+            placement TEXT NOT NULL DEFAULT "start",
+            paragraph_index INTEGER NOT NULL DEFAULT 0
         )"""
     )
     columns = {r[1] for r in conn.execute("PRAGMA table_info(illustrations)")}
     if "placement" not in columns:
         conn.execute("ALTER TABLE illustrations ADD COLUMN placement TEXT NOT NULL DEFAULT 'start'")
+    if "paragraph_index" not in columns:
+        conn.execute("ALTER TABLE illustrations ADD COLUMN paragraph_index INTEGER NOT NULL DEFAULT 0")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_illustrations_project ON illustrations(project_id)")
 
 
@@ -71,11 +75,22 @@ def normalize_png(data: bytes) -> bytes:
 
 def save(data_dir: Path, conn: sqlite3.Connection, *,
          project_id: str, scene_id: str, caption: str,
-         content: bytes, created_at: str, placement: str = "start") -> dict:
+         content: bytes, created_at: str, placement: str = "start",
+         paragraph_index: int = 0) -> dict:
     if not ID.fullmatch(project_id) or not ID.fullmatch(scene_id):
         raise ValueError("Неверный проект или раздел")
-    if placement not in {"start", "end"}:
+    if placement not in {"start", "end", "paragraph", "cover"}:
         raise ValueError("Некорректное расположение иллюстрации")
+    if type(paragraph_index) is not int or paragraph_index < 0 or paragraph_index > 5000:
+        raise ValueError("Номер абзаца должен быть от 0 до 5000")
+    if placement == "paragraph" and paragraph_index < 1:
+        raise ValueError("Для точной вставки укажи номер абзаца, начиная с 1")
+    if (placement == "cover") != (scene_id == COVER_SCENE_ID):
+        raise ValueError("Обложка должна иметь собственный раздел, отдельно от глав")
+    if placement == "cover" and conn.execute(
+        "SELECT 1 FROM illustrations WHERE project_id=? AND placement='cover'",
+        (project_id,)).fetchone():
+        raise ValueError("Обложка уже есть — сначала удали старую обложку")
     if len(caption) > 1000:
         raise ValueError("Подпись слишком длинная")
     count = conn.execute(
@@ -95,25 +110,26 @@ def save(data_dir: Path, conn: sqlite3.Connection, *,
         with os.fdopen(fd, "wb") as dst:
             dst.write(blob)
         conn.execute(
-            "INSERT INTO illustrations (id,project_id,scene_id,caption,created_at,placement) VALUES (?,?,?,?,?,?)",
-            (asset_id, project_id, scene_id, caption.strip(), created_at, placement),
+            "INSERT INTO illustrations (id,project_id,scene_id,caption,created_at,placement,paragraph_index) VALUES (?,?,?,?,?,?,?)",
+            (asset_id, project_id, scene_id, caption.strip(), created_at, placement, paragraph_index),
         )
     except Exception:
         path.unlink(missing_ok=True)
         raise
     return {"id": asset_id, "project_id": project_id, "scene_id": scene_id,
-            "caption": caption.strip(), "created_at": created_at, "placement": placement}
+            "caption": caption.strip(), "created_at": created_at, "placement": placement,
+            "paragraph_index": paragraph_index}
 
 
 def listing(conn: sqlite3.Connection, project_id: str) -> list[dict]:
     if not ID.fullmatch(project_id):
         raise ValueError("Некорректный ID проекта")
     records = conn.execute(
-        "SELECT id,scene_id,caption,created_at,placement FROM illustrations WHERE project_id=? ORDER BY created_at,id",
+        "SELECT id,scene_id,caption,created_at,placement,paragraph_index FROM illustrations WHERE project_id=? ORDER BY created_at,id",
         (project_id,),
     ).fetchall()
     return [dict(id=row[0], scene_id=row[1], caption=row[2],
-                 created_at=row[3], placement=row[4]) for row in records]
+                 created_at=row[3], placement=row[4],paragraph_index=row[5]) for row in records]
 
 
 def asset_for_export(data_dir: Path, conn: sqlite3.Connection, project_id: str) -> list[dict]:
