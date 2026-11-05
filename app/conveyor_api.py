@@ -144,8 +144,8 @@ def install(api: APIRouter, env: dict) -> None:
             r.raise_for_status()
             data=r.json()
         output=data.get("response","")
-        if not isinstance(output,str) or len(output)<35:
-            raise ValueError("Модель вернула пустой или слишком короткий отчёт")
+        if not isinstance(output,str) or not output.strip():
+            raise ValueError("Модель вернула пустой отчёт")
         return output.strip()
 
     def store(job_id: str, stage: str, asset_key: str, source: str, body):
