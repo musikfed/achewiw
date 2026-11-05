@@ -31,6 +31,7 @@ from book_generation_core import (target_words as parse_book_target, distribute_
     create_book_chapters, chapters_for_job, book_summary, save_chapter, check_new_prose)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
+from editorial_ledger import init_editorial_schema, editorial_schema_status
 from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
     retrieve as retrieve_story, context_text, add_node as memory_add_node,
     add_edge as memory_add_edge, nodes as memory_nodes, edges as memory_edges,
@@ -105,6 +106,7 @@ def init_db() -> None:
         init_book_tables(connection)
         init_plan_tables(connection)
         init_memory(connection)
+        init_editorial_schema(connection)
         init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
@@ -1337,6 +1339,16 @@ def story_memory_new_branch(project_id: str, request: StoryBranchRequest):
                                         request.parent_id,request.fork_scene_id)
         except ValueError as exc:
             raise HTTPException(422,str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/editorial-storage")
+def project_editorial_storage(project_id: str,branch: str = "main"):
+    # Explicitly describe the storage stage, not a completed literary editor.
+    get_project(project_id)
+    with db() as connection:
+        if branch not in {x["id"] for x in memory_branches(connection,project_id)}:
+            raise HTTPException(404,"Ветка не найдена")
+        return editorial_schema_status(connection,project_id,branch)
 
 
 @api.get("/projects/{project_id}/story-memory/audit")
