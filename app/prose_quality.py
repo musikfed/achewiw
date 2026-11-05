@@ -28,6 +28,19 @@ def first_cycle(text: str) -> dict | None:
     """
     tokens,matches=_tokens(text)
     if len(tokens)<30:return None
+    # A single repeated word (e.g. «шёпотом» for two printed pages) was
+    # invisible to the former 3-token detector. Require an extreme run so
+    # ordinary literary emphasis is still permitted.
+    run_start = 0
+    for index in range(1, len(tokens)+1):
+        if index<len(tokens) and tokens[index]==tokens[run_start]:
+            continue
+        run_length=index-run_start
+        if run_length>=30:
+            return {"kind":"word_loop","position":matches[run_start].start(),
+                    "end_position":matches[index-1].end(),
+                    "repeats":run_length,"sample":tokens[run_start]}
+        run_start=index
     # Avoid quadratic scans over an entire already-written 20k-word book.
     for i in range(len(tokens)-17):
         for size in range(3,min(19,(len(tokens)-i)//5+1)):
