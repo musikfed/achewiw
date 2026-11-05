@@ -16,7 +16,7 @@ msg() { echo "ACHEWIW clean-update: $*"; }
 cd "$ROOT"
 [[ "$(git rev-parse --show-toplevel)" == "$ROOT" ]] || die "Неверный корень Git"
 BRANCH="$(git branch --show-current)"
-[[ "$BRANCH" == feature/technical-epub-first || "$BRANCH" == feature/production-conveyor-rtx3060 ]] || die "Ожидается ветка $BRANCH"
+[[ "$BRANCH" == main || "$BRANCH" == feature/technical-epub-first || "$BRANCH" == feature/production-conveyor-rtx3060 ]] || die "Ожидается ветка $BRANCH"
 origin="$(git remote get-url origin)" || die "Нет Git origin"
 case "$origin" in
   https://github.com/musikfed/achewiw|https://github.com/musikfed/achewiw.git|\
