@@ -171,7 +171,7 @@ def install(api: APIRouter, env: dict) -> None:
                                         write=30,pool=10),trust_env=False) as client:
             r=await client.post(ollama+"/api/generate",json={
                 "model":name,"prompt":prompt,"stream":False,"think":False,
-                "keep_alive":0,
+                "keep_alive":"5m",
                 "options":{"temperature":temperature,"num_ctx":8192,
                            "num_predict":num_predict,"repeat_penalty":1.1}})
             r.raise_for_status()
@@ -383,6 +383,10 @@ def install(api: APIRouter, env: dict) -> None:
                       "requires_author_approval":True,
                       "note":"Предложение не меняет рукопись и исходный черновик."}
                 summary+=store(job["id"],"editorial_proposals",key,old_source,body)
+            # Ollama is shared with other projects: unload only with author
+            # permission. The next image role must fail closed if not allowed.
+            if job["allow_shared_unload"]:
+                await unload_our_model(job["critic_model"],True)
             if lease.is_set():
                 raise ValueError("GPU lease lost during editorial QA")
         return cv.fingerprint(summary)
