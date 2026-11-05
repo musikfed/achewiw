@@ -3,6 +3,7 @@
 (() => {
   const el = id => document.getElementById(id);
   const current = () => typeof project === 'object' ? project : null;
+  const COVER_ID = '00000000000000000000000000000000';
   let imageBusy = false;
   let engineControlBusy = false;
   let controlStatus = null;
@@ -30,6 +31,7 @@
       scene_id: el('illustrationScene').value,
       caption: el('illustrationCaption').value,
       placement: el('illustrationPlacement').value,
+      paragraph_index: Number(el('illustrationParagraphIndex').value)||0,
       description: el('illustrationPrompt').value,
       prepared: el('illustrationPreparedPrompt').value
     };
@@ -48,8 +50,9 @@
   function restoreDraft(id) {
     const data = storedDraft(id);
     el('illustrationCaption').value = data.caption || '';
-    el('illustrationPlacement').value = ['start','end'].includes(data.placement) ?
+    el('illustrationPlacement').value = ['start','end','paragraph','cover'].includes(data.placement) ?
       data.placement : 'start';
+    el('illustrationParagraphIndex').value=Number(data.paragraph_index)||1;
     el('illustrationPrompt').value = data.description || '';
     el('illustrationPreparedPrompt').value = data.prepared || '';
     try {
@@ -76,8 +79,8 @@
     const meta = document.createElement('div');
     meta.className = 'illustration-meta';
     const title = document.createElement('p');
-    title.textContent = (chapters.find(x=>x.id===row.scene_id)?.title||'Глава') +
-      ' · ' + (row.placement==='end'?'после текста':'после заголовка');
+    title.textContent = (row.placement==='cover'?'Обложка':(chapters.find(x=>x.id===row.scene_id)?.title||'Глава')) +
+      ' · ' + ({cover:'титульная обложка',end:'после текста',paragraph:'после абзаца № '+row.paragraph_index,start:'после заголовка'}[row.placement]||'в главе');
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'danger-action';
@@ -257,6 +260,24 @@
     }
   }
 
+  function syncPlacement(){
+    const isCover=el('illustrationScene').value===COVER_ID;
+    const position=el('illustrationPlacement');
+    if(isCover){position.value='cover';position.disabled=true;}
+    else{position.disabled=false;if(position.value==='cover')position.value='start';}
+    el('illustrationParagraphWrap').hidden=isCover||position.value!=='paragraph';
+    if(!isCover&&position.value==='paragraph'&&!Number(el('illustrationParagraphIndex').value))
+      el('illustrationParagraphIndex').value='1';
+  }
+  function imageParams(){
+    syncPlacement();
+    const placement=el('illustrationPlacement').value;
+    const paragraph_index=placement==='paragraph'?Number(el('illustrationParagraphIndex').value):0;
+    if(placement==='paragraph'&&(!Number.isInteger(paragraph_index)||
+       paragraph_index<1||paragraph_index>5000))
+       throw Error('Номер абзаца должен быть от 1 до 5000');
+    return {placement,paragraph_index};
+  }
   async function refresh() {
     const p = current();
     if (!p) return;
@@ -267,19 +288,22 @@
       el('illustrationScene').value;
     const grid=el('illustrationGrid'),select=el('illustrationScene');
     select.replaceChildren();
+    const coverOption=document.createElement('option');coverOption.value=COVER_ID;
+    coverOption.textContent='Обложка книги (отдельная страница)';select.append(coverOption);
     for(const chapter of p.scenes) {
       const opt = document.createElement('option');
       opt.value=chapter.id;opt.textContent=chapter.title;select.append(opt);
     }
-    if (p.scenes.some(x=>x.id===selected)) select.value=selected;
-    el('illustrationUpload').disabled = !p.scenes.length || imageBusy;
+    if (p.scenes.some(x=>x.id===selected)||selected===COVER_ID) select.value=selected;
+    else if(p.scenes.length) select.value=p.scenes[0].id;
+    syncPlacement();
+    el('illustrationUpload').disabled = imageBusy;
     el('illustrationGenerate').disabled = true;
     el('illustrationRefine').disabled = imageBusy;
-    grid.textContent = p.scenes.length ? 'Загружаем иллюстрации…' :
-      'Сначала добавь главу в разделе «02 · План».';
+    grid.textContent = 'Загружаем обложку и иллюстрации…';
     try {
       const [items,engine,control]=await Promise.all([
-        p.scenes.length ? json('/api/projects/'+projectId+'/illustrations') : Promise.resolve([]),
+        json('/api/projects/'+projectId+'/illustrations'),
         json('/api/illustration-engine').catch(err=>({available:false,reason:err.message})),
         json('/api/illustration-engine/control').catch(()=>null),
       ]);
@@ -287,7 +311,6 @@
       controlStatus=control;
       renderEngineControls(engine,control);
       resumeControlJob(control);
-      if(!p.scenes.length) return;
       grid.replaceChildren();
       if(!items.length)grid.textContent=
         'Изображений пока нет. Выбери главу, загрузи PNG/JPEG/WebP или создай рисунок.';
@@ -306,7 +329,9 @@
     body.set('file',file,file.name);
     body.set('scene_id',el('illustrationScene').value);
     body.set('caption',el('illustrationCaption').value);
-    body.set('placement',el('illustrationPlacement').value);
+    let position;try{position=imageParams()}catch(e){alert(e.message);return}
+    body.set('placement',position.placement);
+    body.set('paragraph_index',String(position.paragraph_index));
     el('illustrationUpload').disabled=true;
     saveDraft();
     try{
@@ -361,10 +386,12 @@
     if(!prompt){alert('Сначала опиши композицию рисунка');return;}
     if(prompt.length>2500){alert('Описание должно быть не длиннее 2500 символов');return;}
     const chosen=document.getElementById('model')?.value;
+    let position;try{position=imageParams()}catch(e){alert(e.message);return}
     const body={
       scene_id:el('illustrationScene').value,prompt,
       caption:el('illustrationCaption').value,
-      placement:el('illustrationPlacement').value,
+      placement:position.placement,
+      paragraph_index:position.paragraph_index,
       release_comfy_vram:el('illustrationReleaseComfy').checked
     };
     imageBusy=true;el('illustrationGenerate').disabled=true;
@@ -404,7 +431,7 @@
     }
   }
   for(const id of ['illustrationScene','illustrationCaption',
-                    'illustrationPlacement','illustrationPrompt',
+                    'illustrationPlacement','illustrationParagraphIndex','illustrationPrompt',
                     'illustrationPreparedPrompt','illustrationReleaseLLM',
                     'illustrationReleaseComfy']){
     const input=el(id);
@@ -417,6 +444,8 @@
     });
     input.addEventListener('change',saveDraft);
   }
+  el('illustrationScene').addEventListener('change',syncPlacement);
+  el('illustrationPlacement').addEventListener('change',syncPlacement);
   el('illustrationUpload').addEventListener('click',upload);
   el('illustrationRefine').addEventListener('click',refine);
   el('illustrationGenerate').addEventListener('click',generate);
