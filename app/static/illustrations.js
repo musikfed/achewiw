@@ -10,6 +10,8 @@
   let watchedControlJob = null;
   const controlJobKey = 'achewiw.v9.comfyControlJob';
   let activeProjectId = null;
+  let puzzleArtwork = [];
+  let puzzleChapters = [];
 
   async function json(url, options = {}) {
     const res = await fetch(url, {cache:'no-store', ...options});
@@ -93,6 +95,22 @@
       } catch(e) {el('illustrationEngineStatus').textContent =
         'Удаление не выполнено: '+e.message;}
     };
+    if(row.placement!=='cover'){
+      const clue=document.createElement('label');clue.className='puzzle-illustration-toggle';
+      const check=document.createElement('input');check.type='checkbox';
+      check.setAttribute('aria-label','Использовать рисунок как визуальную загадку');
+      const span=document.createElement('span');span.textContent='Визуальная загадка с будущей разгадкой';
+      clue.append(check,span);
+      check.addEventListener('change',()=>{
+        if(!check.checked)return;
+        el('puzzleIllustration').value=row.id;
+        syncPuzzleChapters();
+        el('puzzleTitle').focus();
+        el('puzzleStatus').textContent='Выбран рисунок главы. Укажи, где читатель узнает ответ.';
+        el('puzzleTitle').scrollIntoView({behavior:'smooth',block:'center'});
+      });
+      meta.append(clue);
+    }
     meta.append(title,remove);
     card.append(figure,meta);
     return card;
@@ -278,6 +296,86 @@
        throw Error('Номер абзаца должен быть от 1 до 5000');
     return {placement,paragraph_index};
   }
+  function syncPuzzleChapters(){
+    const selected=puzzleArtwork.find(x=>x.id===el('puzzleIllustration').value);
+    const from=puzzleChapters.findIndex(x=>x.id===selected?.scene_id);
+    const select=el('puzzleAnswerScene'),old=select.value;
+    select.replaceChildren();
+    for(let i=0;i<puzzleChapters.length;i++){
+      if(i<=from||from<0)continue;
+      const opt=document.createElement('option');opt.value=puzzleChapters[i].id;
+      opt.textContent=(i+1)+'. '+puzzleChapters[i].title;
+      select.append(opt);
+    }
+    if([...select.options].some(x=>x.value===old))select.value=old;
+    if(!select.options.length)el('puzzleStatus').textContent=
+      'Для загадки нужна будущая глава после главы-подсказки.';
+  }
+  async function loadPuzzles(){
+    const p=current();if(!p)return;
+    const id=p.id;
+    try{
+      const [images,items]=await Promise.all([
+        json('/api/projects/'+id+'/illustrations'),
+        json('/api/projects/'+id+'/visual-puzzles'),
+      ]);
+      if(!current()||current().id!==id)return;
+      puzzleArtwork=images.filter(x=>x.placement!=='cover');
+      puzzleChapters=p.scenes;
+      const choose=el('puzzleIllustration'),old=choose.value;
+      choose.replaceChildren();
+      for(const asset of puzzleArtwork){
+        const option=document.createElement('option');option.value=asset.id;
+        const ix=p.scenes.findIndex(c=>c.id===asset.scene_id);
+        option.textContent=(ix+1)+'. '+(asset.caption||'Рисунок')+
+          ' · '+asset.placement;choose.append(option);
+      }
+      if([...choose.options].some(x=>x.value===old))choose.value=old;
+      syncPuzzleChapters();
+      const list=el('puzzleList');list.replaceChildren();
+      if(!items.length){list.textContent='Визуальных загадок пока нет.';return;}
+      for(const item of items){
+        const row=document.createElement('article');row.className='version-issue';
+        const from=p.scenes.findIndex(x=>x.id===item.clue_scene_id)+1;
+        const to=p.scenes.findIndex(x=>x.id===item.answer_scene_id)+1;
+        const heading=document.createElement('strong');heading.textContent=
+          'Глава '+from+' → '+to+' · '+item.title;
+        const secret=document.createElement('p');secret.textContent=
+          'Ответ для редактора (не печатается): '+item.answer_note;
+        const remove=document.createElement('button');remove.type='button';
+        remove.textContent='Удалить только связь загадки';
+        remove.onclick=async()=>{
+          if(!confirm('Удалить связку подсказки и разгадки? Сам рисунок сохранится.'))return;
+          try{
+            await json('/api/projects/'+id+'/visual-puzzles/'+item.id,{method:'DELETE'});
+            await loadPuzzles();
+          }catch(e){el('puzzleStatus').textContent='Не удалено: '+e.message}
+        };
+        row.append(heading,secret,remove);list.append(row);
+      }
+      el('puzzleStatus').textContent=items.length+' визуальных загадок. '+
+        'Их ответы видны только в редакторе; изображение ставится в выбранную главу.';
+    }catch(e){el('puzzleStatus').textContent='Ошибка загрузки загадок: '+e.message}
+  }
+  async function savePuzzle(){
+    const p=current();if(!p)return;
+    const button=el('puzzleSave');button.disabled=true;
+    try{
+      await json('/api/projects/'+p.id+'/visual-puzzles',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          illustration_id:el('puzzleIllustration').value,
+          answer_scene_id:el('puzzleAnswerScene').value,
+          title:el('puzzleTitle').value.trim(),
+          answer_note:el('puzzleAnswer').value.trim()
+        })
+      });
+      el('puzzleTitle').value='';el('puzzleAnswer').value='';
+      await loadPuzzles();
+    }catch(e){el('puzzleStatus').textContent='Загадка не добавлена: '+e.message}
+    finally{button.disabled=false}
+  }
+
   async function refresh() {
     const p = current();
     if (!p) return;
@@ -316,6 +414,7 @@
         'Изображений пока нет. Выбери главу, загрузи PNG/JPEG/WebP или создай рисунок.';
       for(const item of items)grid.append(imageCard(projectId,item,p.scenes));
       el('illustrationGenerate').disabled=!engine.available||imageBusy;
+      await loadPuzzles();
     }catch(err){
       grid.textContent='Ошибка загрузки: '+err.message;
       el('illustrationEngineStatus').textContent='Не удалось проверить ComfyUI';
@@ -446,6 +545,9 @@
   }
   el('illustrationScene').addEventListener('change',syncPlacement);
   el('illustrationPlacement').addEventListener('change',syncPlacement);
+  el('puzzleIllustration').addEventListener('change',syncPuzzleChapters);
+  el('puzzleSave').addEventListener('click',savePuzzle);
+  el('puzzleRefresh').addEventListener('click',loadPuzzles);
   el('illustrationUpload').addEventListener('click',upload);
   el('illustrationRefine').addEventListener('click',refine);
   el('illustrationGenerate').addEventListener('click',generate);
