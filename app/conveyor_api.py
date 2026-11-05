@@ -49,6 +49,39 @@ class AuthorDecision(BaseModel):
 class ResumeRequest(BaseModel):
     confirm_author_approval: bool = False
 
+
+def review_windows(source: str, limit: int=6500) -> list[str]:
+    """Cover the entire chapter, preserving byte-for-byte order.
+
+    Find a paragraph/sentence/word boundary when possible; a pathological
+    unbroken paragraph is still inspected rather than silently skipped.
+    """
+    if limit<1000:
+        raise ValueError("Review windows must be large enough for literary context")
+    result=[]
+    start=0
+    while start<len(source):
+        end=min(len(source),start+limit)
+        if end<len(source):
+            candidate=source.rfind("\n\n",start+limit//2,end)
+            if candidate!=-1:
+                end=candidate+2
+            else:
+                candidate=max(source.rfind(". ",start+limit//2,end),
+                              source.rfind("! ",start+limit//2,end),
+                              source.rfind("? ",start+limit//2,end))
+                if candidate!=-1:
+                    end=candidate+2
+                else:
+                    candidate=source.rfind(" ",start+limit//2,end)
+                    if candidate!=-1:
+                        end=candidate+1
+        if end<=start:
+            end=min(len(source),start+limit)
+        result.append(source[start:end])
+        start=end
+    return result
+
 def install(api: APIRouter, env: dict) -> None:
     """Install API routes after main's functions exist, before include_router."""
     conn=env["db"]
@@ -237,24 +270,41 @@ def install(api: APIRouter, env: dict) -> None:
                 reveal_checks="; ".join(
                     "В ЭТОЙ главе должна быть проверяемая разгадка: "+
                     card["answer_note"][:500] for card in scheduled)[:1100]
-                prompt=(
-                    "Если заданы запланированные разгадки, проверь: действительно ли "
-                    "они доказаны действием в тексте, а не просто названы. "
-                    "Не добавляй их в предшествующие главы.\nПЛАН РАЗГАДОК: "+reveal_checks+"\n"
-                    "Ты независимый литературный редактор. Это НЕ запрос на генерацию прозы. "
-                    "Отчёт строго по приведённому тексту, без выдуманных событий. "
-                    "Проверь: что на самом деле произошло, цель героя, наблюдаемые последствия, "
-                    "пустые диалоги, смысловые повторы, жанровую прозу против бессмысленного сценария, "
-                    "причинность и отсутствие не подготовленных разгадок. Приводи цитату исходного "
-                    "текста (не более 20 слов на цитату). Отдельно выдели важнейшую проблему и "
-                    "конкретный способ исправления. Если фрагмента недостаточно, так и напиши. "
-                    "Ответ на русском; не вставляй новый художественный текст.\n"
-                    "ЗАДАНИЕ: "+p.premise[:1100]+"\nКАРКАС: "+p.anchors[:850]+
-                    "\nПРЕДЫДУЩАЯ ГЛАВА (КОНЕЦ): "+previous+
-                    "\nТЕКСТ ГЛАВЫ "+key+":\n"+ch["text"][:9300])
-                response=await call_model(job,job["critic_model"],prompt,num_predict=1600)
+                parts=review_windows(ch["text"])
+                reports=[]
+                for part_index,part in enumerate(parts,1):
+                    part_key=key+"."+str(part_index)
+                    part_sha=cv.fingerprint(part)
+                    try:
+                        prior=get(job["id"],"literary_qa",part_key)
+                        if prior["source_sha"]==part_sha:
+                            reports.append(json.loads(prior["body"])["report"])
+                            continue
+                    except (ValueError,KeyError,json.JSONDecodeError):
+                        pass
+                    prompt=(
+                        "Ты независимый литературный редактор. НЕ пиши новую прозу. "
+                        "Проверяй только процитированное: какие события происходят, их причина "
+                        "и следствие, цель персонажа, живость действий, длинные смысловые повторы "
+                        "и пустой диалог. Не считай отсутствие событий нормальной прозой. "
+                        "Не придумывай факты, а приводи точные короткие цитаты и рекомендации. "
+                        "Если задана визуальная разгадка, проверь её фактическое раскрытие действием. "
+                        "Ответ на русском, только отчёт. "
+                        "ЧАСТЬ "+str(part_index)+" ИЗ "+str(len(parts))+
+                        " ГЛАВЫ "+key+"\n"
+                        "ЗАДАНИЕ: "+p.premise[:900]+
+                        "\nПЛАН РАЗГАДОК В ЭТОЙ ГЛАВЕ: "+reveal_checks+
+                        "\nПРЕДЫДУЩАЯ ГЛАВА (КОНЕЦ): "+previous+
+                        "\nФРАГМЕНТ ГЛАВЫ:\n"+part)
+                    report=await call_model(job,job["critic_model"],prompt,num_predict=1100)
+                    store(job["id"],"literary_qa",part_key,part_sha,{"report":report})
+                    reports.append(report)
+                combined="\n\n".join(
+                    "Фрагмент "+str(i+1)+"/"+str(len(reports))+":\n"+rep
+                    for i,rep in enumerate(reports))
                 last+=store(job["id"],"literary_qa",key,
-                            cv.fingerprint(ch["text"]),{"report":response})
+                            cv.fingerprint(ch["text"]),{"report":combined,
+                                                       "windows":len(parts)})
             if lease.is_set():
                 raise ValueError("GPU lease lost during literary QA")
         return cv.fingerprint(last)
