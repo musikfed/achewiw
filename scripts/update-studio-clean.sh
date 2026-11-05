@@ -46,11 +46,14 @@ if "ai_jobs" not in tables:
     raise SystemExit("ОСТАНОВЛЕНО: таблица ai_jobs не найдена")
 text=conn.execute("SELECT count(*) FROM ai_jobs WHERE status IN ('queued','running')").fetchone()[0]
 image=0
+production=0
+if "production_jobs" in tables:
+    production=conn.execute("SELECT count(*) FROM production_jobs WHERE state IN ('queued','running')").fetchone()[0]
 if "achewiw_gpu_lease" in tables:
     image=conn.execute("SELECT count(*) FROM achewiw_gpu_lease WHERE expires_at>?",
                        (time.time(),)).fetchone()[0]
 print(f"Текстовых задач: {text}; зарезервированных графических: {image}")
-if text or image:
+if text or image or production:
     raise SystemExit("ОСТАНОВЛЕНО: сначала дождись окончания активной генерации")
 PY
 }
