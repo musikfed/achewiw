@@ -306,6 +306,47 @@ def vector_index_status(data_dir: Path, project_id: str | None = None) -> dict:
             "models":[{"name":row["model_id"],"vectors":row["n"]} for row in rows]}
 
 
+def record_rag_runtime(data_dir: Path, project_id: str, job_id: str,
+                       scene_index: int, stats: dict) -> None:
+    """Last actual retrieval USED for this book, not hypothetical index health.
+
+    Separate work DB; no story text or embeddings are copied to diagnostics.
+    """
+    with _open(data_dir / "work.sqlite3") as db:
+        db.execute("""CREATE TABLE IF NOT EXISTS work_rag_runtime (
+            project_id TEXT NOT NULL,job_id TEXT NOT NULL,
+            scene_index INTEGER NOT NULL,vector_state TEXT NOT NULL,
+            semantic_hits INTEGER NOT NULL,fts_hits INTEGER NOT NULL,
+            graph_facts INTEGER NOT NULL,graph_links INTEGER NOT NULL,
+            used_passages INTEGER NOT NULL,updated_at TEXT NOT NULL,
+            PRIMARY KEY(project_id,job_id))""")
+        db.execute("""INSERT INTO work_rag_runtime
+          (project_id,job_id,scene_index,vector_state,semantic_hits,fts_hits,
+           graph_facts,graph_links,used_passages,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(project_id,job_id) DO UPDATE SET
+           scene_index=excluded.scene_index,vector_state=excluded.vector_state,
+           semantic_hits=excluded.semantic_hits,fts_hits=excluded.fts_hits,
+           graph_facts=excluded.graph_facts,graph_links=excluded.graph_links,
+           used_passages=excluded.used_passages,updated_at=excluded.updated_at""",
+          (project_id,job_id,scene_index,stats.get("vector_state","unknown"),
+           stats.get("semantic_hits",0),stats.get("fts_hits",0),
+           stats.get("graph_facts",0),stats.get("graph_links",0),
+           stats.get("used_passages",0),utc()))
+
+
+def read_rag_runtime(data_dir: Path, project_id: str, job_id: str) -> dict | None:
+    path=data_dir / "work.sqlite3"
+    if not path.is_file() or path.is_symlink():return None
+    with _open(path) as db:
+        try:
+            row=db.execute("""SELECT * FROM work_rag_runtime
+                WHERE project_id=? AND job_id=?""",(project_id,job_id)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    return dict(row) if row else None
+
+
 def checkpoint_work(data_dir: Path, project_id: str, job_id: str, scene_id: str,
                     text: str, words: int) -> None:
     """Record a resumable workspace manifest; original prose stays in legacy job table."""
