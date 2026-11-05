@@ -762,7 +762,9 @@ async def generate_book_illustration(project_id: str, request: ImageGenerationRe
 @api.get("/projects/{project_id}/continuity")
 def continuity_report(project_id: str):
     p = get_project(project_id)
-    return {"causality": story_preflight(p),
+    with db() as connection:
+        graph = audit_graph(connection,project_id)
+    return {"graph": graph, "causality": story_preflight(p),
             "style": [{"scene_id": s.id, "title": s.title,
                        "report": editorial_lint(s.text)} for s in p.scenes if s.text.strip()]}
 
@@ -1257,6 +1259,8 @@ class StoryBranchRequest(BaseModel):
 def story_memory_overview(project_id: str, branch: str = "main"):
     project = get_project(project_id)
     with db() as connection:
+        if branch == "main":
+            sync_approved(connection,project)
         branches=memory_branches(connection,project_id)
         if branch not in {x["id"] for x in branches}:
             raise HTTPException(404,"Ветка не найдена")
