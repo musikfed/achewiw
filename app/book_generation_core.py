@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 WORDS_PER_MINUTE = 150
 MIN_BOOK_WORDS = 500
 MAX_BOOK_WORDS = 60000
-CHUNK_WORDS = 420  # Smaller local-model continuations reduce looping and preserve scene control
+CHUNK_WORDS = 900  # Requested prose target; NOT a fixed truncation of Ollama's response
+MAX_REQUEST_WORDS = 1500
 MAX_CHAPTER_WORDS = 12000
 
 
@@ -62,8 +63,30 @@ def distribute_words(total: int, scene_ids: list[str]) -> list[int]:
     return [base + (i < remainder) for i in range(parts)]
 
 
-def chunk_size(remaining: int) -> int:
-    return min(CHUNK_WORDS, max(180, remaining))
+def chunk_size(remaining: int, last_output_words: int | None = None) -> int:
+    """Predict a useful next answer length from what this model actually produced.
+
+    Never truncate a returned response. A 900-word default is adjusted upward
+    when the writer demonstrates a higher output capacity. A shorter Ollama
+    response is preserved, indexed, and continued instead of being rejected.
+    """
+    planned = CHUNK_WORDS
+    if last_output_words and last_output_words > CHUNK_WORDS:
+        planned = min(MAX_REQUEST_WORDS, max(CHUNK_WORDS, round(last_output_words * 1.10)))
+    return min(planned, max(180, remaining))
+
+
+def predict_output_tokens(requested_words: int, tokens_per_word: float | None = None,
+                          prompt_tokens: int | None = None, context_window: int = 16384) -> int:
+    """Conservative output budget, based on the previous real Ollama eval_count.
+
+    This controls generation capacity, never slices already generated prose.
+    """
+    ratio = max(1.2, min(5.0, tokens_per_word or 3.0))
+    budget = min(6500, max(1200, round(requested_words * ratio * 1.18)))
+    if prompt_tokens is not None and prompt_tokens > 0:
+        budget = min(budget, max(600, context_window-prompt_tokens-512))
+    return budget
 
 
 def max_attempts(chapter_target: int) -> int:
