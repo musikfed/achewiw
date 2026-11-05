@@ -13,7 +13,7 @@ die() { printf 'ACHEWIW: ОСТАНОВЛЕНО — %s\n' "$*" >&2; exit 1; }
 cd "$ROOT"
 [[ "$(git rev-parse --show-toplevel)" == "$ROOT" ]] || die "Это не корень репозитория ACHEWIW"
 BRANCH="$(git branch --show-current)"
-[[ "$BRANCH" == feature/technical-epub-first || "$BRANCH" == feature/production-conveyor-rtx3060 ]] || die "Нужна ветка $BRANCH"
+[[ "$BRANCH" == main || "$BRANCH" == feature/technical-epub-first || "$BRANCH" == feature/production-conveyor-rtx3060 ]] || die "Нужна ветка $BRANCH"
 case "$(git remote get-url origin)" in
   https://github.com/$EXPECTED|https://github.com/$EXPECTED.git|\
 git@github.com:$EXPECTED|git@github.com:$EXPECTED.git) ;;
