@@ -76,6 +76,46 @@ ACHEWIW не использует облачную базу. Состояние 
 
 RAG и StoryGraph помогают не забывать события и авторские факты, но **не гарантируют**, что литературная логика автоматически станет безупречной. Уже записанный черновик нельзя считать каноном только потому, что он попал в поисковый индекс.
 
+## Управление Studio и графическим ИИ
+
+Все команды работают в `/1tbdisk/achewiw` от обычного пользователя и не затрагивают Ollama, другие Docker Compose-проекты и посторонние процессы на портах 7080/8188/8190.
+
+```bash
+cd /1tbdisk/achewiw
+bash scripts/achewiw-services.sh status         # Studio + ComfyUI + controller
+bash scripts/achewiw-services.sh start          # только Studio, без загрузки SDXL
+bash scripts/achewiw-services.sh graphics-start # отдельно локальный ComfyUI + UI controller
+bash scripts/achewiw-services.sh graphics-stop  # отдельно выключить ComfyUI и controller
+bash scripts/achewiw-services.sh studio-stop    # только Studio
+bash scripts/achewiw-services.sh start-all      # Studio + ComfyUI по явной команде
+bash scripts/achewiw-services.sh stop           # выключить оба компонента
+```
+
+Перед остановкой проверяются активные текстовые задания, публикация, GPU-аренды, очередь ComfyUI и состояние её контроллера. Если есть активная работа, остановка отменяется — дочитайте/закончите задания. Работающий ComfyUI выключается только при подтверждении собственного PID; чужие серверы и user-units не трогаются. Внутренний токен для связи веб-панели и ComfyUI не вводится пользователем.
+
+### Восстановление очень старой локальной ветки
+
+Если `main` отстаёт на сотни коммитов, а `git status --short` показывает `?? scripts/`, новые скрипты **ещё не появились в рабочем дереве**. `git fetch` только загрузил объекты и не изменил файлы. Сначала убедитесь, что генерация и фоновые загрузки завершены и временно остановите Studio/ComfyUI (не удаляя данные). Затем:
+
+```bash
+cd /1tbdisk/achewiw
+git status --short
+# НЕ выполнять, если есть изменённые отслеживаемые файлы или неожиданные каталоги.
+# Сохранить старые НЕотслеживаемые скрипты ВНЕ репозитория:
+mkdir -p /1tbdisk/achewiw-recovery-backups
+mv -- scripts "/1tbdisk/achewiw-recovery-backups/scripts-$(date +%Y%m%d-%H%M%S)"
+git fetch --no-tags origin
+git switch main
+git merge --ff-only origin/main
+git status --short
+bash scripts/achewiw-services.sh status
+bash scripts/update-studio-clean.sh preview
+# Только если preview показал отсутствие активных заданий:
+bash scripts/update-studio-clean.sh apply
+```
+
+Папки `data/`, `.env` и файл `.achewiw-control.lock` остаются на месте; новая `.gitignore` их игнорирует. НЕ применять `reset --hard`, `git clean` или `docker compose down -v`. Если `git merge --ff-only` не прошёл, прекратите обновление и разберите причину без принудительного сброса. Если Studio была выключена до `apply`, обновлятор пересоберёт образ и **оставит её выключенной**. Для запуска используйте `bash scripts/achewiw-services.sh start`; графический ИИ запускается отдельно.
+
 ## Первый запуск и обновление
 
 Проект рассчитан на **свой Ubuntu-хост**, доступ в студию — из доверенной локальной сети / через VPN. Не открывайте порт 7080 напрямую в публичный интернет без отдельной защищённой конфигурации.
