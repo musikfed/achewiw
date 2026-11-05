@@ -32,6 +32,15 @@
   </details>
 </section>
 <div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button></nav>
+<div id="bookLiveBar" class="book-live-bar" role="region" aria-label="Сохранённая генерация книги" hidden>
+ <div class="book-live-heading"><strong id="bookLiveStatus">Проверяем состояние книги на сервере…</strong><small id="bookLiveJob">Задание хранится в SQLite</small></div>
+ <progress id="bookLiveProgress" max="100" value="0" aria-label="Написано слов по сравнению с планом"></progress>
+ <div class="actions">
+  <button type="button" id="bookLiveJump">Перейти к генерации</button>
+  <button type="button" id="bookLiveDraft">Читать текущие главы</button>
+  <button type="button" id="bookLiveResume" hidden>▶ Продолжить после остановки</button>
+ </div>
+</div>
 <section id="brief" class="tabpane"><div class="sectionhead"><h2 id="briefHeading">Редакционное задание</h2><p>Опишите пространство истории — ИИ построит драматургию, но выбор всегда за автором.</p></div><div class="fields"><label>Название<input data-field="title" maxlength="200"></label><label>Направление<select data-field="work_type" id="workType">
 <option value="fiction">Фантастика, роман и художественная проза</option>
 <option value="technical">Техническая, инженерная и научная книга</option>
