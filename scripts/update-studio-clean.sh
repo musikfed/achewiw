@@ -150,19 +150,32 @@ python3 scripts/story-storage-maintenance.py apply || die "Проверка/ин
 msg "Очищаем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
 find -P "$ROOT/app" "$ROOT/tests" -depth -type d -name '__pycache__' -empty -delete
-msg "4/5 — пересборка без кэша только подтверждённого контейнера ACHEWIW"
-bash scripts/achewiw-control.sh rebuild-fresh
-msg "5/5 — проверяем веб-приложение и мониторинг"
-bash scripts/achewiw-control.sh auth-check
-if bash scripts/comfyui-control-agent.sh reload; then
-  msg "Кнопочное управление ComfyUI подключено"
+msg "4/5 — пересборка без кэша только ACHEWIW Studio"
+# A stopped Studio must stay stopped after updating, rather than secretly
+# restarting its Docker container and GPU controller.
+running="$(docker ps --filter label=com.docker.compose.project=achewiw --filter label=com.docker.compose.service=studio --format '{{.ID}}')" ||
+  die "Нельзя проверить, работает ли Studio"
+if [[ -n "$running" ]]; then
+  bash scripts/achewiw-control.sh rebuild-fresh
+  msg "5/5 — проверяем веб-приложение и мониторинг"
+  bash scripts/achewiw-control.sh auth-check
+  if bash scripts/comfyui-control-agent.sh reload; then
+    msg "Кнопочное управление ComfyUI подключено"
+  else
+    msg "ВНИМАНИЕ: controller ComfyUI не обновлён; проверь scripts/comfyui-control-agent.sh status"
+  fi
+  if bash scripts/monitor-v2.sh start; then
+    msg "Монитор CPU/RAM/GPU запущен"
+  else
+    msg "Монитор не запущен, смотри scripts/monitor-v2.sh status"
+  fi
 else
-  msg "ВНИМАНИЕ: host-control ComfyUI не обновлён (возможно, занята загрузка SDXL). Проверь scripts/comfyui-control-agent.sh status, затем повтори reload"
-fi
-if bash scripts/monitor-v2.sh start; then
-  msg "Монитор CPU/RAM/GPU запущен"
-else
-  msg "Монитор не запущен, смотри scripts/monitor-v2.sh status"
+  msg "Studio была остановлена: обновляем ТОЛЬКО Docker-образ и оставляем сервис выключенным"
+  [[ "$(docker compose --project-name achewiw --project-directory "$ROOT" --file "$ROOT/compose.yaml" config --services)" == studio ]] ||
+    die "В Compose обнаружены неожиданные сервисы; сборка отменена"
+  docker compose --project-name achewiw --project-directory "$ROOT" --file "$ROOT/compose.yaml" build --no-cache studio ||
+    die "Пересборка образа остановленной Studio не удалась; запуск не выполнялся"
+  msg "5/5 — Studio/ComfyUI не запускаем; для запуска: bash scripts/achewiw-services.sh start"
 fi
 bash scripts/achewiw-control.sh status
-msg "Готово. Нажми Ctrl+Shift+R в браузере; data/, SQLite и остальные проекты сохранены."
+msg "Готово. data/, SQLite, модели и остальные проекты сохранены. После запуска нажми Ctrl+Shift+R в браузере."
