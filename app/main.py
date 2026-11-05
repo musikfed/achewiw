@@ -1438,16 +1438,22 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
          "brief_synopsis": card.text[:850] if book_words(card.text) <= 180 else ""}
         for index, card in enumerate(project.scenes)
     ]
+    # Priority order matters: first the entire arc and non-negotiable canon.
+    # Long pasted research/premise must not push the climax or resolution out
+    # of a bounded local Qwen context. The full originals remain in SQLite.
     brief = {
+        "план_ВСЕХ_глав": chapter_cards,
+        "канон_не_менять": project.anchors[:1800],
+        "главная_интрига": project.twist[:1200],
+        "запланированное_раскрытие": project.reveal[:850],
         "название": project.title, "тип": project.work_type,
         "жанр": project.genre, "атмосфера": project.atmosphere,
-        "аудитория": project.audience, "замысел": project.premise,
-        "интрига": project.twist, "момент_раскрытия": project.reveal,
-        "канон": project.anchors, "авторские_источники": project.sources[:2500],
-        "авторские_тезисы": project.claims[:2500],
-        "план": chapter_cards, "текущая_глава": chapter_index + 1,
+        "аудитория": project.audience, "замысел": project.premise[:2100],
+        "авторские_источники": project.sources[:850],
+        "авторские_тезисы": project.claims[:850],
+        "текущая_глава": chapter_index + 1,
         "целевая_длина_главы": chapter_target, "карточка": scene.model_dump(exclude={"text", "blocks"}),
-        "утверждённый_синопсис_главы": scene.text[:2000] if book_words(scene.text) <= 500 else "",
+        "утверждённый_синопсис_главы": scene.text[:1300] if book_words(scene.text) <= 500 else "",
     }
     chapter_plan = chapter_plan or {}
     disclosure = {
