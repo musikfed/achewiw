@@ -98,7 +98,7 @@ def test_single_word_ai_spam_rejected_but_literary_emphasis_allowed():
     assert first_cycle("шёпотом " * 45)["kind"] == "word_loop"
     with pytest.raises(ProseDegeneration):
         check_quality("шёпотом " * 45)
-    assert first_cycle(("Да. " * 6) + ("Событие изменило ситуацию. " * 10)) is None
+    assert first_cycle(("Да. " * 6) + ("Миирус вышел на лестницу и заметил на стене след. Он решил рассказать об этом сестре. Сестра проверила окно и обнаружила записку.")) is None
 
 
 def test_literary_review_covers_long_chapter_without_losing_chars():
