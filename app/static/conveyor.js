@@ -48,8 +48,8 @@ async function loadModels(){
   const el=$(id);
   for(const regex of regexes){const v=names.find(x=>regex.test(x));if(v){el.value=v;break}}
  }
- choose("cvWriterModel",[/qwen3\.5:9b/i,/qwen3:8b/i,/hermes.*/i]);
- choose("cvCriticModel",[/Hermes-4-14B/i,/gemma3:12b/i,/qwen3:8b/i]);
+ choose("cvWriterModel",[/^qwen3:8b$/i,/qwen3:4b/i]);
+ choose("cvCriticModel",[/^qwen3:4b-instruct$/i,/^qwen3:4b/i,/^qwen3:8b$/i]);
  modelsLoaded=true
 }
 async function load(){
