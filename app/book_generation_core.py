@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 WORDS_PER_MINUTE = 150
 MIN_BOOK_WORDS = 500
 MAX_BOOK_WORDS = 60000
-CHUNK_WORDS = 800
+CHUNK_WORDS = 420  # Smaller local-model continuations reduce looping and preserve scene control
 MAX_CHAPTER_WORDS = 12000
 
 
@@ -83,6 +83,7 @@ def init_book_tables(db: sqlite3.Connection) -> None:
             text TEXT NOT NULL DEFAULT '',
             word_count INTEGER NOT NULL DEFAULT 0,
             attempts INTEGER NOT NULL DEFAULT 0,
+            retry_epoch INTEGER NOT NULL DEFAULT 0,
             complete INTEGER NOT NULL DEFAULT 0,
             accepted_at TEXT,
             tension INTEGER NOT NULL DEFAULT 3,
@@ -98,7 +99,8 @@ def init_book_tables(db: sqlite3.Connection) -> None:
     for name, definition in (("tension", "INTEGER NOT NULL DEFAULT 3"),
                              ("reveal_level", "TEXT NOT NULL DEFAULT 'none'"),
                              ("editorial_goal", "TEXT NOT NULL DEFAULT ''"),
-                             ("stage_name", "TEXT NOT NULL DEFAULT 'development'")):
+                             ("stage_name", "TEXT NOT NULL DEFAULT 'development'"),
+                             ("retry_epoch", "INTEGER NOT NULL DEFAULT 0")):
         if name not in existing:
             db.execute(f"ALTER TABLE ai_book_chapters ADD COLUMN {name} {definition}")
     db.execute("CREATE INDEX IF NOT EXISTS ai_book_chapters_job "
@@ -121,7 +123,7 @@ def create_book_chapters(db: sqlite3.Connection, job_id: str, chapters: list[dic
 def chapters_for_job(db: sqlite3.Connection, job_id: str, *, include_text: bool = True) -> list[dict]:
     columns = "*" if include_text else (
         "job_id,scene_id,scene_index,title,target_words,word_count,"
-        "attempts,complete,accepted_at,tension,reveal_level,editorial_goal,stage_name,updated_at"
+        "attempts,retry_epoch,complete,accepted_at,tension,reveal_level,editorial_goal,stage_name,updated_at"
     )
     return [dict(row) for row in db.execute(
         f"SELECT {columns} FROM ai_book_chapters WHERE job_id=? ORDER BY scene_index",
@@ -156,6 +158,59 @@ def save_chapter(db: sqlite3.Connection, job_id: str, scene_id: str,
     """, (text, count_words(text), attempts, int(complete), now(), job_id, scene_id))
     if db.execute("SELECT changes()").fetchone()[0] != 1:
         raise ValueError("Глава не найдена или уже принята автором")
+
+
+def trim_repeated_tail(existing: str, proposed: str) -> str:
+    """Remove a word-for-word echo of the LAST lines, not previous story events.
+
+    Many local models start their completion by copying the final paragraph
+    of the prompt. Remove only a matching suffix/prefix of >=12 full words;
+    the separate repetition guard rejects echoes of earlier passages.
+    Never modify a stored chapter or claim that a semantic paraphrase is new.
+    """
+    if not existing or not proposed:
+        return proposed.strip()
+    pattern = r"[^\W_]+(?:[-’'][^\W_]+)*"
+    prior = [m.group().casefold() for m in re.finditer(pattern, existing, re.UNICODE)]
+    incoming = list(re.finditer(pattern, proposed, re.UNICODE))
+    words = [m.group().casefold() for m in incoming]
+    maximum = min(150, len(prior), len(incoming))
+    for length in range(maximum, 11, -1):
+        if prior[-length:] == words[:length]:
+            return proposed[incoming[length-1].end():].lstrip(" \t\r\n.,;:—–-")
+    return proposed.strip()
+
+
+def continuation_repair_note(retry: int, existing: str, last_failure: str = "") -> str:
+    """Escalating, bounded prompts for a distinct next scene beat.
+
+    Concrete actions and a different narrative entry point are more effective
+    than replaying the same instruction with a different random seed.
+    """
+    if retry == 0:
+        return ""
+    last_line = re.split(r"(?<=[.!?])\s+", existing.strip())[-1][-260:]
+    notes = [
+        "",
+        "\nРЕДАКТОРСКАЯ ПРАВКА 1: Продолжи строго ПОСЛЕ последнего события. "
+        "Первый абзац должен описывать новую реакцию или действие, не пересказывай завязку.",
+        "\nРЕДАКТОРСКАЯ ПРАВКА 2: Перейди к короткому предметному разговору "
+        "или конкретной проверке уже введённой загадки. Новое действие обязательно "
+        "меняет знание, риск или положение персонажа; никаких общих рассуждений.",
+        "\nРЕДАКТОРСКАЯ ПРАВКА 3: Начни с нового наблюдаемого последствия "
+        "последнего поступка героя. Покажи действие, препятствие и решение, "
+        "не повторяя описания места и не делая преждевременной развязки.",
+        "\nРЕДАКТОРСКАЯ ПРАВКА 4: Выбери другой ритм: короткие диалоги "
+        "с конкретными целями и жестами. Начни с момента ПОСЛЕ имеющегося текста.",
+        "\nРЕДАКТОРСКАЯ ПРАВКА 5: Короткий новый микроконфликт внутри "
+        "утверждённой сцены. Пиши только события, которых ещё не было, "
+        "действие должно иметь явную причину и следствие.",
+    ]
+    return notes[min(retry, len(notes)-1)] + (
+        "\nПоследнее состояние текста (не цитировать): " + last_line
+        if retry >= 2 and last_line else ""
+    ) + ("\nПричина отклонения предыдущей попытки: " + last_failure[:170]
+         if retry >= 2 and last_failure else "")
 
 
 def check_new_prose(existing: str, proposed: str) -> None:
