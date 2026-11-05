@@ -25,6 +25,14 @@ from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
+from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
+    versions as book_versions, get_version as get_book_version,
+    compare as compare_book_versions, review as review_book_version,
+    propose_graph as propose_version_graph, suggestions as graph_suggestions,
+    mark_suggestion as decide_graph_suggestion)
+from visual_puzzles import (initialize as init_visual_puzzles,
+    list_puzzles as visual_puzzle_list, add as add_visual_puzzle,
+    delete as delete_visual_puzzle)
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
@@ -117,11 +125,13 @@ def init_db() -> None:
         init_editorial_schema(connection)
         init_gpu_leases(connection)
         init_illustrations(connection)
+        init_visual_puzzles(connection)
         mark_interrupted(connection)
     # Derived search/work databases are additive, the existing manuscript stays put.
     # Optional caches must not block reading old approved manuscripts.
     try:
         initialize_workspace(DATA_DIR)
+        init_versions(DATA_DIR)
         with db() as connection:
             sync_search(DATA_DIR,connection)
     except (OSError,sqlite3.Error,ValueError):
@@ -1898,6 +1908,44 @@ def full_book_draft(job_id: str, response: Response):
             for chapter in chapters
         ],
     }
+
+
+
+@api.get("/books/jobs/{job_id}/draft.pdf")
+def download_book_draft_pdf(job_id: str):
+    """A5 READ-ONLY partial proof from actual persisted AI chapter text.
+
+    No author synopsis, no unreleased stream, no canon edits or generation
+    restarts. Valid while the model is running and after a crash.
+    """
+    with db() as connection:
+        job=_book_record(connection,job_id)
+        saved=chapters_for_job(connection,job_id)
+    written={row["scene_id"]:row["text"] for row in saved if row["text"].strip()}
+    if not written:
+        raise HTTPException(409,"Ещё нет законченных сохранённых абзацев для PDF")
+    original=get_project(job["project_id"])
+    # Project copy avoids accidental mutation of the actual author manuscript.
+    proof=original.model_copy(deep=True)
+    proof.scenes=[scene for scene in proof.scenes if scene.id in written]
+    for scene in proof.scenes:scene.text=written[scene.id]
+    summary=book_summary_for_preview(saved)
+    note=(f"ЧЕРНОВИК ИИ · {summary['generated_words']} из "
+          f"{summary['target_words']} слов · "
+          "НЕ ДЛЯ ПУБЛИКАЦИИ · главы ещё не приняты автором")
+    try:
+        content=manuscript_pdf(proof,illustrations=illustrations_for_book(job["project_id"]),
+                               draft_notice=note)
+    except (ValueError,RuntimeError) as exc:
+        raise HTTPException(422,str(exc)) from exc
+    return Response(content=content,media_type="application/pdf",headers={
+       "Content-Disposition":f'attachment; filename="achewiw-ai-draft-{job_id[:12]}.pdf"',
+       "Cache-Control":"no-store","X-ACHEWIW-Export":"ai-draft-not-publication"})
+
+
+def book_summary_for_preview(chapters: list[dict]) -> dict:
+    return {"generated_words":sum(c["word_count"] for c in chapters),
+            "target_words":sum(c["target_words"] for c in chapters)}
 
 
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
