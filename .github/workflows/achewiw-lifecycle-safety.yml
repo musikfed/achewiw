@@ -116,19 +116,3 @@ jobs:
           grep -Fq 'WorkingDirectory=/1tbdisk/achewiw' ops/achewiw-host-monitor.service
           grep -Fq '/1tbdisk/achewiw/scripts/achewiw_host_monitor.py' ops/achewiw-host-monitor.service
 
-  retire-merged-branches:
-    name: Remove only merged legacy refs (keep main + dual-model archive)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'musikfed/achewiw'
-    needs: safety-check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      - name: Verify historical branches are entirely contained in main
-        run: bash scripts/prune-legacy-branches.sh preview
-      - name: Remove allowlisted old feature branches (never main or archive)
-        run: bash scripts/prune-legacy-branches.sh apply DELETE_OLD_ACHEWIW_BRANCHES
