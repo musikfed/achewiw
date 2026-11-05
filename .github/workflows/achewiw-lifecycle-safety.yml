@@ -36,6 +36,12 @@ jobs:
           grep -Fq 'model-sdxl' docs/COMFYUI-RTX3060-RU.md
       - name: Reproduce linked Ubuntu systemd user-unit and isolation checks
         run: python3 -m unittest discover -v -s tests -p 'test_monitor_v2_service.py'
+      - name: Validate exactly six Studio CSS/JS assets and separate conveyor version
+        run: |
+          python3 scripts/verify-versioned-assets.py
+          python3 -m unittest discover -v -s tests -p 'test_versioned_assets.py'
+      - name: Test unified Studio and ComfyUI lifecycle
+        run: python3 -m unittest discover -v -s tests -p 'test_services_cli.py'
       - name: Editorial layout, responsive rules and versioned assets
         run: python3 -m unittest discover -v -s tests -p 'test_editorial_layout.py'
       - name: Validate browser application and monitoring JS syntax
