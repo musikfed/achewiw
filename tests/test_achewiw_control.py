@@ -469,7 +469,7 @@ class ShutdownTests(unittest.TestCase):
         variants = (
             {"TEST_GIT_DIRTY": "1"},
             {"TEST_GIT_ORIGIN": "https://github.com/other/achewiw.git"},
-            {"TEST_GIT_BRANCH": "main"},
+            {"TEST_GIT_BRANCH": "unsupported-branch"},
             {"TEST_GIT_DIVERGED": "1"},
         )
         for case in variants:
