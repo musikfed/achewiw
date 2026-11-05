@@ -37,6 +37,8 @@ from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
     add_edge as memory_add_edge, nodes as memory_nodes, edges as memory_edges,
     branches as memory_branches, create_branch as memory_create_branch,
     erase_node as memory_erase_node, audit_graph, erase_project as erase_story_memory)
+from editor_workspace import initialize as initialize_workspace, sync_search, checkpoint_work, status as storage_status
+from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
@@ -110,6 +112,8 @@ def init_db() -> None:
         init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
+    # Derived search/work databases are additive, the existing manuscript stays put.
+    initialize_workspace(DATA_DIR)
 
 
 _background_tasks: set[asyncio.Task] = set()
@@ -127,7 +131,7 @@ async def lifespan(_app: FastAPI):
             await asyncio.gather(*_background_tasks, return_exceptions=True)
 
 
-app = FastAPI(title="ACHEWIW StoryEngine", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="ACHEWIW StoryEngine", version=APP_VERSION, lifespan=lifespan)
 api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
 
 
@@ -162,6 +166,10 @@ class Project(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     title: str = Field(default="Без названия", max_length=200)
     genre: str = Field(default="Фантастика", max_length=200)
+    author_name: str = Field(default="", max_length=200)
+    publisher_name: str = Field(default="", max_length=200)
+    edition_label: str = Field(default="Первое издание", max_length=200)
+    publication_year: int | None = Field(default=None, ge=1900, le=2200)
     atmosphere: str = Field(default="", max_length=2000)
     audience: str = Field(default="", max_length=1000)
     target_length: str = Field(default="", max_length=200)
@@ -508,10 +516,10 @@ def illustrations_list(project_id: str):
 @api.post("/projects/{project_id}/illustrations", status_code=201)
 async def illustrations_upload(project_id: str, file: UploadFile = File(...),
                                scene_id: str = Form(...), caption: str = Form(""),
-                               placement: str = Form("start")):
+                               placement: str = Form("start"), paragraph_index: int = Form(0)):
     project = get_project(project_id)
-    if scene_id not in {scene.id for scene in project.scenes}:
-        raise HTTPException(422, "Для иллюстрации выбери существующую главу или сцену")
+    if scene_id not in {scene.id for scene in project.scenes} and not (scene_id == COVER_SCENE_ID and placement == "cover"):
+        raise HTTPException(422, "Для иллюстрации выбери главу; для обложки — особый раздел")
     if file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
         raise HTTPException(415, "Загрузи PNG, JPEG или WebP")
     if len(caption) > 1000:
@@ -521,7 +529,8 @@ async def illustrations_upload(project_id: str, file: UploadFile = File(...),
         with db() as connection:
             return save_illustration(DATA_DIR, connection,
                  project_id=project_id, scene_id=scene_id,
-                 caption=caption, content=payload, created_at=utc_now(), placement=placement)
+                 caption=caption, content=payload, created_at=utc_now(),
+                 placement=placement, paragraph_index=paragraph_index)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -639,7 +648,8 @@ class ImageGenerationRequest(BaseModel):
     scene_id: str
     prompt: str = Field(min_length=1, max_length=2500)
     caption: str = Field(default="", max_length=1000)
-    placement: Literal["start", "end"] = "start"
+    placement: Literal["start", "end", "paragraph", "cover"] = "start"
+    paragraph_index: int = Field(default=0, ge=0, le=5000)
     release_comfy_vram: bool = False
 
 
@@ -710,8 +720,8 @@ async def refine_illustration_prompt(request: ImagePromptRequest):
 async def generate_book_illustration(project_id: str, request: ImageGenerationRequest):
     """Sequential local image generation; never silently share loaded Ollama VRAM."""
     project = get_project(project_id)
-    if request.scene_id not in {scene.id for scene in project.scenes}:
-        raise HTTPException(422, "Укажи существующую главу")
+    if request.scene_id not in {scene.id for scene in project.scenes} and not (request.scene_id == COVER_SCENE_ID and request.placement == "cover"):
+        raise HTTPException(422, "Укажи существующую главу или обложку")
     token = uuid.uuid4().hex
     with db() as connection:
         connection.execute("BEGIN IMMEDIATE")
@@ -742,7 +752,8 @@ async def generate_book_illustration(project_id: str, request: ImageGenerationRe
                 result = save_illustration(DATA_DIR, connection,
                     project_id=project_id, scene_id=request.scene_id,
                     caption=request.caption, content=png,
-                    created_at=utc_now(), placement=request.placement)
+                    created_at=utc_now(), placement=request.placement,
+                    paragraph_index=request.paragraph_index)
         except (ValueError, TimeoutError) as exc:
             raise HTTPException(422, str(exc)) from exc
         except httpx.HTTPError as exc:
@@ -1057,6 +1068,8 @@ def publishing_preflight(project_id: str):
     return {
         "work_type": p.work_type,
         "title": p.title,
+        "edition": edition_info(p),
+        "publication_metadata_complete": bool(p.author_name.strip() and p.publication_year),
         "written_sections": book["written_scenes"],
         "total_sections": book["total_scenes"],
         "unwritten": book["unwritten"],
@@ -1339,6 +1352,13 @@ def story_memory_new_branch(project_id: str, request: StoryBranchRequest):
                                         request.parent_id,request.fork_scene_id)
         except ValueError as exc:
             raise HTTPException(422,str(exc)) from exc
+
+
+@api.get("/storage/status")
+def editor_storage_status():
+    """Only file sizes/status. No arbitrary path or destructive DB operations."""
+    return {"version":APP_VERSION,"storage":storage_status(DATA_DIR),
+            "note":"Legacy job checkpoints stay in canon until a verified, separate migration."}
 
 
 @api.get("/projects/{project_id}/editorial-storage")
