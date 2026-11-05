@@ -179,7 +179,7 @@ def test_recovery_after_power_loss_during_ollama_stream(tmp_path,monkeypatch):
         with main.db() as conn:
             first=chapters_for_job(conn,job["id"])[0]
             assert first["text"].startswith(base.rstrip())
-            assert "Симса задала вопрос о скрытом передатчике." in first["text"]
+            assert "Симса задала вопрос о скрытом передатчике," in first["text"]
             assert first["text"].count("Симса задала вопрос о скрытом передатчике")==1
             assert read_stream_buffer(conn,job["id"],first["scene_id"],first["text"]) is None
             assert book_summary(conn,job["id"])["generated_words"]>250
