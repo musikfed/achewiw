@@ -3,7 +3,7 @@ let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, pre
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 let draftSaveTimer=null;
 let bookJobId=null, bookPollBusy=false;
-let chapterPlan=null;
+let chapterPlan=null,storyMemory=null;
 let bookDraftMode=false, bookDraftBusy=false, bookDraftWords=-1, bookDraftFetchedAt=0;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let activeKind='all';
@@ -133,7 +133,7 @@ function render(){
 }
 function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
@@ -579,6 +579,135 @@ async function restoreLatestBook(){
  }
 }
 
+
+const memoryKinds={event:'Событие',character:'Персонаж',object:'Предмет',
+ place:'Место',fact:'Факт',mystery:'Загадка',rule:'Правило'};
+const memoryRelations={causes:'вызывает',requires:'требуется для',before:'раньше',
+ foreshadows:'предвещает',reveals:'раскрывает',knows:'знает о',
+ holds:'владеет',contradicts:'противоречит'};
+function fillMemorySelect(id,options,selected){
+ const el=$(id);const last=selected??el.value;el.replaceChildren();
+ options.forEach(({value,label})=>{
+   const item=document.createElement('option');item.value=value;item.textContent=label;
+   el.append(item);
+ });
+ if([...el.options].some(o=>o.value===last))el.value=last;
+}
+function renderStoryMemory(data){
+ storyMemory=data;
+ const graph=data.audit||{};
+ $('#memoryStatus').textContent='SQLite: '+(graph.nodes||0)+' узлов, '+(graph.edges||0)+
+   ' связей · ветка '+(data.branch_id==='main'?'основная':'альтернативная')+
+   ' · авторские факты отдельно от черновиков ИИ';
+ const branchOptions=(data.branches||[]).map(b=>({
+   value:b.id,label:b.name+(b.id==='main'?' (основная)':' (ветка графа)')}));
+ fillMemorySelect('#memoryBranch',branchOptions,data.branch_id);
+ const sceneOptions=(data.scenes||[]).map((scene,i)=>({value:scene.id,
+   label:(i+1)+'. '+scene.title}));
+ fillMemorySelect('#memoryNodeScene',sceneOptions);
+ const graphNodes=data.nodes||[],graphEdges=data.edges||[];
+ const entityOptions=graphNodes.map(n=>({value:n.id,
+   label:(memoryKinds[n.kind]||n.kind)+' · '+n.title}));
+ fillMemorySelect('#memoryEdgeFrom',entityOptions);
+ fillMemorySelect('#memoryEdgeTo',entityOptions);
+ const list=$('#memoryNodeList');list.replaceChildren();
+ const header=document.createElement('h5');header.textContent='Узлы · '+graphNodes.length;list.append(header);
+ graphNodes.forEach(n=>{
+   const line=document.createElement('div');line.className='story-memory-item';
+   const text=document.createElement('div');
+   const b=document.createElement('strong');b.textContent=(memoryKinds[n.kind]||n.kind)+' · '+n.title;
+   const p=document.createElement('p');p.textContent=n.statement;
+   const mark=document.createElement('small');
+   mark.textContent='Глава '+(n.scene_index+1)+(n.status==='outline'?' · план, не подтверждённый факт':' · закреплено автором');
+   text.append(b,p,mark);line.append(text);
+   if(n.status!=='outline'){
+     const del=document.createElement('button');del.type='button';
+     del.textContent='Удалить';del.className='danger-action';
+     del.onclick=()=>deleteMemoryNode(n.id,n.title);
+     line.append(del);
+   }
+   list.append(line);
+ });
+ const eList=$('#memoryEdgeList');eList.replaceChildren();
+ const eh=document.createElement('h5');eh.textContent='Связи · '+graphEdges.length;eList.append(eh);
+ const byId=new Map(graphNodes.map(n=>[n.id,n.title]));
+ graphEdges.forEach(edge=>{
+   const p=document.createElement('p');p.className='story-memory-item';
+   p.textContent=(byId.get(edge.source_id)||'Удалённый узел')+' → '+
+       (memoryRelations[edge.relation]||edge.relation)+' → '+
+       (byId.get(edge.target_id)||'Удалённый узел');
+   eList.append(p);
+ });
+ const open=(graph.open_mysteries||[]).map(n=>n.title);
+ $('#memoryAudit').textContent='Граф QA: '+(graph.issues||[]).length+
+   ' структурных проблем · нерешённых загадок '+open.length+
+   (open.length?' ('+open.slice(0,8).join(', ')+')':'')+
+   '. Эта проверка не доказывает литературную или фактическую правильность.';
+}
+async function loadStoryMemory(branch='main'){
+ if(!project)return;
+ const projectId=project.id;
+ $('#memoryStatus').textContent='Загрузка памяти сюжета…';
+ try{
+   const data=await api('/projects/'+projectId+'/story-memory?branch='+encodeURIComponent(branch),
+                        {cache:'no-store'});
+   if(!project||projectId!==project.id)return;
+   renderStoryMemory(data);
+ }catch(e){
+   $('#memoryStatus').textContent='Память сюжета недоступна: '+e.message;
+ }
+}
+async function addMemoryNode(){
+ if(!project||!storyMemory)return;
+ const kind=$('#memoryNodeKind').value,title=$('#memoryNodeTitle').value.trim();
+ const statement=$('#memoryNodeStatement').value.trim(),scene_id=$('#memoryNodeScene').value;
+ if(!title||!statement){toast('Заполни название и конкретное событие/факт');return}
+ try{
+   await api('/projects/'+project.id+'/story-memory/nodes',{method:'POST',
+      body:JSON.stringify({kind,title,statement,scene_id:scene_id||null,
+                           branch_id:storyMemory.branch_id})});
+   $('#memoryNodeTitle').value='';$('#memoryNodeStatement').value='';
+   await loadStoryMemory(storyMemory.branch_id);
+   toast('Факт записан в граф автора');
+ }catch(e){toast('Не добавлено: '+e.message)}
+}
+async function addMemoryEdge(){
+ if(!project||!storyMemory)return;
+ const source_id=$('#memoryEdgeFrom').value,target_id=$('#memoryEdgeTo').value,
+       relation=$('#memoryEdgeKind').value;
+ if(!source_id||!target_id||source_id===target_id){
+   toast('Выбери два разных узла');return;
+ }
+ try{
+   await api('/projects/'+project.id+'/story-memory/edges',{method:'POST',
+      body:JSON.stringify({source_id,target_id,relation,branch_id:storyMemory.branch_id})});
+   await loadStoryMemory(storyMemory.branch_id);
+   toast('Связь записана и проверена на циклы');
+ }catch(e){toast('Связь не добавлена: '+e.message)}
+}
+async function deleteMemoryNode(id,title){
+ if(!project||!storyMemory||!confirm('Удалить факт «'+title+'» и все его связи? Текст глав и каркас не изменятся.'))return;
+ try{
+   await api('/projects/'+project.id+'/story-memory/nodes/'+id+
+     '?branch='+encodeURIComponent(storyMemory.branch_id),{method:'DELETE'});
+   await loadStoryMemory(storyMemory.branch_id);
+   toast('Узел графа удалён. Рукопись сохранена.');
+ }catch(e){toast('Ошибка удаления узла: '+e.message)}
+}
+async function addMemoryBranch(){
+ if(!project||!storyMemory)return;
+ const name=$('#memoryBranchName').value.trim();
+ if(!name){toast('Укажи название альтернативной ветки');return}
+ try{
+   const branch=await api('/projects/'+project.id+'/story-memory/branches',
+     {method:'POST',body:JSON.stringify({name,parent_id:storyMemory.branch_id,
+       fork_scene_id:$('#memoryNodeScene').value||null})});
+   $('#memoryBranchName').value='';
+   await loadStoryMemory(branch.id);
+   toast('Создана отдельная ветка графа; основная рукопись не затронута.');
+ }catch(e){toast('Ветка не создана: '+e.message)}
+}
+
 const revealChoices={
  none:'Без сюжетной тайны / без раскрытия',
  hint:'Намёк, без объяснения',
@@ -841,7 +970,7 @@ document.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{
 $('#workType').onchange=e=>{if(!project)return;project.work_type=e.target.value;updateWorkCopy();renderProjects()};
 $('#saveBrief').onclick=async()=>{try{await save();await loadChapterPlan()}catch(e){toast(e.message)}};
 $('#deleteProject').onclick=deleteCurrentProject;
-$('#saveScenes').onclick=async()=>{try{collectScenes();await save();await loadChapterPlan()}catch(e){toast(e.message)}};
+$('#saveScenes').onclick=async()=>{try{collectScenes();await save();await loadChapterPlan();await loadStoryMemory()}catch(e){toast(e.message)}};
 $('#saveText').onclick=()=>{collectText();save().catch(e=>toast(e.message))};
 $('#addScene').onclick=()=>{collectScenes();project.scenes.push({id:crypto.randomUUID().replaceAll('-',''),title:'Новая сцена',active_objects:[],anchor:'',tempo:'Ровный',reader_info:'',hook:'',text:''});renderScenes();renderWriting()};
 $('#writingScene').onchange=()=>{collectText();switchWriting()};
@@ -850,6 +979,11 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#bookGenerate').onclick=startFullBook;
  $('#bookOpenChapterPlan').onclick=()=>gotoTab('structure');
  $('#recalculateChapterPlan').onclick=async()=>{await save();await loadChapterPlan(true)};
+ $('#memoryReload').onclick=()=>loadStoryMemory(storyMemory?.branch_id||'main');
+ $('#memoryBranch').onchange=e=>loadStoryMemory(e.target.value);
+ $('#memoryAddNode').onclick=addMemoryNode;
+ $('#memoryAddEdge').onclick=addMemoryEdge;
+ $('#memoryAddBranch').onclick=addMemoryBranch;
  $('#balanceChapterPlan').onclick=balanceChapterPlan;
  $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
  $('#bookResume').onclick=resumeFullBook;
