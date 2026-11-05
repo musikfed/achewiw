@@ -38,6 +38,7 @@
  <div class="actions">
   <button type="button" id="bookLiveJump">Перейти к генерации</button>
   <button type="button" id="bookLiveDraft">Читать текущие главы</button>
+  <a id="bookLivePdf" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF · написанные страницы</a>
   <button type="button" id="bookLiveResume" hidden>▶ Продолжить после остановки</button>
  </div>
 </div>
@@ -106,15 +107,16 @@
        <small>Ветки графа изолированы. Генерация альтернативной рукописи по ветке — отдельный следующий этап; текущий генератор пишет только main.</small>
      </div>
    </div>
-   <details id="memoryDetails"><summary>Узлы графа, причинные связи и нерешённые загадки</summary>
+   <details id="memoryDetails" open><summary>Узлы графа, причинные связи и нерешённые загадки <span id="memoryGraphCounts"></span></summary>
      <div class="story-memory-layout"><div id="memoryNodeList"></div><div id="memoryEdgeList"></div></div>
    </details>
    <p id="memoryAudit" role="status" aria-live="polite"></p>
-   <small>RAG использует SQLite FTS5: проверяемые цитаты из авторского текста и отдельные непринятые фрагменты текущей генерации. Семантические embeddings можно подключить позднее без пересборки графа.</small>
+   <small>RAG использует SQLite FTS5 и локальные векторы nomic-embed-text при доступности модели. План глав отображается как план, не как доказанные факты. События черновика проходят редакторское утверждение перед добавлением в канон.</small>
  </section>
  <div class="actions"><button id="generateFullBook" class="primary" type="button">✦ Написать всю книгу</button>
  <button id="resumeFullBook" type="button" hidden>Продолжить прерванную генерацию</button>
- <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button></div>
+ <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button>
+ <a id="bookPartialPdfPlan" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF · посмотреть текущий черновик</a></div>
  <p id="fullBookStatus" role="status" aria-live="polite">Утвердите каркас, укажите объём в редакционном задании и нажмите «Написать всю книгу».</p>
  <progress id="fullBookProgress" max="100" aria-label="Процент полученного текста к целевому количеству слов" hidden></progress>
  <div id="fullBookChapters"></div>
@@ -177,12 +179,46 @@
   <p class="illustration-disclaimer">Обложку генерируй как художественное изображение без букв: заголовок, имя автора и год наносятся при экспорте отдельно. После рисунка проверь персонажей и детали мира. Генерация работает только при установленном локальном ComfyUI с diffusion-checkpoint. Модели qwen2.5vl и granite-vision анализируют изображения, но не рисуют их. Выбранный checkpoint определяется автоматически. Общая Ollama без разрешения не выгружается.</p>
  </div>
  </div>
- <h3 class="illustration-library-title">Иллюстрации рукописи</h3>
+ <section class="visual-puzzle-editor">
+<h3>Визуальная загадка · подсказка сейчас, разгадка позже</h3>
+<p>Сначала создай или загрузи рисунок выше. Затем свяжи его с будущей главой, где читатель найдёт ответ. Разгадка хранится в редакторе, а на рисунке и в ранних главах не раскрывается.</p>
+<div class="editorial-version-choose">
+ <label>Иллюстрация-подсказка<select id="puzzleIllustration"><option value="">Выбери загруженный рисунок главы</option></select></label>
+ <label>Глава разгадки<select id="puzzleAnswerScene"><option value="">Выбери будущую главу</option></select></label>
+</div>
+<label>Название загадки<input id="puzzleTitle" maxlength="160" placeholder="Что изображено на старом передатчике?"></label>
+<label>Секретная разгадка для редактора<textarea id="puzzleAnswer" maxlength="1500" rows="3" placeholder="Какой факт будет раскрыт, почему он важен для сюжета?"></textarea></label>
+<div class="actions"><button id="puzzleSave" type="button">Связать подсказку с главой разгадки</button><button id="puzzleRefresh" type="button">Обновить загадки</button></div>
+<div id="puzzleStatus" role="status"></div><div id="puzzleList"></div>
+</section>
+<h3 class="illustration-library-title">Иллюстрации рукописи</h3>
  <div id="illustrationGrid" class="illustration-grid"><p>Загрузка каталога...</p></div>
 </section>
 <section id="audit" class="tabpane" hidden><div class="sectionhead"><h2 id="auditHeading">Редакторская проверка</h2><p>Оценивайте когнитивную нагрузку, ритм и предполагаемое время чтения вслух.</p></div><div id="stats"></div><div id="continuityFindings" class="continuity-findings"><p>Проверка фактов и причинных связей будет доступна для выбранной художественной истории.</p></div><div class="actions"><label class="continuity-scope">Область проверки <select id="continuityScene"><option value="">Вся история: обзор и реестр</option></select></label><label class="continuity-prompt">Что особенно проверить?
   <input id="continuityInstructions" maxlength="2000" placeholder="Например: откуда появился ключ, кто знал о посадке и почему герой сменил решение.">
-</label><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
+</label><button id="runContinuity" type="button">✦ Проверить причинность, появления предметов и несостыковки</button><button id="runAudit">✦ Литературный аудит с ИИ</button><button id="openBookFromAudit" type="button">Открыть рукопись ↗</button></div><p class="audit-explainer">QA проверяет написанное, но не пишет и не переписывает книгу автоматически. После отчёта отметьте решение по правкам ниже или вернитесь к сценам.</p><section id="editorialVersions" class="editorial-versions">
+ <h3>Редакции книги · проверка перед выпуском</h3>
+ <p>Сохраняй снимки даже недописанного черновика. Они хранятся отдельно в рабочей SQLite и не меняют рукопись. При одной редакции проверь её; при нескольких выбери и сравни.</p>
+ <div class="actions">
+  <input id="versionLabel" maxlength="160" placeholder="Название снимка, необязательно" aria-label="Название снимка редакции">
+  <button id="versionSaveDraft" type="button">Сохранить версию черновика</button>
+  <button id="versionSaveManuscript" type="button">Сохранить версию чистовика</button>
+  <button id="versionReload" type="button">Обновить версии</button>
+ </div>
+ <div class="editorial-version-choose">
+   <label>Редакция для проверки<select id="versionFirst"><option value="">Нет сохранённых редакций</option></select></label>
+   <label>С чем сравнить<select id="versionSecond"><option value="">Один черновик: проверяем его отдельно</option></select></label>
+ </div>
+ <div class="actions">
+   <button id="versionReview" type="button">Проверить нестыковки и готовность к выпуску</button>
+   <button id="versionCompare" type="button">Сравнить редакции</button>
+   <button id="versionProposeGraph" type="button">Предложить узлы графа из текста</button>
+ </div>
+ <div id="versionStatus" role="status" aria-live="polite">Версии хранятся в work.sqlite3. Рукопись не перезаписывается.</div>
+ <div id="versionReport" class="version-report" aria-live="polite"></div>
+ <div id="versionGraphProposals"></div>
+ </section>
+ <div class="audit-history"><h3>Мои сохранённые QA-отчёты</h3><div id="auditHistory">Отчёты загружаются…</div></div></section>
 <section id="book" class="tabpane" hidden aria-label="Издательская мастерская: чтение и экспорт">
   <div class="sectionhead"><div class="eyebrow">ЭЛЕКТРОННАЯ КНИГА / РЕДАКЦИОННЫЕ ФАЙЛЫ / ПЕЧАТНАЯ ПРОБА</div><h2>Типография и выпуск</h2>
   <p>На выход идут только сохранённые тексты глав или частей. QA-отчёты, технические промпты и незаконченные разделы не подмешиваются в книгу.</p></div>
@@ -207,6 +243,7 @@
       <button id="bookResume" type="button" hidden>▶ Продолжить написание</button>
       <button id="bookAccept" type="button" hidden>✓ Принять готовые главы в рукопись</button>
       <button id="bookViewDraft" type="button" hidden>Читать сгенерированный текст</button>
+      <a id="bookPartialPdf" class="book-live-pdf" href="#" target="_blank" rel="noopener" hidden>PDF A5 · черновик во время генерации</a>
       <button id="bookViewSaved" type="button" hidden>Читать сохранённую рукопись</button>
       <button id="bookDraftRefresh" type="button" hidden>Обновить текст черновика</button>
     </div>
