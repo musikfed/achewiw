@@ -21,8 +21,10 @@ async function resetBrowserAfterFreshLibrary(){
     const payload=await response.json();
     const epoch=payload.epoch;
     if(typeof epoch!=='string'||!/^[0-9a-f]{40}$/.test(epoch))return;
-    if(safeGet(localStorage,'achewiw.libraryEpoch')===epoch)return;
+    // localStorage is origin-wide while sessionStorage belongs to EACH TAB.
+    // Every tab must independently clear its old manuscript drafts.
     for(const store of [localStorage,sessionStorage]){
+      if(safeGet(store,'achewiw.libraryEpoch')===epoch)continue;
       const keys=[];
       for(let i=0;i<store.length;i++){
         const key=store.key(i);
@@ -30,8 +32,8 @@ async function resetBrowserAfterFreshLibrary(){
           keys.push(key);
       }
       for(const key of keys)store.removeItem(key);
+      safeSet(store,'achewiw.libraryEpoch',epoch);
     }
-    safeSet(localStorage,'achewiw.libraryEpoch',epoch);
     // Remain on the empty project selector; no old draft is re-attached.
   }catch(e){console.warn('Reset epoch check unavailable:',e)}
 }
