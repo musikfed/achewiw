@@ -239,6 +239,15 @@ class ShutdownTests(unittest.TestCase):
         self.assertFalse(self.unit_stopped.exists())
         self.assertNotIn("stop --time", self.commands())
 
+    def test_studio_stop_ignores_foreign_monitor_but_stops_only_owned_container(self):
+        result = self.run_switch(
+            "studio-stop", TEST_UNIT_STATE="loaded",
+            TEST_UNIT_FRAGMENT="/other/project/monitor.service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.state.read_text(), "stopped")
+        self.assertIn("stop --time 60 a11c0ffee", self.commands())
+        self.assertFalse(self.unit_stopped.exists())
+
     def test_no_cache_rebuild_is_project_scoped_and_preserves_other_services(self):
         result = self.run_switch("rebuild-fresh", TEST_UNIT_STATE="loaded",
                                  TEST_UNIT_FRAGMENT="/other/monitor.service")
