@@ -51,7 +51,7 @@ def test_removed_source_cleans_only_derived_index(tmp_path):
     with sqlite3.connect(":memory:") as db:
         db.row_factory=sqlite3.Row
         db.execute("""CREATE TABLE story_chunks
-          (id TEXT PRIMARY KEY, project_id TEXT, branch_id TEXT, job_id TEXT,
+          (id TEXT PRIMARY KEY, project_id TEXT, branch_id TEXT, scene_index INTEGER, job_id TEXT,
            source TEXT, content TEXT, digest TEXT)""")
         db.execute("INSERT INTO story_chunks VALUES('x','p','main',0,'job','draft','hello','h')")
         assert sync_search(tmp_path,db)["total"]==1
@@ -73,7 +73,7 @@ def test_storage_maintenance_read_only_preview_and_safe_backup(tmp_path,monkeypa
         db.execute("CREATE TABLE projects(id TEXT PRIMARY KEY)")
         db.execute("CREATE TABLE ai_jobs(id TEXT PRIMARY KEY,status TEXT)")
         db.execute("INSERT INTO projects VALUES('keep')")
-        db.execute("CREATE TABLE story_chunks(id TEXT PRIMARY KEY,project_id TEXT,branch_id TEXT,job_id TEXT,source TEXT,content TEXT,digest TEXT)")
+        db.execute("CREATE TABLE story_chunks(id TEXT PRIMARY KEY,project_id TEXT,branch_id TEXT,scene_index INTEGER,job_id TEXT,source TEXT,content TEXT,digest TEXT)")
         db.execute("INSERT INTO story_chunks VALUES('a','keep','main',0,'author','synopsis','Кот ждёт','h')")
     tool.run("preview")
     assert not (data/"search.sqlite3").exists()
