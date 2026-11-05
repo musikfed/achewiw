@@ -12,8 +12,8 @@ ACTION="${1:-status}"
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 
 case "$ACTION" in
-  start|status|stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start) ;;
-  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start" ;;
+  start|status|stop|studio-stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start) ;;
+  *) die "Использование: bash scripts/achewiw-control.sh start|status|stop|studio-stop|restart|update|rebuild|rebuild-fresh|auth-check|monitor-start" ;;
 esac
 [[ $# -le 1 ]] || die "Допускается только одна команда"
 command -v docker >/dev/null 2>&1 || die "Docker CLI не найден"
@@ -437,6 +437,7 @@ ids="$(containers false)" || die "Не удалось получить спис�
 if [[ -z "$ids" ]]; then
   echo "Управляемые Docker-контейнеры ACHEWIW уже остановлены или ещё не созданы."
 else
+  # studio-stop may ignore an unrelated monitor unit; still require strict Docker container ownership.
   # Fail closed for the ENTIRE operation if any candidate is not in the explicit allow-list.
   owned=()
   while IFS= read -r id; do
