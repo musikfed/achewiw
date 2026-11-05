@@ -1002,3 +1002,24 @@ header{
 .puzzle-illustration-toggle input{width:18px!important;height:18px!important;min-height:0!important}
 @media(max-width:720px){.editorial-version-choose{grid-template-columns:1fr}}
 @media print{.editorial-versions,.visual-puzzle-editor,.book-live-pdf{display:none!important}}
+
+
+/* Sequential production conveyor: usable from 430px through 2200px displays. */
+#conveyorSection{margin-block:1.3rem;display:grid;gap:1rem;min-width:0}
+#conveyorSection .formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:.8rem}
+#conveyorSection .formgrid label{display:grid;gap:.35rem;min-width:0}
+#conveyorSection .formgrid select,#conveyorSection .formgrid input{width:100%;min-width:0}
+#conveyorSection .checkbox-row{display:flex;align-items:center;gap:.65rem;line-height:1.5}
+#conveyorSection .checkbox-row input{flex:none;width:20px;height:20px}
+#conveyorSection progress{width:100%;height:14px}
+#conveyorSection .cv-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.6rem}
+#conveyorSection .cv-step{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem;min-width:0;border:1px solid var(--line,rgba(128,128,128,.3));border-radius:10px;padding:.65rem .8rem}
+#conveyorSection .cv-step strong{font-size:.93rem}
+#conveyorSection .cv-step small{width:100%;overflow-wrap:anywhere}
+#conveyorSection #cvFiles{flex-wrap:wrap}
+#conveyorSection #cvFiles a{display:inline-flex;min-height:40px;align-items:center}
+#conveyorSection #cvReviewItems{display:grid;gap:.8rem}
+#conveyorSection #cvReviewItems details{min-width:0;border:1px solid var(--line,rgba(128,128,128,.3));border-radius:10px;padding:.85rem}
+#conveyorSection #cvReviewItems summary{cursor:pointer;font-weight:650}
+#conveyorSection .cv-pre{white-space:pre-wrap;overflow:auto;overflow-wrap:anywhere;max-height:390px;padding:.8rem;border-radius:8px;font-family:var(--book,serif);line-height:1.65;font-size:1rem;border:1px solid var(--line,rgba(128,128,128,.3))}
+@media(max-width:720px){#conveyorSection .formgrid{grid-template-columns:1fr}#conveyorSection .cv-steps{grid-template-columns:1fr}}
