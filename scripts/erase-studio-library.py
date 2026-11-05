@@ -7,12 +7,14 @@ Read-only preview:
 Only after studio has stopped:
   python3 scripts/erase-studio-library.py --confirm ERASE_ACHEWIW_LIBRARY_AND_ARCHIVES
 
-Deletes only the exact ACHEWIW canon/search/work SQLite files and own snapshots
-and /1tbdisk/achewiw/data/illustrations subtree. Monitor metrics and .env stay.
+Deletes only the exact ACHEWIW canon/search/work SQLite files, known SQLite
+snapshots, /data/illustrations and ACHEWIW-prefixed old ComfyUI SaveImage PNGs.
+Installed ComfyUI/SDXL checkpoint and other applications are never removed. Monitor metrics and .env stay.
 """
 from __future__ import annotations
 import argparse
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -68,6 +70,22 @@ def planned() -> list[Path]:
             raise RuntimeError("Небезопасная папка illustrations")
         verify_tree(artwork)
         paths.append(artwork)
+    # ComfyUI SaveImage is an EXTRA copy of ACHEWIW's generated artwork.
+    # Keep installed ComfyUI and checkpoint models; erase ONLY our PNG prefix.
+    runtime = DATA / "comfyui-runtime"
+    source = runtime / "src"
+    generated = source / "output"
+    if any(path.is_symlink() or os.path.ismount(path)
+           for path in (runtime, source, generated)):
+        raise RuntimeError("Небезопасная ссылка или mount в пути ComfyUI output")
+    if generated.exists():
+        if not generated.is_dir():
+            raise RuntimeError("Неверный каталог output ComfyUI")
+        for item in generated.iterdir():
+            if re.fullmatch(r"achewiw_local_[0-9]+_\.png", item.name):
+                if item.is_symlink() or not item.is_file():
+                    raise RuntimeError("Небезопасный старый рисунок в ComfyUI output")
+                paths.append(item)
     return paths
 
 
