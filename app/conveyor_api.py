@@ -36,7 +36,7 @@ from manuscript_core import manuscript_epub
 
 class ConveyorRequest(BaseModel):
     writer_model: str = Field(default="qwen3:8b",min_length=1,max_length=200)
-    critic_model: str = Field(default="hf.co/bartowski/NousResearch_Hermes-4-14B-GGUF:Q4_K_M",min_length=1,max_length=200)
+    critic_model: str = Field(default="qwen3:4b-instruct",min_length=1,max_length=200)
     image_mode: Literal["none","cover","cover_chapters"] = "cover"
     image_style: str = Field(default="book illustration, expressive ink and watercolor",max_length=400)
     allow_shared_unload: bool = False
