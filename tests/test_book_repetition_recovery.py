@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import sqlite3
 import sys
@@ -32,7 +33,7 @@ def test_trim_only_word_for_word_tail_echo_and_keep_new_prose():
     check_new_prose(earlier,fixed)
     assert trim_repeated_tail(earlier,new)==new.strip()
     with pytest.raises(ValueError, match="повтор"):
-        check_new_prose(earlier,last*6)
+        check_new_prose(earlier," ".join([last]*6))
 
 
 def test_small_chunks_and_distinct_recovery_strategies():
@@ -42,7 +43,7 @@ def test_small_chunks_and_distinct_recovery_strategies():
            for i in range(6)]
     assert notes[0]==""
     assert len(set(notes))==6
-    assert all("ПОСЛЕ" in x or "события" in x for x in notes[1:])
+    assert all("РЕДАКТОРСКАЯ ПРАВКА" in x for x in notes[1:])
 
 
 def test_retry_epoch_migrates_existing_chapter_and_persists(tmp_path):
@@ -119,7 +120,7 @@ def test_book_generation_recovers_from_four_repeated_qwen_responses(tmp_path,mon
             async def __aenter__(self):return self
             async def __aexit__(self,*a):pass
             def stream(self,method,url,json):
-                calls.append(json)
+                calls.append(copy.deepcopy(json))
                 return MockResponse(old if len(calls)<=4 else
                                     accepted_1 if len(calls)==5 else accepted_2)
 
