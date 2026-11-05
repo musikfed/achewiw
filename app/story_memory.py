@@ -263,9 +263,51 @@ def index_chunk(db: sqlite3.Connection, project_id: str, branch: str, job_id: st
     return 1
 
 
+def sync_outline(db: sqlite3.Connection, project) -> None:
+    """Mirror author-approved outline cards and their order into graph PLAN nodes.
+
+    A plan card is not a verified world fact. Stable graph IDs follow the
+    scene IDs; neither source cards nor author manuscript are modified.
+    """
+    ensure_main(db,project.id)
+    expected=set()
+    order=set()
+    for i,scene in enumerate(project.scenes):
+        uid="outline:"+scene.id
+        expected.add(uid)
+        synopsis=scene.text[:900] if len(re.findall(r"\w+",scene.text))<=180 else ""
+        parts=[p for p in (scene.anchor,scene.hook,synopsis) if p.strip()]
+        statement="План главы: "+(" | ".join(parts)[:1800] if parts else scene.title)
+        db.execute("""INSERT INTO story_nodes
+            (id,project_id,branch_id,kind,title,statement,scene_id,scene_index,status,created_at)
+            VALUES(?,?,'main','event',?,?,?,?, 'outline',?)
+            ON CONFLICT(id) DO UPDATE SET title=excluded.title,
+                statement=excluded.statement,scene_index=excluded.scene_index,
+                scene_id=excluded.scene_id""",
+            (uid,project.id,scene.title,statement,scene.id,i,stamp()))
+        if i:
+            prev="outline:"+project.scenes[i-1].id
+            eid="outline-order:"+scene.id
+            order.add(eid)
+            db.execute("""INSERT OR IGNORE INTO story_edges
+                (id,project_id,branch_id,source_id,target_id,relation,note,created_at)
+                VALUES(? ,?,'main',?,?,'before','Порядок утверждённого каркаса',?)""",
+                (eid,project.id,prev,uid,stamp()))
+    # Remove only machine-maintained outline items, never author-entered facts.
+    for row in db.execute("SELECT id FROM story_nodes WHERE project_id=? AND "
+                          "branch_id='main' AND status='outline'",(project.id,)).fetchall():
+        if row["id"] not in expected:
+            db.execute("DELETE FROM story_nodes WHERE id=?",(row["id"],))
+    for row in db.execute("SELECT id FROM story_edges WHERE project_id=? AND "
+                          "branch_id='main' AND id LIKE 'outline-order:%'",(project.id,)).fetchall():
+        if row["id"] not in order:
+            db.execute("DELETE FROM story_edges WHERE id=?",(row["id"],))
+
+
 def sync_approved(db: sqlite3.Connection, project) -> int:
     """Re-index author-saved text, not drafts. Never modify the manuscript."""
     ensure_main(db,project.id)
+    sync_outline(db,project)
     changed=0
     for i, scene in enumerate(project.scenes):
         source = "synopsis" if len(re.findall(r"\w+",scene.text)) <= 180 else "approved"
@@ -366,12 +408,17 @@ def retrieve(db: sqlite3.Connection, project_id: str, job_id: str,
 
 def context_text(memory: dict, max_chars: int = 6000) -> str:
     facts=[{"id":n["id"],"type":n["kind"],"fact":n["statement"],
-            "scene":n["scene_index"]+1} for n in memory["facts"]]
+            "scene":n["scene_index"]+1} for n in memory["facts"]
+           if n["status"]=="approved"]
+    plan_cards=[{"id":n["id"],"scene":n["scene_index"]+1,
+                 "outline":n["statement"]} for n in memory["facts"]
+                if n["status"]=="outline"]
     snippets=[{"source":("НЕПРИНЯТЫЙ ЧЕРНОВИК" if e["source"]=="draft" else
                          "АВТОРСКИЙ СИНОПСИС" if e["source"]=="synopsis" else "АВТОРСКАЯ РУКОПИСЬ"),
                "chapter":e["scene_index"]+1,"excerpt":e["text"][:850]}
               for e in memory["evidence"]]
-    return json.dumps({"author_approved_facts":facts,"causal_links":memory["links"],
+    return json.dumps({"author_approved_facts":facts,"outline_cards_not_world_facts":plan_cards,
+                       "causal_links":memory["links"],
                        "retrieved_passages":snippets},ensure_ascii=False)[:max_chars]
 
 
