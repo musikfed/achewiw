@@ -22,3 +22,15 @@ h1,h2{font-family:Georgia,serif;font-weight:400}h1{font-size:clamp(38px,5vw,68px
 footer{padding-top:25px;margin-top:45px;border-top:1px solid var(--line);font-size:14px;color:#6c777b}
 a:focus-visible{outline:3px solid #b88954;outline-offset:3px}
 @media(max-width:600px){.top{align-items:start}.lang{gap:5px}.lang a{font-size:12px;padding:6px}.project{min-height:165px}}
+
+/* Illustrated eleven-language portfolio cards: static assets, no client JavaScript. */
+.portfolio-hero{display:block;width:100%;height:auto;max-width:100%;border-radius:16px;margin:22px 0 27px;background:#1b3040}
+.project{padding:0;overflow:hidden;min-height:300px}
+.project .project-art{display:block;align-self:stretch;padding:0;margin:0;border:0;text-decoration:none;background:#142838}
+.project .project-art img{display:block;width:100%;height:auto;aspect-ratio:1440/625;object-fit:cover;background:#142838}
+.project>small,.project>h3,.project>p,.project .project-links{margin-left:17px;margin-right:17px}
+.project>small{padding-top:15px}
+.project>p{margin-top:8px}
+.project .project-links{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:19px;flex-wrap:wrap}
+.project .project-links a{display:inline-block;align-self:auto}
+.contacts{scroll-margin-top:25px}
