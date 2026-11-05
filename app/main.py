@@ -28,6 +28,7 @@ from illustrations_core import initialize as init_illustrations, save as save_il
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
 from prose_quality import (check_quality, streaming_loop, prompt_tail, first_cycle, ProseDegeneration)
 from narrative_direction import scene_contract, reject_vacant_dialogue
+from reader_engagement import map_chapters as map_reader_engagement, fragment_contract as reader_fragment_contract
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
     versions as book_versions, get_version as get_book_version,
@@ -1465,6 +1466,18 @@ def preview_chapter_plan(project_id: str, suggested: bool = False):
         raise HTTPException(422, str(exc)) from exc
 
 
+@api.get("/projects/{project_id}/reader-engagement")
+def preview_reader_engagement(project_id: str):
+    """Author-only screenplay-free map of suspense obligations, no manuscript writes."""
+    project=get_project(project_id)
+    try:
+        with db() as connection:
+            plan=get_plan(connection,project)
+        return map_reader_engagement(project,plan)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+
+
 @api.put("/projects/{project_id}/book-plan")
 def save_chapter_plan(project_id: str, request: BookPlanUpdate):
     project = get_project(project_id)
@@ -1735,7 +1748,9 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
     guidance = (
         "Ты профессиональный писатель. " + genre +
         (scene_contract(project,scene,chapter_index,chapter_plan,
-                        book_words(existing_text),chapter_target)
+                        book_words(existing_text),chapter_target) +
+         reader_fragment_contract(project,scene,chapter_index,chapter_plan,
+                                  book_words(existing_text),chapter_target)
          if project.work_type=="fiction" else "") +
         "\nТолько русский литературный текст, без Markdown-заголовков, списков, "
         "пояснений модели, синопсиса и слов «продолжение следует». "
