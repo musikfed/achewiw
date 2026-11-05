@@ -3,9 +3,9 @@
 ## База и разделение версий
 
 - Предыдущая рабочая редакция: `archive/dual-model-20261105`; SHA `00de009a661e24194a10fec43c66e6ae4e26adfc`.
-- Новая ветка: `feature/production-conveyor-rtx3060`.
+- Публичная актуальная версия: `main`; инженерная ветка: `feature/production-conveyor-rtx3060` (после переноса).
 - Сохранённые черновики, авторский текст, SQLite, модельные кеши и другие службы при обновлении **не удалять**.
-- Ветки `main`, `feature/release-gate-technical-books`, `feature/safe-library-reset-rebuild-20261104` содержат собственные коммиты, которых нет в рабочей ветке. Их нельзя удалять до переноса/архивирования этих изменений.
+- Перед очисткой GitHub все уникальные головы старых веток должны войти в историю итогового `main` как родители объединяющего коммита; прежняя редакция остаётся в `archive/dual-model-20261105`.
 - В самом проекте файлы должны быть доступны по проверенному Git checkout, а не через независимую копию поверх серверной `data/`.
 
 ## Реальные этапы (состояния в SQLite)
@@ -31,14 +31,15 @@
 
 ## Модели
 
-Существующие Ollama-модели продолжат работать без скачивания. Для новых (команды на **хосте CORE**, только по желанию):
+Существующие Ollama-модели продолжат работать без скачивания. Безопасный начальный профиль: **уже установленные** `qwen3:8b` (писатель) и `qwen3:4b-instruct` (критик/редактор). Более крупные модели не обязательны. Дополнительные модели скачиваются только по отдельному решению владельца (команды на **хосте CORE**):
 
 ```bash
 cd /1tbdisk/achewiw
 bash scripts/prepare-conveyor-models.sh status
-bash scripts/prepare-conveyor-models.sh pull-writer  # qwen3.5:9b-q4_K_M
-bash scripts/prepare-conveyor-models.sh pull-editor  # gemma3:12b
 ollama ps
+# необязательно: изучить доступные варианты и проверить VRAM
+# bash scripts/prepare-conveyor-models.sh pull-writer
+# bash scripts/prepare-conveyor-models.sh pull-editor
 nvidia-smi
 ```
 
@@ -51,14 +52,14 @@ cd /1tbdisk/achewiw
 git status --short
 # если есть несохранённые изменения — остановись, без reset/clean
 git fetch --no-tags origin
-git switch --track origin/feature/production-conveyor-rtx3060
+git switch main
 bash scripts/update-studio-clean.sh preview
 # если все проверки пройдены и нет активного задания:
 bash scripts/update-studio-clean.sh apply
 bash scripts/achewiw-control.sh status
 ```
 
-Если новая локальная ветка уже существует, вместо `git switch --track` используй `git switch feature/production-conveyor-rtx3060`. Если у текущей ветки разошлась история, не делай `reset --hard`: остановись и сохрани локальные изменения.
+Если локальная `main` разошлась с `origin/main`, сперва сохрани изменения и разбери расхождение; не выполняй `reset --hard`. Если у текущей ветки разошлась история, не делай `reset --hard`: остановись и сохрани локальные изменения.
 
 Работай в веб-интерфейсе на вкладке **06 · Типография → Издательский конвейер**. Выбери две установленные модели и режим иллюстраций, **подтверди право выгрузки именно выбранных моделей**, затем запусти. После этапа QA проверь PDF/EPUB и предложения редактора, отметь по главам и утверди. Нельзя принимать рукопись не читая её.
 
