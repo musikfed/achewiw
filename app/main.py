@@ -2113,7 +2113,7 @@ def download_book_draft_pdf(job_id: str):
     except (ValueError,RuntimeError) as exc:
         raise HTTPException(422,str(exc)) from exc
     return Response(content=content,media_type="application/pdf",headers={
-       "Content-Disposition":f'attachment; filename="achewiw-ai-draft-{job_id[:12]}.pdf"',
+       "Content-Disposition":f'inline; filename="achewiw-ai-draft-{job_id[:12]}.pdf"',
        "Cache-Control":"no-store","X-ACHEWIW-Export":"ai-draft-not-publication"})
 
 
