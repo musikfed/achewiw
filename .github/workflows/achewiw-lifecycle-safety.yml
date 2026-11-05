@@ -3,6 +3,7 @@ name: ACHEWIW lifecycle isolation
 on:
   push:
     branches:
+      - main
       - feature/technical-epub-first
       - feature/production-conveyor-rtx3060
   pull_request:
