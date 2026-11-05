@@ -710,11 +710,15 @@ function renderStoryMemory(data){
 async function loadStorageStatus(){
  try{
    const data=await api('/storage/status',{cache:'no-store'});
-   const items=data.storage||{};
+   const items=data.storage||{},rag=data.rag||{};
+   const sources=Number(rag.sources)||0,vectors=Number(rag.stored_vectors)||0;
    $('#memoryStorage').textContent='SQLite · canon: '+(items.canon?.exists?'готова':'недоступна')+
-     ' · search: '+(items.search?.exists?'готова':'ещё не создана')+
+     ' · search/FTS5: '+(items.search?.exists?'готова':'ещё не создана')+
      ' · work: '+(items.work?.exists?'готова':'ещё не создана')+
-     ' · версия '+(data.version||'?')+'. Исторические задачи сохраняются в основной БД.';
+     ' · RAG: '+sources+' фрагментов текста, '+vectors+' векторов'+
+     (vectors?' (семантика индексирована)':' (семантический поиск ещё не заполнен)')+
+     ' · embeddings: '+((rag.models||[]).map(m=>m.name).join(', ')||'не загружены')+
+     ' · версия '+(data.version||'?')+'. Черновики не становятся каноном автоматически.';
  }catch(e){$('#memoryStorage').textContent='Не удалось проверить базы: '+e.message;}
 }
 async function reindexStorySearch(){
