@@ -99,3 +99,13 @@ def test_single_word_ai_spam_rejected_but_literary_emphasis_allowed():
     with pytest.raises(ProseDegeneration):
         check_quality("шёпотом " * 45)
     assert first_cycle(("Да. " * 6) + ("Событие изменило ситуацию. " * 10)) is None
+
+
+def test_literary_review_covers_long_chapter_without_losing_chars():
+    from conveyor_api import review_windows
+    body = ("Миирус заметил след на камне и повернулся к спутнику. " * 1600)
+    windows=review_windows(body)
+    assert len(windows)>7
+    assert "".join(windows)==body
+    assert all(0<len(window)<=6500 for window in windows)
+    assert review_windows("")==[]
