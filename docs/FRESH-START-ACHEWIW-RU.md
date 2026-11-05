@@ -17,6 +17,9 @@
   их временные SQLite WAL/SHM/journal.
 - Все `data/illustrations/<id>` (старые обложки и рисунки).
 - Свои SQLite архивы из `data/backups` с проверенными префиксами.
+- Оставшиеся PNG-файлы генерации ComfyUI с точным префиксом
+  `data/comfyui-runtime/src/output/achewiw_local_<число>_.png`.
+  Чужие файлы ComfyUI и сами модели остаются.
 - `*.pyc`, `__pycache__`, `.pytest_cache` внутри исходников ACHEWIW.
 - Только браузерные ключи `achewiw.*` (на следующем открытии сайта)
   благодаря новому `.achewiw-library-epoch`. Трекер текущей операции
