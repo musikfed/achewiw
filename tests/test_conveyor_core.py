@@ -77,6 +77,7 @@ def test_single_active_project_and_cancel(tmp_path):
 
 def test_gpu_refresh_does_not_steal_or_revive(tmp_path):
     with connected(tmp_path/"gpu.sqlite") as db:
+        db.commit()
         db.execute("BEGIN IMMEDIATE")
         assert reserve_gpu(db,"owner","writer",at=100.0)
         assert refresh_gpu(db,"owner",at=200.0)
