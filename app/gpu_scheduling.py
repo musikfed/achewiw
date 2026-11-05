@@ -50,3 +50,16 @@ def release_gpu(connection: sqlite3.Connection, token: str) -> None:
     connection.execute(
         "DELETE FROM achewiw_gpu_lease WHERE name='gpu' AND token=?", (token,)
     )
+
+
+def refresh_gpu(connection: sqlite3.Connection, token: str, *, at: float | None = None) -> bool:
+    """Extend an actively owned GPU lease. Never revive an expired/foreign lease.
+
+    A stage worker refreshes this periodically while its Ollama or ComfyUI
+    request runs. A returned False is fatal: another worker may now own VRAM.
+    """
+    now = time.time() if at is None else at
+    connection.execute("""UPDATE achewiw_gpu_lease SET expires_at=?
+        WHERE name='gpu' AND token=? AND expires_at>?""",
+        (now + LEASE_SECONDS, token, now))
+    return connection.execute("SELECT changes()").fetchone()[0] == 1
