@@ -5,17 +5,17 @@ from pathlib import Path
 import importlib.util
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"app"))
-from editor_workspace import initialize,sync_search,checkpoint_work,status
+from editor_workspace import initialize,sync_search,checkpoint_work,status,search_snippets
 
 
 def test_non_destructive_databases_and_incremental_fts(tmp_path):
     main=tmp_path/"achewiw.sqlite3"
     with sqlite3.connect(main) as db:
         db.execute("""CREATE TABLE story_chunks
-          (id TEXT PRIMARY KEY, project_id TEXT, branch_id TEXT, job_id TEXT,
+          (id TEXT PRIMARY KEY, project_id TEXT, branch_id TEXT, scene_index INTEGER, job_id TEXT,
            source TEXT, content TEXT, digest TEXT)""")
-        db.execute("INSERT INTO story_chunks VALUES(?,?,?,?,?,?,?)",
-                   ("id1","book1","main","author","approved",
+        db.execute("INSERT INTO story_chunks VALUES(?,?,?,?,?,?,?,?)",
+                   ("id1","book1","main",0,"author","approved",
                     "Миирус нашёл ключ под креслом.","hash-one"))
     paths=initialize(tmp_path)
     assert set(paths)=={"canon","search","work"}
@@ -35,6 +35,10 @@ def test_non_destructive_databases_and_incremental_fts(tmp_path):
         assert search.execute("SELECT count(*) FROM search_fts").fetchone()[0]==1
         assert "потерял" in search.execute("SELECT text FROM search_fts").fetchone()[0]
         assert search.execute("SELECT digest FROM search_manifest").fetchone()[0]=="hash-two"
+    matches=search_snippets(tmp_path,"book1","job1",0,"ключ Миирус")
+    assert matches and matches[0]["source_kind"]=="approved"
+    assert search_snippets(tmp_path,"other-project","job1",0,"ключ")==[]
+    assert search_snippets(tmp_path,"book1","job1",-1,"ключ")==[]
     checkpoint_work(tmp_path,"book1","job1","chapter1","Или это был сон?",5)
     with sqlite3.connect(tmp_path/"work.sqlite3") as work:
         assert work.execute("SELECT words FROM work_checkpoints").fetchone()[0]==5
@@ -49,7 +53,7 @@ def test_removed_source_cleans_only_derived_index(tmp_path):
         db.execute("""CREATE TABLE story_chunks
           (id TEXT PRIMARY KEY, project_id TEXT, branch_id TEXT, job_id TEXT,
            source TEXT, content TEXT, digest TEXT)""")
-        db.execute("INSERT INTO story_chunks VALUES('x','p','main','job','draft','hello','h')")
+        db.execute("INSERT INTO story_chunks VALUES('x','p','main',0,'job','draft','hello','h')")
         assert sync_search(tmp_path,db)["total"]==1
         db.execute("DELETE FROM story_chunks")
         out=sync_search(tmp_path,db)
@@ -70,7 +74,7 @@ def test_storage_maintenance_read_only_preview_and_safe_backup(tmp_path,monkeypa
         db.execute("CREATE TABLE ai_jobs(id TEXT PRIMARY KEY,status TEXT)")
         db.execute("INSERT INTO projects VALUES('keep')")
         db.execute("CREATE TABLE story_chunks(id TEXT PRIMARY KEY,project_id TEXT,branch_id TEXT,job_id TEXT,source TEXT,content TEXT,digest TEXT)")
-        db.execute("INSERT INTO story_chunks VALUES('a','keep','main','author','synopsis','Кот ждёт','h')")
+        db.execute("INSERT INTO story_chunks VALUES('a','keep','main',0,'author','synopsis','Кот ждёт','h')")
     tool.run("preview")
     assert not (data/"search.sqlite3").exists()
     tool.run("apply")
