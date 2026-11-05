@@ -76,8 +76,8 @@ const workModes={
  nonfiction:{name:'Нонфикшн',part:'Глава',eyebrow:'НОНФИКШН / ОБРАЗОВАНИЕ / ИССЛЕДОВАНИЕ',intro:'Ясная структура, доказательные аргументы, реальные источники и читаемая книга.',structure:'Главы и аргументы',write:'Редактор нонфикшн',audit:'Логическая и фактологическая проверка'}
 };
 const modelPicks={
- fiction:{name:'qwen3:8b',reason:'Фантастика: qwen3:8b — хороший баланс русского текста, скорости и VRAM. Для сравнения художественного стиля попробуйте Hermes-4-14B.'},
- technical:{name:'qwen2.5-coder:14b',reason:'Технические главы и код: qwen2.5-coder:14b, если хватает VRAM. Проверка фактов и DOI остаётся за автором.'},
+ fiction:{name:'qwen3:8b',reason:'Фантастика: qwen3:8b — стартовая локальная модель для 12 ГБ VRAM. Критика и редактор можно запускать отдельной меньшей моделью.'},
+ technical:{name:'qwen2.5-coder:7b',reason:'Технические главы: локальная qwen2.5-coder:7b подходит для 12 ГБ VRAM; факты, ссылки и DOI проверяет автор.'},
  speech:{name:'qwen3:8b',reason:'Выступление: qwen3:8b для структуры, ясных переходов и репетиций.'},
  nonfiction:{name:'qwen3:8b',reason:'Нонфикшн: qwen3:8b, но библиографию и источники нужно проверять.'}
 };
@@ -150,8 +150,13 @@ async function refreshProjects(){projects=await api('/projects');renderProjects(
 function render(){
  const active=!!project;$('#editor').hidden=!active;$('#empty').hidden=active;
  renderProjects();
- $('#heading').textContent=active?project.title:'Выберите мастерскую';
- updateWorkCopy();if(!active)return;
+ $('#heading').textContent=active?project.title:'Типография в кармане';
+ updateWorkCopy();
+ if(!active){
+   $('#workEyebrow').textContent='ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW';
+   $('#workIntro').textContent='Закулисная мастерская рассказов, книг и выступлений. Идея, план, редактура, иллюстрации и выпуск PDF / DOCX / EPUB — под контролем автора.';
+   return;
+ }
  document.querySelectorAll('[data-field]').forEach(el=>el.value=project[el.dataset.field]??'');
  $('#export').href='/api/projects/'+project.id+'/export';
  $('#meta').textContent=project.scenes.length+' частей';
