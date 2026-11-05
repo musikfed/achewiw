@@ -165,3 +165,10 @@ bash scripts/achewiw-control.sh status
 Индексирование не гарантируется: полезные реальные кейсы, качество объяснения и внешние ссылки значат больше, чем повторение ключевых слов.
 
 **Сайт лаборатории:** для публичного `https://peginelab.ru/` подготовлены отдельная страница `/achewiw/` и карточка проекта со ссылкой на этот репозиторий. Они находятся в `musikfed/peginelab` (`main`); фактическая публикация на домене зависит от безопасного CI/CD-развёртывания PegiNelab.
+
+
+## Project showcase · 11 languages / Презентация проекта
+
+[**Multilingual project presentation, architecture SVG and contacts**](docs/showcase/README.md)
+
+![achewiw project architecture](docs/showcase/overview.svg)
