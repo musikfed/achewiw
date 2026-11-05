@@ -277,7 +277,7 @@ def test_browser_persistence_and_cache_scoping_markers():
                     "release_comfy_vram:el('illustrationReleaseComfy').checked"):
         assert marker in illustrations,marker
     assert "illustrationEnginePrepare" in illustrations and "illustrationEnginePrepare" in html
-    assert "20261105-edition-v14" in html
+    assert "20261105-edition-v15" in html
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
     assert "comfyui-control-agent.sh reload" in updater
@@ -286,7 +286,7 @@ def test_browser_persistence_and_cache_scoping_markers():
     assert 'updater_before="$(git hash-object scripts/update-studio-clean.sh)"' in updater
     assert 'exec bash "$ROOT/scripts/update-studio-clean.sh" apply' in updater
     assert 'class AssetParser(HTMLParser):' in updater
-    assert "grep -Fq '20261105-edition-v14'" not in updater
+    assert "grep -Fq '20261105-edition-v15'" not in updater
     assert "docker system prune" not in updater
     assert "rm -rf" not in updater
     assert "data/achewiw.sqlite3" in updater
