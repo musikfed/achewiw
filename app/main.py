@@ -1370,6 +1370,21 @@ def reindex_editor_storage():
         return sync_search(DATA_DIR, connection)
 
 
+@api.get("/storage/reset-epoch")
+def studio_reset_epoch():
+    """Empty until explicit library wipe; only the browser keys of ACHEWIW reset."""
+    marker = DATA_DIR / ".achewiw-library-epoch"
+    if marker.is_symlink() or not marker.is_file():
+        return {"epoch": None}
+    try:
+        value = marker.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError):
+        return {"epoch": None}
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        return {"epoch": None}
+    return {"epoch": value}
+
+
 @api.get("/storage/status")
 def editor_storage_status():
     """Only file sizes/status. No arbitrary path or destructive DB operations."""
