@@ -901,3 +901,34 @@ header{
  .chapter-plan-fields{grid-template-columns:minmax(0,1fr)}
  .chapter-plan-field:last-child{grid-column:auto}
 }
+
+
+/* Story RAG + causal graph: no external graph server or browser-side secrets. */
+.story-memory-panel{margin:22px 0;padding:clamp(16px,2vw,24px);
+ border:1px solid #d7c6ae;border-radius:12px;background:#fffdf9}
+.story-memory-panel h4{font:400 clamp(21px,2vw,29px)/1.25 var(--book);margin:0 0 8px}
+.story-memory-panel h5{font-size:14px;margin:0 0 12px;color:#684d35}
+.story-memory-panel>p,.story-memory-panel small{color:#72675b;font-size:12px;line-height:1.65}
+.story-memory-panel>.chapter-plan-field{max-width:440px;margin-top:13px}
+.story-memory-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:15px;margin:17px 0}
+.story-memory-form{display:flex;flex-direction:column;gap:10px;padding:15px;
+ background:#fbf8f3;border:1px solid #eadfd0;border-radius:10px;min-width:0}
+.story-memory-form>label{font-size:12px;display:flex;flex-direction:column;gap:6px}
+.story-memory-form input,.story-memory-form select,.story-memory-form textarea,
+.story-memory-panel select{width:100%;min-height:43px;min-width:0;
+ background:#fff;padding:9px 11px;border:1px solid #dcd1c2;border-radius:8px;font-size:13px}
+.story-memory-form textarea{min-height:86px;resize:vertical}
+.story-memory-form button{align-self:start}
+.story-memory-form h5:not(:first-child){margin-top:14px}
+.story-memory-panel details{margin-top:16px;padding:12px 14px;
+ background:#fff;border:1px solid #e8dfd2;border-radius:9px}
+.story-memory-panel details summary{cursor:pointer;font-weight:600;font-size:13px}
+.story-memory-item{border-bottom:1px solid #eee4d6;padding:11px 2px;
+ display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+ overflow-wrap:anywhere}
+.story-memory-item p{font-size:12px;line-height:1.6;margin:5px 0}
+.story-memory-item small{font-size:11px}
+.story-memory-item button{font-size:12px;flex-shrink:0}
+#memoryAudit{font-weight:600}
+@media(max-width:720px){.story-memory-layout{grid-template-columns:minmax(0,1fr)}}
