@@ -49,6 +49,33 @@ def test_small_chunks_and_distinct_recovery_strategies():
     assert all("РЕДАКТОРСКАЯ ПРАВКА" in x for x in notes[1:])
 
 
+
+def test_prompt_never_cuts_the_last_saved_paragraphs_or_book_ending():
+    scenes=[
+        main.Scene(title="Первая глава",anchor="Начало",hook="Новая загадка"),
+        main.Scene(title="Кульминация",anchor="Сложный выбор",hook="Обнаружение причины"),
+        main.Scene(title="Развязка",anchor="Следствие выбора",hook="Тайна раскрывается"),
+    ]
+    p=main.Project(title="Филинохомусы",scenes=scenes,
+                   premise="Нельзя менять причину появления сигнала. "*90,
+                   anchors="Миирус всё ещё не знает источник сигнала. "*55,
+                   sources="Важный авторский архив. "*150,
+                   claims="Ни одного реткона. "*80)
+    last="И в этот момент передатчик наконец подал третий сигнал."
+    previous="Предыдущая глава завершилась открытием железной двери."
+    prompt=main._book_prompt(p,scenes[0],0,2700,previous,
+                             ("Первый сохранённый абзац. "*500)+"\\n\\n"+last,
+                             900,{"stage_name":"opening","editorial_goal":"Установить загадку"},
+                             "ПАМЯТЬ ОБ УЗЛАХ ГРАФА. "*700)
+    assert len(prompt)<=22000
+    assert "Кульминация" in prompt and "Развязка" in prompt
+    assert "Миирус" in prompt
+    assert previous in prompt
+    assert last in prompt
+    assert prompt.endswith("Продолжи текст этой же главы прямо с места остановки:")
+
+
+
 def test_retry_epoch_migrates_existing_chapter_and_persists(tmp_path):
     dbpath=tmp_path/"book.sqlite3"
     with sqlite3.connect(dbpath) as db:
