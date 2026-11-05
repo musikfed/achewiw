@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "verified_public_repositories": 20,
-  "source": "Public GitHub visibility checked on 2026-11-05",
+  "source": "20 public repositories reviewed from GitHub, November 5, 2026. Private repositories excluded.",
   "project": [
     {
       "repository": "musikfed/achewiw",
@@ -14,8 +14,13 @@
         "hi": "पुस्तक लेखन, समीक्षा और प्रकाशन के लिए स्थानीय AI स्टूडियो।",
         "fr": "Studio IA local pour écrire, réviser et publier des livres.",
         "fi": "Paikallinen tekoälystudio kirjojen kirjoittamiseen, tarkistamiseen ja julkaisuun.",
-        "ko": "책 집필·검토·출판을 위한 로컬 AI 스튜디오."
-      }
+        "ko": "책 집필·검토·출판을 위한 로컬 AI 스튜디오.",
+        "ja": "achewiw：ローカル書籍制作スタジオ。構成：Book idea → Canon / RAG → Local LLM roles → PDF / EPUB / DOCX。",
+        "it": "achewiw: Studio locale per la produzione di libri. Componenti: Book idea → Canon / RAG → Local LLM roles → PDF / EPUB / DOCX.",
+        "be": "achewiw — Лакальная кніжная студыя. Этапы: Book idea → Canon / RAG → Local LLM roles → PDF / EPUB / DOCX."
+      },
+      "showcase": "https://github.com/musikfed/achewiw/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/achewiw/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/muzikfed",
@@ -28,8 +33,13 @@
         "hi": "Pocket Orchestra: एल्गोरिदमिक ऑर्केस्ट्रेशन, MIDI और MusicXML।",
         "fr": "Pocket Orchestra : orchestration algorithmique, MIDI et MusicXML.",
         "fi": "Pocket Orchestra: algoritminen orkestrointi, MIDI ja MusicXML.",
-        "ko": "Pocket Orchestra: 알고리즘 편곡, MIDI 및 MusicXML."
-      }
+        "ko": "Pocket Orchestra: 알고리즘 편곡, MIDI 및 MusicXML.",
+        "ja": "muzikfed：アルゴリズム作曲。構成：Music prompt → CPU composition → MusicXML / MIDI → Listening preview。",
+        "it": "muzikfed: Creazione musicale algoritmica. Componenti: Music prompt → CPU composition → MusicXML / MIDI → Listening preview.",
+        "be": "muzikfed — Алгарытмічнае стварэнне музыкі. Этапы: Music prompt → CPU composition → MusicXML / MIDI → Listening preview."
+      },
+      "showcase": "https://github.com/musikfed/muzikfed/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/muzikfed/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/YadroKreator",
@@ -42,8 +52,13 @@
         "hi": "फ़र्मवेयर और सिस्टम इमेज बनाने का नियंत्रित कार्यक्षेत्र।",
         "fr": "Atelier contrôlé de compilation de firmwares et d'images système.",
         "fi": "Hallittu työpöytä laiteohjelmistojen ja järjestelmäkuvien rakentamiseen.",
-        "ko": "펌웨어와 시스템 이미지 빌드를 관리하는 작업대."
-      }
+        "ko": "펌웨어와 시스템 이미지 빌드를 관리하는 작업대.",
+        "ja": "YadroKreator：システム構築と Linux。構成：Git sources → Isolated build → Artifact validation → Download / logs。",
+        "it": "YadroKreator: Build di sistema e Linux. Componenti: Git sources → Isolated build → Artifact validation → Download / logs.",
+        "be": "YadroKreator — Сістэмныя зборкі і Linux. Этапы: Git sources → Isolated build → Artifact validation → Download / logs."
+      },
+      "showcase": "https://github.com/musikfed/YadroKreator/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/YadroKreator/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/Irila_baikal_v1.0",
@@ -56,8 +71,13 @@
         "hi": "Irina Baikal 1.0: प्रयोगात्मक Linux-आधारित ऑपरेटिंग सिस्टम।",
         "fr": "Irina Baikal 1.0 : système d'exploitation expérimental basé sur Linux.",
         "fi": "Irina Baikal 1.0: kokeellinen Linux-pohjainen käyttöjärjestelmä.",
-        "ko": "Irina Baikal 1.0: 실험적인 Linux 기반 운영체제."
-      }
+        "ko": "Irina Baikal 1.0: 실험적인 Linux 기반 운영체제.",
+        "ja": "Irila_baikal_v1.0：システム構築と Linux。構成：Ubuntu / Linux → Secure Boot → XFCE / Desktop → USB hardware tests。",
+        "it": "Irila_baikal_v1.0: Build di sistema e Linux. Componenti: Ubuntu / Linux → Secure Boot → XFCE / Desktop → USB hardware tests.",
+        "be": "Irila_baikal_v1.0 — Сістэмныя зборкі і Linux. Этапы: Ubuntu / Linux → Secure Boot → XFCE / Desktop → USB hardware tests."
+      },
+      "showcase": "https://github.com/musikfed/Irila_baikal_v1.0/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/Irila_baikal_v1.0/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/wificam_T23N",
@@ -70,8 +90,13 @@
         "hi": "Ingenic T23N कैमरे के लिए प्रयोगात्मक बूट फ़र्मवेयर।",
         "fr": "Firmware de démarrage expérimental pour caméra Ingenic T23N.",
         "fi": "Kokeellinen käynnistysohjelmisto Ingenic T23N -kameralle.",
-        "ko": "Ingenic T23N 카메라용 실험적 부팅 펌웨어."
-      }
+        "ko": "Ingenic T23N 카메라용 실험적 부팅 펌웨어.",
+        "ja": "wificam_T23N：IP カメラファームウェア実験。構成：SD boot firmware → Linux / BusyBox → H.264 / PTZ → Hardware tests。",
+        "it": "wificam_T23N: Esperimenti firmware per telecamere IP. Componenti: SD boot firmware → Linux / BusyBox → H.264 / PTZ → Hardware tests.",
+        "be": "wificam_T23N — Эксперыменты з прашыўкай IP-камер. Этапы: SD boot firmware → Linux / BusyBox → H.264 / PTZ → Hardware tests."
+      },
+      "showcase": "https://github.com/musikfed/wificam_T23N/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/wificam_T23N/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/myipcam",
@@ -84,8 +109,13 @@
         "hi": "MyIPCam OS: स्थानीय IP कैमरे के लिए प्रयोगात्मक सिस्टम।",
         "fr": "MyIPCam OS : système expérimental de caméra IP locale.",
         "fi": "MyIPCam OS: kokeellinen paikallinen IP-kamerajärjestelmä.",
-        "ko": "MyIPCam OS: 로컬 IP 카메라용 실험적 운영체제."
-      }
+        "ko": "MyIPCam OS: 로컬 IP 카메라용 실험적 운영체제.",
+        "ja": "myipcam：IP カメラファームウェア実験。構成：microSD boot → Ingenic T23N → Video / PTZ → Web administration。",
+        "it": "myipcam: Esperimenti firmware per telecamere IP. Componenti: microSD boot → Ingenic T23N → Video / PTZ → Web administration.",
+        "be": "myipcam — Эксперыменты з прашыўкай IP-камер. Этапы: microSD boot → Ingenic T23N → Video / PTZ → Web administration."
+      },
+      "showcase": "https://github.com/musikfed/myipcam/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/myipcam/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/wifcam_helper",
@@ -98,8 +128,13 @@
         "hi": "T23N कैमरा हेड का अलग फ़र्मवेयर और परीक्षण मंच।",
         "fr": "Firmware séparé et banc d'essai pour une tête caméra T23N.",
         "fi": "Erillinen laiteohjelmisto ja testipenkki T23N-kamerapäälle.",
-        "ko": "T23N 카메라 헤드용 별도 펌웨어와 테스트 환경."
-      }
+        "ko": "T23N 카메라 헤드용 별도 펌웨어와 테스트 환경.",
+        "ja": "wifcam_helper：IP カメラファームウェア実験。構成：T23N camera head → Audio / Video → Firmware overlay → Hardware test bench。",
+        "it": "wifcam_helper: Esperimenti firmware per telecamere IP. Componenti: T23N camera head → Audio / Video → Firmware overlay → Hardware test bench.",
+        "be": "wifcam_helper — Эксперыменты з прашыўкай IP-камер. Этапы: T23N camera head → Audio / Video → Firmware overlay → Hardware test bench."
+      },
+      "showcase": "https://github.com/musikfed/wifcam_helper/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/wifcam_helper/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/micro",
@@ -112,8 +147,13 @@
         "hi": "MICRO वॉइस असिस्टेंट का प्रयोगात्मक विकास रिपॉज़िटरी।",
         "fr": "Dépôt expérimental de développement de l'assistant vocal MICRO.",
         "fi": "MICRO-puheavustimen kokeellinen kehitysrepositorio.",
-        "ko": "MICRO 음성 비서의 실험적 개발 저장소."
-      }
+        "ko": "MICRO 음성 비서의 실험적 개발 저장소.",
+        "ja": "micro：ロボット工学と音声制御。構成：Micro development → Voice assistant → Local services → Integration tests。",
+        "it": "micro: Robotica e controllo vocale. Componenti: Micro development → Voice assistant → Local services → Integration tests.",
+        "be": "micro — Робататэхніка і галасавое кіраванне. Этапы: Micro development → Voice assistant → Local services → Integration tests."
+      },
+      "showcase": "https://github.com/musikfed/micro/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/micro/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/Hombo3_3.0.0",
@@ -126,8 +166,13 @@
         "hi": "ESP32-S3 रोबोट नियंत्रण: कैमरा, सेंसर, आवाज़ और OTA।",
         "fr": "Commande d'un robot ESP32-S3 : caméra, capteurs, voix et OTA.",
         "fi": "ESP32-S3-robotin ohjaus: kamera, anturit, puhe ja OTA.",
-        "ko": "ESP32-S3 로봇 제어: 카메라, 센서, 음성 및 OTA."
-      }
+        "ko": "ESP32-S3 로봇 제어: 카메라, 센서, 음성 및 OTA.",
+        "ja": "Hombo3_3.0.0：ロボット工学と音声制御。構成：ESP32-S3 robot → Sensors / Camera → Voice / LLM → OTA controls。",
+        "it": "Hombo3_3.0.0: Robotica e controllo vocale. Componenti: ESP32-S3 robot → Sensors / Camera → Voice / LLM → OTA controls.",
+        "be": "Hombo3_3.0.0 — Робататэхніка і галасавое кіраванне. Этапы: ESP32-S3 robot → Sensors / Camera → Voice / LLM → OTA controls."
+      },
+      "showcase": "https://github.com/musikfed/Hombo3_3.0.0/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/Hombo3_3.0.0/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/esp32s3devkitC-1N16R8",
@@ -140,8 +185,13 @@
         "hi": "ESP32-C3/S3 और MicroPython के लिए क्रॉस-प्लेटफ़ॉर्म स्टूडियो।",
         "fr": "Studio multiplateforme ESP32-C3/S3 et MicroPython.",
         "fi": "Monialustainen ESP32-C3/S3- ja MicroPython-kehitysympäristö.",
-        "ko": "ESP32-C3/S3 및 MicroPython용 크로스플랫폼 개발 스튜디오."
-      }
+        "ko": "ESP32-C3/S3 및 MicroPython용 크로스플랫폼 개발 스튜디오.",
+        "ja": "esp32s3devkitC-1N16R8：ESP32 開発ツール。構成：ESP32-C3 / S3 → MicroPython → Cross-platform UI → Device setup。",
+        "it": "esp32s3devkitC-1N16R8: Strumenti di sviluppo ESP32. Componenti: ESP32-C3 / S3 → MicroPython → Cross-platform UI → Device setup.",
+        "be": "esp32s3devkitC-1N16R8 — Інструменты распрацоўкі ESP32. Этапы: ESP32-C3 / S3 → MicroPython → Cross-platform UI → Device setup."
+      },
+      "showcase": "https://github.com/musikfed/esp32s3devkitC-1N16R8/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/esp32s3devkitC-1N16R8/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/diskshellhdd",
@@ -154,8 +204,13 @@
         "hi": "Windows डिस्क और स्टोरेज प्रशासन का स्थानीय कार्यक्षेत्र।",
         "fr": "Atelier local d'administration des disques sous Windows.",
         "fi": "Paikallinen Windows-levyjen ja tallennuksen hallintatyökalu.",
-        "ko": "로컬 Windows 디스크·스토리지 관리 도구."
-      }
+        "ko": "로컬 Windows 디스크·스토리지 관리 도구.",
+        "ja": "diskshellhdd：Windows 管理ツール。構成：Windows storage → Placement / Analytics → Disk safety rules → Operation reports。",
+        "it": "diskshellhdd: Strumenti di amministrazione Windows. Componenti: Windows storage → Placement / Analytics → Disk safety rules → Operation reports.",
+        "be": "diskshellhdd — Інструменты адміністравання Windows. Этапы: Windows storage → Placement / Analytics → Disk safety rules → Operation reports."
+      },
+      "showcase": "https://github.com/musikfed/diskshellhdd/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/diskshellhdd/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/pitools",
@@ -168,8 +223,13 @@
         "hi": ".prj प्रोजेक्ट फ़ाइलों पर आधारित समानांतर SSH तैनाती।",
         "fr": "Déploiement SSH parallèle piloté par des fichiers .prj.",
         "fi": "Rinnakkainen SSH-julkaisu .prj-projektitiedostoilla.",
-        "ko": " .prj 프로젝트 파일 기반 병렬 SSH 배포."
-      }
+        "ko": " .prj 프로젝트 파일 기반 병렬 SSH 배포.",
+        "ja": "pitools：インフラ関連ツール。構成：.prj manifest → SSH connections → Parallel deploy → Result logs。",
+        "it": "pitools: Strumenti per infrastrutture. Componenti: .prj manifest → SSH connections → Parallel deploy → Result logs.",
+        "be": "pitools — Інфраструктурныя інструменты. Этапы: .prj manifest → SSH connections → Parallel deploy → Result logs."
+      },
+      "showcase": "https://github.com/musikfed/pitools/blob/pitools/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/pitools/pitools/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/registry-change-explorer",
@@ -182,8 +242,13 @@
         "hi": "स्थानीय SQLite सूचकांक से Windows रजिस्ट्री की खोज।",
         "fr": "Explorer le registre Windows avec un index SQLite local.",
         "fi": "Windows-rekisterin tutkiminen paikallisen SQLite-hakuindeksin avulla.",
-        "ko": "로컬 SQLite 검색 색인으로 Windows 레지스트리 탐색."
-      }
+        "ko": "로컬 SQLite 검색 색인으로 Windows 레지스트리 탐색.",
+        "ja": "registry-change-explorer：Windows 管理ツール。構成：Windows Registry → SQLite index → Search UI → Diff roadmap。",
+        "it": "registry-change-explorer: Strumenti di amministrazione Windows. Componenti: Windows Registry → SQLite index → Search UI → Diff roadmap.",
+        "be": "registry-change-explorer — Інструменты адміністравання Windows. Этапы: Windows Registry → SQLite index → Search UI → Diff roadmap."
+      },
+      "showcase": "https://github.com/musikfed/registry-change-explorer/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/registry-change-explorer/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/pgsql",
@@ -196,8 +261,13 @@
         "hi": "PostgreSQL 16, 1C, Patroni/etcd और Kubernetes प्रयोगशाला।",
         "fr": "Laboratoire PostgreSQL 16, 1C, Patroni/etcd et Kubernetes.",
         "fi": "PostgreSQL 16 -laboratorio: 1C, Patroni/etcd ja Kubernetes.",
-        "ko": "PostgreSQL 16, 1C, Patroni/etcd 및 Kubernetes 실험실."
-      }
+        "ko": "PostgreSQL 16, 1C, Patroni/etcd 및 Kubernetes 실험실.",
+        "ja": "pgsql：インフラ関連ツール。構成：PostgreSQL 16 → Ubuntu / Docker → Patroni / etcd → Kubernetes lab。",
+        "it": "pgsql: Strumenti per infrastrutture. Componenti: PostgreSQL 16 → Ubuntu / Docker → Patroni / etcd → Kubernetes lab.",
+        "be": "pgsql — Інфраструктурныя інструменты. Этапы: PostgreSQL 16 → Ubuntu / Docker → Patroni / etcd → Kubernetes lab."
+      },
+      "showcase": "https://github.com/musikfed/pgsql/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/pgsql/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/postgresql1c",
@@ -210,8 +280,13 @@
         "hi": "PostgreSQL और 1C इन्फ्रास्ट्रक्चर प्रयोग।",
         "fr": "Expériences d'infrastructure PostgreSQL et 1C.",
         "fi": "PostgreSQL- ja 1C-infrastruktuurikokeiluja.",
-        "ko": "PostgreSQL 및 1C 인프라 실험."
-      }
+        "ko": "PostgreSQL 및 1C 인프라 실험.",
+        "ja": "postgresql1c：インフラ関連ツール。構成：Container → PostgresPro 1C → Docker build → 1C server。",
+        "it": "postgresql1c: Strumenti per infrastrutture. Componenti: Container → PostgresPro 1C → Docker build → 1C server.",
+        "be": "postgresql1c — Інфраструктурныя інструменты. Этапы: Container → PostgresPro 1C → Docker build → 1C server."
+      },
+      "showcase": "https://github.com/musikfed/postgresql1c/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/postgresql1c/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/analitikhhru",
@@ -224,8 +299,13 @@
         "hi": "hh.ru नौकरी और रिज़्यूमे आँकड़ों के लिए स्थानीय डैशबोर्ड।",
         "fr": "Tableau de bord local pour offres et CV agrégés de hh.ru.",
         "fi": "Paikallinen hallintapaneeli hh.ru-työpaikkojen ja ansioluetteloiden koosteille.",
-        "ko": "hh.ru 채용공고와 이력서 집계용 로컬 대시보드."
-      }
+        "ko": "hh.ru 채용공고와 이력서 집계용 로컬 대시보드.",
+        "ja": "analitikhhru：ローカルデータ分析。構成：hh.ru browser → Aggregate counts → Local analytics → Trends dashboard。",
+        "it": "analitikhhru: Analisi locale dei dati. Componenti: hh.ru browser → Aggregate counts → Local analytics → Trends dashboard.",
+        "be": "analitikhhru — Лакальная аналітыка даных. Этапы: hh.ru browser → Aggregate counts → Local analytics → Trends dashboard."
+      },
+      "showcase": "https://github.com/musikfed/analitikhhru/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/analitikhhru/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/smilegun",
@@ -238,8 +318,13 @@
         "hi": "कैमरे के इशारों से नियंत्रित प्रयोगात्मक ब्राउज़र गेम।",
         "fr": "Jeu expérimental dans le navigateur contrôlé par gestes et caméra.",
         "fi": "Kokeellinen selainpeli, jota ohjataan kameran eleillä.",
-        "ko": "카메라 제스처로 조작하는 실험적 브라우저 게임."
-      }
+        "ko": "카메라 제스처로 조작하는 실험적 브라우저 게임.",
+        "ja": "smilegun：コンピュータービジョンゲーム。構成：Webcam stream → Computer vision → Hand / face gestures → Browser game。",
+        "it": "smilegun: Giochi di visione artificiale. Componenti: Webcam stream → Computer vision → Hand / face gestures → Browser game.",
+        "be": "smilegun — Гульні з камп'ютарным зрокам. Этапы: Webcam stream → Computer vision → Hand / face gestures → Browser game."
+      },
+      "showcase": "https://github.com/musikfed/smilegun/blob/my-game/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/smilegun/my-game/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/smilegun_v2",
@@ -252,8 +337,13 @@
         "hi": "कंप्यूटर विज़न, इशारों और चेहरे के भाव वाला आर्केड गेम।",
         "fr": "Jeu d'arcade avec vision artificielle, gestes et expressions du visage.",
         "fi": "Tietokonenäköön, eleisiin ja ilmeisiin perustuva arcade-peli.",
-        "ko": "컴퓨터 비전, 제스처, 표정으로 조작하는 아케이드 게임."
-      }
+        "ko": "컴퓨터 비전, 제스처, 표정으로 조작하는 아케이드 게임.",
+        "ja": "smilegun_v2：コンピュータービジョンゲーム。構成：Camera input → MediaPipe → Gesture controller → Arcade UI。",
+        "it": "smilegun_v2: Giochi di visione artificiale. Componenti: Camera input → MediaPipe → Gesture controller → Arcade UI.",
+        "be": "smilegun_v2 — Гульні з камп'ютарным зрокам. Этапы: Camera input → MediaPipe → Gesture controller → Arcade UI."
+      },
+      "showcase": "https://github.com/musikfed/smilegun_v2/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/smilegun_v2/main/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/docker-compose-ui",
@@ -266,22 +356,45 @@
         "hi": "Docker Compose वेब UI का फ़ोर्क; मूल परियोजना अन्य लेखक की है।",
         "fr": "Fork d'une interface web Docker Compose ; projet d'origine tiers.",
         "fi": "Docker Compose -verkkokäyttöliittymän forkki; alkuperäinen tekijä on muu.",
-        "ko": "Docker Compose 웹 UI 포크; 원본 프로젝트는 다른 개발자의 것입니다."
-      }
+        "ko": "Docker Compose 웹 UI 포크; 원본 프로젝트는 다른 개발자의 것입니다.",
+        "ja": "docker-compose-ui：第三者プロジェクトのフォーク。構成：Docker Compose → Web dashboard → REST API → Container management。",
+        "it": "docker-compose-ui: Fork di un progetto di terzi. Componenti: Docker Compose → Web dashboard → REST API → Container management.",
+        "be": "docker-compose-ui — Форк праекта іншага аўтара. Этапы: Docker Compose → Web dashboard → REST API → Container management."
+      },
+      "showcase": "https://github.com/musikfed/docker-compose-ui/blob/master/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/docker-compose-ui/master/docs/showcase/overview.svg"
     },
     {
       "repository": "musikfed/ai_video3060_12G",
-      "type": "empty",
+      "type": "reserved",
       "descriptions": {
-        "ru": "Публичный пустой репозиторий; описание проекта пока отсутствует.",
-        "en": "Public empty repository; no project description yet.",
-        "zh": "公开的空仓库；暂无项目说明。",
-        "de": "Öffentliches leeres Repository; bisher keine Projektbeschreibung.",
-        "hi": "सार्वजनिक खाली रिपॉज़िटरी; अभी परियोजना विवरण नहीं है।",
-        "fr": "Dépôt public vide ; pas encore de description du projet.",
-        "fi": "Julkinen tyhjä repositorio; projektikuvaus puuttuu vielä.",
-        "ko": "공개된 빈 저장소로 아직 프로젝트 설명이 없습니다."
-      }
+        "ru": "Репозиторий с презентацией будущего проекта; исполняемого видеогенератора пока нет.",
+        "en": "Reserved project with documentation only; no verified AI video generator is implemented.",
+        "zh": "预留项目仓库，目前只有说明文档，没有已验证的视频生成器。",
+        "de": "Reserviertes Projekt mit Dokumentation, bisher ohne verifizierten KI-Videogenerator.",
+        "hi": "आरक्षित परियोजना; दस्तावेज़ उपलब्ध हैं, लेकिन सत्यापित वीडियो जनरेटर अभी नहीं।",
+        "fr": "Projet réservé et documenté, sans générateur vidéo IA vérifié à ce jour.",
+        "fi": "Varausluonteinen projekti, jossa on vasta dokumentaatiota; ei varmennettua videogeneraattoria.",
+        "ko": "문서만 있는 예정 프로젝트이며 검증된 AI 동영상 생성기는 아직 없습니다.",
+        "ja": "ai_video3060_12G：空の公開リポジトリ。構成：Repository created → No source files → Not yet documented → No verified release。",
+        "it": "ai_video3060_12G: Repository pubblico vuoto. Componenti: Repository created → No source files → Not yet documented → No verified release.",
+        "be": "ai_video3060_12G — Пусты публічны рэпазіторый. Этапы: Repository created → No source files → Not yet documented → No verified release."
+      },
+      "showcase": "https://github.com/musikfed/ai_video3060_12G/blob/main/docs/showcase/README.md",
+      "diagram": "https://raw.githubusercontent.com/musikfed/ai_video3060_12G/main/docs/showcase/overview.svg"
     }
+  ],
+  "languages": [
+    "ru",
+    "en",
+    "zh",
+    "de",
+    "hi",
+    "fr",
+    "fi",
+    "ko",
+    "ja",
+    "it",
+    "be"
   ]
 }
