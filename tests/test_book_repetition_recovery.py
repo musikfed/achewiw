@@ -166,4 +166,15 @@ def test_book_generation_recovers_from_four_repeated_qwen_responses(tmp_path,mon
         assert "На стене появился знак" in state["text"]
         assert state["word_count"]>=250
         assert report["status"]=="ready"
+        versions=api.get("/api/projects/"+project["id"]+"/editorial/versions").json()
+        assert len(versions)==1
+        assert versions[0]["source_kind"]=="draft"
+        assert versions[0]["all_complete"]
+        proposals=api.get("/api/projects/"+project["id"]+"/editorial/versions/"+
+                          versions[0]["id"]+"/graph-proposals").json()
+        assert proposals["suggestions"]
+        with main.db() as conn:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM story_nodes WHERE project_id=? AND status='approved'",
+                (project["id"],)).fetchone()[0]==0  # never auto-approve AI events
         assert api.get("/api/projects/"+project["id"]).json()["scenes"][0]["text"]=="Коты слышат неизвестный сигнал."
