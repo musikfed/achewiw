@@ -7,7 +7,7 @@ Read-only preview:
 Only after studio has stopped:
   python3 scripts/erase-studio-library.py --confirm ERASE_ACHEWIW_LIBRARY_AND_ARCHIVES
 
-Deletes only the exact ACHEWIW SQLite files, own prefixed SQLite snapshots
+Deletes only the exact ACHEWIW canon/search/work SQLite files and own snapshots
 and /1tbdisk/achewiw/data/illustrations subtree. Monitor metrics and .env stay.
 """
 from __future__ import annotations
@@ -47,8 +47,9 @@ def verify_tree(tree: Path) -> None:
 def planned() -> list[Path]:
     assert_root()
     paths = []
-    for suffix in ("", "-wal", "-shm", "-journal"):
-        target = DATA / ("achewiw.sqlite3" + suffix)
+    for name in ("achewiw.sqlite3", "search.sqlite3", "work.sqlite3"):
+      for suffix in ("", "-wal", "-shm", "-journal"):
+        target = DATA / (name + suffix)
         if target.is_symlink():
             raise RuntimeError("Ссылка в SQLite-пути запрещена")
         if target.is_file():
@@ -59,7 +60,7 @@ def planned() -> list[Path]:
             raise RuntimeError("Небезопасная папка backups")
         verify_tree(backups)
         for item in backups.iterdir():
-            if item.is_file() and item.name.startswith(("achewiw-before-reset-", "achewiw-before-delete-")) and item.suffix == ".sqlite3":
+            if item.is_file() and item.name.startswith(("achewiw-before-reset-", "achewiw-before-delete-", "before-story-storage-")) and item.suffix == ".sqlite3":
                 paths.append(item)
     artwork = DATA / "illustrations"
     if artwork.exists() or artwork.is_symlink():
@@ -111,7 +112,7 @@ def main() -> None:
     backups = DATA / "backups"
     if backups.is_dir() and not backups.is_symlink() and not any(backups.iterdir()):
         backups.rmdir()
-    print("Готово. SQLite, архивы ACHEWIW и иллюстрации удалены без создания новых архивов.")
+    print("Готово. Только SQLite ACHEWIW (canon/search/work), свои архивы и иллюстрации удалены.")
     print("Папки других проектов, .env, Ollama, Docker volumes и monitor/ не затронуты.")
 
 
