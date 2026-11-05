@@ -75,6 +75,40 @@ async def hybrid_context(data_dir: Path, ollama_base_url: str, project_id: str,
     }
 
 
+
+async def flush_pending_vectors(data_dir: Path, ollama_base_url: str,
+                                project_id: str, job_id: str, *,
+                                model: str = EMBED_MODEL, max_batches: int = 8) -> dict:
+    """Finish embedding last saved chunks (which lack a following prompt).
+
+    Never blocks manuscript persistence on missing Ollama embeddings; preserves
+    FTS5 and author-approved graph. Small CPU-only batches, no writer unload.
+    """
+    count=0
+    try:
+        for _ in range(max(1,min(16,max_batches))):
+            backlog=pending_embeddings(data_dir,project_id,job_id,model,limit=12)
+            if not backlog: return {"state":"active","indexed":count}
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=8,read=100,write=20,pool=10)) as client:
+                resp=await client.post(ollama_base_url+"/api/embed",json={
+                    "model":model,
+                    "input":[x["text"][:1500] for x in backlog],
+                    "truncate":False,"keep_alive":0,
+                    "options":{"num_gpu":0,"num_ctx":2048}})
+                resp.raise_for_status()
+                vectors=resp.json()["embeddings"]
+            wrote=save_embeddings(data_dir,model,backlog,vectors)
+            if not wrote:break
+            count+=wrote
+    except asyncio.CancelledError:
+        raise
+    except (httpx.HTTPError,ValueError,KeyError,TypeError,AttributeError,
+            sqlite3.Error,OSError):
+        return {"state":"fts5-only","indexed":count}
+    return {"state":"partial","indexed":count}
+
+
+
 def compact_hybrid_context(result: dict, max_chars: int = 3400) -> str:
     """Prompt-safe context assembled from real indexed sources, no fake canon."""
     chunks=[{
