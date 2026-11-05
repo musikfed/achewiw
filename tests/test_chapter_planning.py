@@ -152,7 +152,9 @@ def test_quality_guard_rejects_exact_prose_repetitions():
     from book_generation_core import check_new_prose
     paragraph = "В переулке медленно загорались фонари, и Миирус слушал город. "
     already = paragraph * 20
-    check_new_prose("", paragraph * 8)
+    # New guard blocks repetition inside a single Ollama answer as well.
+    with pytest.raises(ValueError, match="повтор"):
+        check_new_prose("", paragraph * 8)
     with pytest.raises(ValueError, match="повтор"):
         check_new_prose(already, paragraph * 10)
     with pytest.raises(ValueError, match="короткий"):
