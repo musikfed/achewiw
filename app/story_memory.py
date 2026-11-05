@@ -276,15 +276,15 @@ def sync_outline(db: sqlite3.Connection, project) -> None:
         uid="outline:"+scene.id
         expected.add(uid)
         synopsis=scene.text[:900] if len(re.findall(r"\w+",scene.text))<=180 else ""
-        parts=[p for p in (scene.anchor,scene.hook,synopsis) if p.strip()]
-        statement="План главы: "+(" | ".join(parts)[:1800] if parts else scene.title)
+        parts=[p for p in (getattr(scene,"anchor",""),getattr(scene,"hook",""),synopsis) if p.strip()]
+        statement="План главы: "+(" | ".join(parts)[:1800] if parts else getattr(scene,"title",scene.id))
         db.execute("""INSERT INTO story_nodes
             (id,project_id,branch_id,kind,title,statement,scene_id,scene_index,status,created_at)
             VALUES(?,?,'main','event',?,?,?,?, 'outline',?)
             ON CONFLICT(id) DO UPDATE SET title=excluded.title,
                 statement=excluded.statement,scene_index=excluded.scene_index,
                 scene_id=excluded.scene_id""",
-            (uid,project.id,scene.title,statement,scene.id,i,stamp()))
+            (uid,project.id,getattr(scene,"title",scene.id),statement,scene.id,i,stamp()))
         if i:
             prev="outline:"+project.scenes[i-1].id
             eid="outline-order:"+scene.id
