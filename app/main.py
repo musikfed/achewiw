@@ -1366,12 +1366,25 @@ def story_memory_new_branch(project_id: str, request: StoryBranchRequest):
 
 
 @api.post("/storage/reindex")
-def reindex_editor_storage():
-    """Incremental FTS cache refresh, no delete of canon/working manuscripts."""
+async def reindex_editor_storage(project_id: str | None = None):
+    """Explicit FTS+CPU-vector refresh for selected book, never alter canon."""
     with db() as connection:
-        if active_job(connection):
-            raise HTTPException(409, "Дождись окончания генерации перед переиндексацией")
-        return sync_search(DATA_DIR, connection)
+        if active_job(connection) or image_operation_active(connection):
+            raise HTTPException(409, "Заверши генерацию/иллюстрацию перед обновлением RAG")
+        job_id=""
+        if project_id is not None:
+            exists=connection.execute("SELECT 1 FROM projects WHERE id=?",(project_id,)).fetchone()
+            if not exists:raise HTTPException(404,"Книга не найдена")
+            # Historical drafts remain isolated to their own book job.
+            row=connection.execute("SELECT id FROM ai_jobs WHERE project_id=? AND mode='book' "
+                                   "ORDER BY created_at DESC LIMIT 1",(project_id,)).fetchone()
+            job_id=row["id"] if row else ""
+        result=sync_search(DATA_DIR, connection,project_id)
+    if project_id is not None:
+        result["vector_index"]=await flush_pending_vectors(DATA_DIR,OLLAMA_BASE_URL,
+                                                          project_id,job_id)
+        result["rag"]=vector_index_status(DATA_DIR,project_id)
+    return result
 
 
 @api.get("/storage/reset-epoch")
