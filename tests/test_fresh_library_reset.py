@@ -39,6 +39,12 @@ def test_only_library_files_are_selected_for_clean_start(tmp_path,monkeypatch):
         (backup/name).write_bytes(b"backup")
     (data/"comfyui-runtime"/"src").mkdir(parents=True)
     (data/"comfyui-runtime"/"src"/"checkpoint.safetensors").write_bytes(b"preserve")
+    output=data/"comfyui-runtime"/"src"/"output"
+    output.mkdir()
+    own_generated=output/"achewiw_local_00001_.png"
+    own_generated.write_bytes(b"old-generated-book-image")
+    foreign_generated=output/"other_client_00001_.png"
+    foreign_generated.write_bytes(b"keep")
     (data/"monitor").mkdir()
     (data/"monitor"/"host.json").write_text("{}")
     (data/"comfyui-control.token").write_text("preserve")
@@ -54,6 +60,10 @@ def test_only_library_files_are_selected_for_clean_start(tmp_path,monkeypatch):
     assert backup/"achewiw-before-reset-old.sqlite3" in targets
     assert backup/"other-person.sqlite3" not in targets
     assert data/"comfyui-runtime" not in targets
+    assert own_generated in targets
+    assert foreign_generated not in targets
+    assert output not in targets
+    assert data/"comfyui-runtime"/"src"/"checkpoint.safetensors" not in targets
     assert data/"comfyui-control.token" not in targets
     assert data/"monitor" not in targets
     assert tmp_path/"unrelated_project.sqlite3" not in targets
