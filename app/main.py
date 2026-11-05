@@ -1023,7 +1023,7 @@ def download_manuscript_docx(project_id: str):
 @api.get("/projects/{project_id}/manuscript.fb2")
 def download_manuscript_fb2(project_id: str):
     try:
-        body = manuscript_fb2(get_project(project_id))
+        body = manuscript_fb2(get_project(project_id), illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     return Response(
@@ -1354,6 +1354,15 @@ def story_memory_new_branch(project_id: str, request: StoryBranchRequest):
             raise HTTPException(422,str(exc)) from exc
 
 
+@api.post("/storage/reindex")
+def reindex_editor_storage():
+    """Incremental FTS cache refresh, no delete of canon/working manuscripts."""
+    with db() as connection:
+        if active_job(connection):
+            raise HTTPException(409, "Дождись окончания генерации перед переиндексацией")
+        return sync_search(DATA_DIR, connection)
+
+
 @api.get("/storage/status")
 def editor_storage_status():
     """Only file sizes/status. No arbitrary path or destructive DB operations."""
@@ -1565,6 +1574,11 @@ async def execute_book(job_id: str) -> None:
                     save_chapter(connection, job_id, scene.id, text, attempts,
                                  complete=book_words(text) >= chapter["target_words"])
                     index_chunk(connection,project.id,"main",job_id,"draft",scene.id,index,attempts,generated)
+                try:
+                    checkpoint_work(DATA_DIR, project.id, job_id, scene.id, text, book_words(text))
+                except (OSError, sqlite3.Error, ValueError):
+                    # Workspace mirror is derived: failed cache must never discard prose.
+                    pass
                     summary = book_summary(connection, job_id)
                     update_job(connection, job_id,
                                stage=f"Глава {index+1}/{len(project.scenes)} · {book_words(text)}/{chapter['target_words']} слов",
