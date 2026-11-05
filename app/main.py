@@ -28,7 +28,8 @@ from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, max_attempts, count_words as book_words, init_book_tables,
-    create_book_chapters, chapters_for_job, book_summary, save_chapter, check_new_prose)
+    create_book_chapters, chapters_for_job, book_summary, save_chapter,
+    check_new_prose, trim_repeated_tail, continuation_repair_note)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
 from editorial_ledger import init_editorial_schema, editorial_schema_status
@@ -1558,22 +1559,17 @@ async def execute_book(job_id: str) -> None:
                     update_job(connection, job_id, stage=f"Глава {index+1}/{len(project.scenes)} · фрагмент {attempts+1}",
                                output="Текст глав хранится в SQLite отдельно от каркаса.",
                                percent=pct)
-                # Local models may repeat a generic paragraph. A rejected
-                # response is NEVER appended to manuscript or RAG. Retry with
-                # a new seed and a concrete non-recursive scene-writing brief.
-                for retry in range(3):
-                    payload["options"]["temperature"] = 0.72 + retry * 0.07
+                # A model echo must never overwrite previous text. First trim
+                # a verbatim echo of the tail; then retry with a NEW concrete
+                # scene beat and a different seed. Each failure is bounded.
+                last_failure = ""
+                for retry in range(6):
+                    payload["options"]["temperature"] = min(0.93, 0.72 + retry * 0.035)
                     payload["options"]["seed"] = (
-                        int(job_id[:8], 16) + (index+1)*101 + attempts*31 + retry*1009
+                        int(job_id[:8], 16) + (index+1)*101 +
+                        attempts*31 + chapter.get("retry_epoch", 0)*7919 + retry*1009
                     ) % 2147483647
-                    payload["prompt"] = prompt + (
-                        "\\nПОВТОР ОТКЛОНЁН. Не повторяй уже написанные образы, "
-                        "не рассуждай снова о неизвестности и важности пути. "
-                        "Продвигай непосредственно заданное событие через действие, "
-                        "конкретную обстановку, разговор и причинное следствие. "
-                        "Не выдумывай новый канон и не раскрывай запретные факты."
-                        if retry else ""
-                    )
+                    payload["prompt"] = prompt + continuation_repair_note(retry,text,last_failure)
                     generated = ""
                     async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
                         async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
@@ -1589,18 +1585,26 @@ async def execute_book(job_id: str) -> None:
                                     raise ValueError("Один фрагмент превышает лимит")
                                 if part.get("done"):
                                     break
+                    candidate = trim_repeated_tail(text, generated)
                     try:
-                        check_new_prose(text, generated)
-                        break
+                        check_new_prose(text, candidate)
                     except ValueError as exc:
-                        if retry == 2 or not any(k in str(exc).casefold()
-                                                 for k in ("повтор", "короткий")):
-                            raise
+                        last_failure = str(exc)
+                        if retry == 5 or not any(k in last_failure.casefold()
+                                                  for k in ("повтор", "короткий")):
+                            raise ValueError(
+                                f"Глава {index+1}: после {retry+1} попыток новый текст "
+                                "пока не отличается от сохранённого. Ничего не потеряно; "
+                                "можно продолжить с новым контекстом и seed."
+                            ) from exc
                         with db() as connection:
                             update_job(connection, job_id,
-                                       stage="Обнаружен повтор · пробуем другую формулировку",
-                                       output="Отклонённый фрагмент не сохранён, предыдущий текст цел.",
+                                       stage=f"Глава {index+1} · повтор, перестраиваем продолжение ({retry+1}/6)",
+                                       output="Неподходящий фрагмент отклонён, ранее написанная глава сохранена.",
                                        percent=pct)
+                        continue
+                    generated = candidate
+                    break
                 text = (text.rstrip() + "\n\n" + generated.strip()).strip()
                 attempts += 1
                 with db() as connection:
@@ -1759,6 +1763,12 @@ async def resume_full_book(job_id: str):
                     "UPDATE ai_book_chapters SET attempts=0,updated_at=? "
                     "WHERE job_id=? AND scene_id=?",
                     (utc_now(), job_id, chapter["scene_id"]))
+        # Every explicit resume must change the seed even when no chunk was
+        # accepted on the previous run. Previously saved words stay intact.
+        connection.execute(
+            "UPDATE ai_book_chapters SET retry_epoch=retry_epoch+1,updated_at=? "
+            "WHERE job_id=? AND complete=0 AND accepted_at IS NULL",
+            (utc_now(), job_id))
         connection.execute(
             "UPDATE ai_jobs SET status='queued',stage='Возобновление',error=NULL,updated_at=? WHERE id=?",
             (utc_now(), job_id))
