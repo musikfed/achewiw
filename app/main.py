@@ -24,7 +24,8 @@ from gpu_scheduling import init_gpu_leases, image_operation_active, reserve_gpu,
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
-from prose_quality import (check_quality, streaming_loop, prompt_tail, ProseDegeneration)
+from prose_quality import (check_quality, streaming_loop, prompt_tail, first_cycle, ProseDegeneration)
+from narrative_direction import scene_contract, reject_vacant_dialogue
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
     versions as book_versions, get_version as get_book_version,
@@ -1709,6 +1710,9 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
                  "реакциями героев и причинно-следственными событиями. Не пересказывай сюжет.")
     guidance = (
         "Ты профессиональный писатель. " + genre +
+        (scene_contract(project,scene,chapter_index,chapter_plan,
+                        book_words(existing_text),chapter_target)
+         if project.work_type=="fiction" else "") +
         "\nТолько русский литературный текст, без Markdown-заголовков, списков, "
         "пояснений модели, синопсиса и слов «продолжение следует». "
         "Продолжай непосредственно текущую главу, а не начинай новую. "
@@ -1797,6 +1801,8 @@ async def execute_book(job_id: str) -> None:
                     try:
                         check_new_prose(text,recovered)
                         check_quality(recovered,previous_chapters=earlier_chapters)
+                        if project.work_type=="fiction":
+                            reject_vacant_dialogue(recovered)
                     except ValueError:
                         # Invalid/repeated stream is NOT promoted to draft.
                         clear_stream_buffer(connection,job_id,scene.id)
@@ -1826,6 +1832,12 @@ async def execute_book(job_id: str) -> None:
                 hybrid=await hybrid_context(DATA_DIR,OLLAMA_BASE_URL,
                                              project.id,job_id,scene.id,index,
                                              memory_query,text)
+                # Old accepted draft excerpts are kept intact in canon, but
+                # never quoted as stylistic examples when trapped in a loop.
+                packet["evidence"]=[
+                    e for e in packet.get("evidence",[])
+                    if not first_cycle(e["text"])
+                ]
                 context=context_text(packet,max_chars=2900)
                 context+="\\nПОИСК В SEARCH SQLITE И СОСТОЯНИЕ ИЗ WORK SQLITE:\\n"
                 context+=compact_hybrid_context(hybrid,max_chars=2600)
@@ -1915,12 +1927,14 @@ async def execute_book(job_id: str) -> None:
                     try:
                         check_new_prose(text, candidate)
                         check_quality(candidate, previous_chapters=earlier_chapters)
+                        if project.work_type=="fiction":
+                            reject_vacant_dialogue(candidate)
                     except ValueError as exc:
                         with db() as connection:
                             clear_stream_buffer(connection,job_id,scene.id)
                         last_failure = str(exc)
                         if retry == 5 or not any(k in last_failure.casefold()
-                                                  for k in ("повтор", "короткий")):
+                                                  for k in ("повтор", "короткий", "пустой диалог")):
                             raise ValueError(
                                 f"Глава {index+1}: после {retry+1} попыток новый текст "
                                 "пока не отличается от сохранённого. Ничего не потеряно; "
