@@ -219,6 +219,8 @@ def install(api: APIRouter, env: dict) -> None:
         async with gpu_session(job["id"],"literary_qa") as lease:
             await check_gpu_models(job["critic_model"],job)
             p=project(job)
+            with conn() as db:
+                puzzle_cards=env["visual_puzzle_list"](db,p.id)
             for ch in chapters:
                 if state(job["id"])["cancel_requested"]:
                     raise ValueError("Автор отменил конвейер")
@@ -231,7 +233,14 @@ def install(api: APIRouter, env: dict) -> None:
                 except ValueError:
                     pass
                 previous=chapters[ch["scene_index"]-1]["text"][-700:] if ch["scene_index"] else ""
+                scheduled=[card for card in puzzle_cards if card["answer_scene_id"]==ch["scene_id"]]
+                reveal_checks="; ".join(
+                    "В ЭТОЙ главе должна быть проверяемая разгадка: "+
+                    card["answer_note"][:500] for card in scheduled)[:1100]
                 prompt=(
+                    "Если заданы запланированные разгадки, проверь: действительно ли "
+                    "они доказаны действием в тексте, а не просто названы. "
+                    "Не добавляй их в предшествующие главы.\nПЛАН РАЗГАДОК: "+reveal_checks+"\n"
                     "Ты независимый литературный редактор. Это НЕ запрос на генерацию прозы. "
                     "Отчёт строго по приведённому тексту, без выдуманных событий. "
                     "Проверь: что на самом деле произошло, цель героя, наблюдаемые последствия, "
