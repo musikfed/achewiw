@@ -47,3 +47,28 @@ GitHub Topics поддерживает до 20 тегов, строчные ла
 - Индексация зависит от поисковых систем и GitHub, мгновенный топ выдачи и звёзды не гарантированы.
 
 Справка: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/classifying-your-repository-with-topics
+
+## Google и Яндекс: отдельная индексируемая страница
+
+В `docs/index.html` добавлена **статическая публичная страница проекта**, не связанная с локальной SQLite, Ollama или рукописями. Там есть `title`, `description`, естественные русские тексты, заголовки, `alt` для схем, `canonical`, Open Graph и JSON-LD `SoftwareSourceCode`. На одной странице обсуждаются реальные сценарии использования и технические ограничения.
+
+**Состояние на 5 ноября 2026:** у репозитория GitHub Pages ещё не включён (`has_pages=false`). Пока страницу нельзя считать общедоступным сайтом или проиндексированной Google/Яндексом.
+
+Чтобы запустить её, владелец репозитория открывает **Settings → Pages → Build and deployment → Deploy from a branch → main /docs → Save**. После включения проверяет в браузере `https://musikfed.github.io/achewiw/` и статус HTTP 200. Это **только публичная документация**, не сам ACHEWIW Studio. Нельзя публиковать `/data`, бэкапы SQLite, токены, Ollama, порт 7080, приватные рукописи.
+
+После успешного включения:
+
+1. Проверить `title` и описание в открывшейся странице, наличие ссылок на `https://github.com/musikfed/achewiw` и корректное отображение изображений.
+2. Добавить доступную URL-prefix собственность в [Google Search Console](https://search.google.com/search-console/about), проверить её доступным способом, отправить главную страницу через URL Inspection и отслеживать Page indexing. Верификация требует реального доступа к указанной странице/домену, не всегда доступна для чужого домена `github.io`.
+3. Добавить доступный адрес в [Яндекс Вебмастер](https://webmaster.yandex.ru/), подтвердить права и проверить «Страницы в поиске», «Диагностика», «Статистика запросов».
+4. Если проверку прав на подкаталог GitHub Pages выполнить нельзя, использовать собственный домен с доступом к DNS, настроить HTTPS и обновить canonical/OG/Schema.org на реальный адрес. Не выдавать чужой `github.io` за свой домен.
+5. Связать страницу из профильной статьи о локальных LLM и авторской редактуре с конкретными техническими измерениями. Нужны реальные отзывы пользователей и качественные примеры, не дорвеи, спам и массовые дубли страниц.
+
+Официальные руководства:
+
+- [Google Search Essentials — доступность и индексирование](https://developers.google.com/search/docs/essentials/technical)
+- [Google — полезный контент для людей](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Яндекс — этапы обхода и индексирования](https://yandex.ru/support/webmaster/ru/yandex-indexing/site-indexing)
+- [Яндекс — качество страниц, заголовки и описания](https://www.yandex.ru/support/webmaster/ru/site-quality-index)
+
+**Важно:** README GitHub, его `About` и Topics редактируются отдельно от метатегов `docs/index.html`. GitHub в данный момент не получил описание и темы через подключение — для них нужно вручную воспользоваться иконкой редактирования About. Поисковые позиции, сроки и количество звёзд никто не гарантирует.
