@@ -426,6 +426,21 @@ def install(api: APIRouter, env: dict) -> None:
             ("approved.fb2",manuscript_fb2(p,illustrations=arts)),
         ):
             files.append(file_atomically(job["id"],filename,content))
+        # An opt-in local corpus package of accepted material. Do not train
+        # the writer automatically; the rights/provenance and quality of this
+        # small sample must be reviewed before any future fine-tune.
+        examples=[]
+        for i,scene in enumerate(p.scenes,1):
+            examples.append(json.dumps({
+                "project_id":p.id,"chapter":i,"scene_id":scene.id,
+                "title":scene.title,"genre":p.genre,
+                "accepted_text":scene.text,
+                "source_sha256":cv.fingerprint(scene.text),
+                "status":"author_approved","usage":"local_RAG_reference",
+                "training_opt_in":False
+            },ensure_ascii=False,sort_keys=True))
+        corpus=("\\n".join(examples)+"\\n").encode("utf-8")
+        files.append(file_atomically(job["id"],"approved-corpus.jsonl",corpus))
         snapshot=edition_snapshot(data_dir,p,[
             {"scene_id":s.id,"title":s.title,"text":s.text,"complete":True}
             for s in p.scenes],source_kind="manuscript",label="Одобренный том · конвейер")
@@ -533,7 +548,8 @@ def install(api: APIRouter, env: dict) -> None:
     def download_conveyor_file(job_id: str,filename: str):
         if not cv.ID.fullmatch(job_id) or filename not in (
             "proof-draft-a5.pdf","proof-draft.epub",
-            "approved-a5.pdf","approved.epub","approved.docx","approved.fb2"):
+            "approved-a5.pdf","approved.epub","approved.docx","approved.fb2",
+            "approved-corpus.jsonl"):
             raise HTTPException(404,"Недопустимый файл")
         job=state(job_id)
         if filename.startswith("approved") and job["state"]!="ready":
