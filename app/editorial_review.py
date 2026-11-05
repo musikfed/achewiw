@@ -14,6 +14,8 @@ import uuid
 from pathlib import Path
 from editor_workspace import _open
 from book_generation_core import count_words
+from narrative_direction import fiction_warnings
+from prose_quality import quality_findings
 from story_memory import audit_graph
 
 def stamp():
@@ -149,6 +151,15 @@ def review(data_dir: Path, canon: sqlite3.Connection, project, version_id: str,
         if not ch["complete"] and version["source_kind"]=="draft":
             issue("warning","incomplete_chapter",f"Черновик главы «{ch['title']}» ещё не закончен",ch["index"])
     issues.extend(_duplicate_paragraphs(version["chapters"]))
+    # Analyze already-saved (including legacy) text without rewriting canon.
+    # These are editorial signals, not a claim of full semantic fact checking.
+    for ch in version["chapters"]:
+        if not ch["text"].strip():continue
+        for flag in quality_findings(ch["text"],limit=4):
+            issue("warning","prose_"+flag["kind"],flag["detail"],ch["index"])
+        if getattr(project,"work_type","fiction")=="fiction":
+            for flag in fiction_warnings(ch["text"]):
+                issue(flag["severity"],"literary_"+flag["kind"],flag["detail"],ch["index"])
     if len(version["chapters"])!=len(project.scenes):
         issue("warning","outline_mismatch","Число глав не совпадает с каркасом")
     graph=audit_graph(canon,project.id)
@@ -176,7 +187,7 @@ def review(data_dir: Path, canon: sqlite3.Connection, project, version_id: str,
         "chapters":len(version["chapters"]),
         "graph_nodes":graph["nodes"],"graph_edges":graph["edges"],
         "issues":issues,
-        "qa_result":"needs_review" if any(i["severity"] in ("warning","publication") for i in issues) else "no_structural_issues_found",
+        "qa_result":"needs_review" if issues else "no_structural_issues_found",
         "note":"Автоматическая структурная проверка не гарантирует литературной логики или фактической достоверности."
     }
     with _open(data_dir/"work.sqlite3") as work:
