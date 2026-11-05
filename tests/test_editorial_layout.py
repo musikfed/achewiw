@@ -62,9 +62,10 @@ class EditorialLayoutTests(unittest.TestCase):
         parser = Structure()
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
-        self.assertEqual(len(urls), 5)
-        self.assertTrue(all("v=20261105-editorial-v19" in u for u in urls))
+        self.assertEqual(len(urls), 6)
+        self.assertTrue(all(("v=20261105-editorial-v19" in u or "v=20261105-conveyor-v1" in u) for u in urls))
         self.assertTrue(all(u.startswith("/static/") for u in urls))
+        self.assertTrue(any("conveyor.js" in u for u in urls))
 
     def test_typography_and_responsive_layout_rules(self):
         self.assertIn('grid-template-columns:var(--nav-width) minmax(0,1fr)', CSS)
