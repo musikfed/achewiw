@@ -33,8 +33,8 @@ def initialize(data_dir: Path) -> dict:
         search.executescript("""
         CREATE TABLE IF NOT EXISTS search_manifest (
             source_id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
-            branch_id TEXT NOT NULL, source_kind TEXT NOT NULL,
-            revision_id TEXT NOT NULL, digest TEXT NOT NULL,
+            branch_id TEXT NOT NULL, scene_index INTEGER NOT NULL DEFAULT 0,
+            source_kind TEXT NOT NULL, revision_id TEXT NOT NULL, digest TEXT NOT NULL,
             text TEXT NOT NULL, indexed_at TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_search_project
             ON search_manifest(project_id,branch_id,source_kind);
@@ -43,6 +43,9 @@ def initialize(data_dir: Path) -> dict:
             digest TEXT NOT NULL, dimension INTEGER NOT NULL,
             vector BLOB NOT NULL, PRIMARY KEY(source_id,model_id));
         """)
+        columns={row[1] for row in search.execute("PRAGMA table_info(search_manifest)")}
+        if "scene_index" not in columns:
+            search.execute("ALTER TABLE search_manifest ADD COLUMN scene_index INTEGER NOT NULL DEFAULT 0")
         search.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
             source_id UNINDEXED, text, tokenize='unicode61')""")
     with _open(work_path) as work:
@@ -79,7 +82,7 @@ def sync_search(data_dir: Path, canon: sqlite3.Connection, project_id: str | Non
     if not found:
         return {"indexed":0,"unchanged":0,"removed":0,"total":0,"note":"No source chunks yet"}
     records=canon.execute(
-        "SELECT id,project_id,branch_id,job_id,source,content,digest "
+        "SELECT id,project_id,branch_id,scene_index,job_id,source,content,digest "
         "FROM story_chunks"+conditions+" ORDER BY id", args).fetchall()
     added=0
     unchanged=0
@@ -95,13 +98,13 @@ def sync_search(data_dir: Path, canon: sqlite3.Connection, project_id: str | Non
             search.execute("DELETE FROM search_fts WHERE source_id=?",(sid,))
             search.execute("DELETE FROM search_embeddings WHERE source_id=?",(sid,))
             search.execute("""INSERT INTO search_manifest
-                (source_id,project_id,branch_id,source_kind,revision_id,digest,text,indexed_at)
-                VALUES(?,?,?,?,?,?,?,?)
+                (source_id,project_id,branch_id,scene_index,source_kind,revision_id,digest,text,indexed_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(source_id) DO UPDATE SET
                  project_id=excluded.project_id,branch_id=excluded.branch_id,
-                 source_kind=excluded.source_kind,revision_id=excluded.revision_id,
+                 scene_index=excluded.scene_index,source_kind=excluded.source_kind,revision_id=excluded.revision_id,
                  digest=excluded.digest,text=excluded.text,indexed_at=excluded.indexed_at""",
-                 (sid,record["project_id"],record["branch_id"],record["source"],
+                 (sid,record["project_id"],record["branch_id"],record["scene_index"],record["source"],
                   record["job_id"],record["digest"],record["content"],utc()))
             search.execute("INSERT INTO search_fts(source_id,text) VALUES(?,?)",
                            (sid,record["content"]))
@@ -115,6 +118,38 @@ def sync_search(data_dir: Path, canon: sqlite3.Connection, project_id: str | Non
             search.execute("DELETE FROM search_manifest WHERE source_id=?",(sid,))
         total=search.execute("SELECT count(*) FROM search_manifest"+conditions,args).fetchone()[0]
     return {"indexed":added,"unchanged":unchanged,"removed":len(obsolete),"total":total}
+
+def search_snippets(data_dir: Path, project_id: str, job_id: str,
+                    scene_index: int, question: str, limit: int = 4) -> list[dict]:
+    """One safe RAG gateway over the derived index, excluding future/foreign drafts."""
+    import re
+    from story_memory import STOPWORDS
+    tokens=list(dict.fromkeys(x for x in re.findall(
+        r"[^\\W_]{3,}",question.casefold(),flags=re.UNICODE)
+        if x not in STOPWORDS))[:12]
+    if not tokens:
+        return []
+    query=" OR ".join('"'+x+'"' for x in tokens)
+    path=data_dir/"search.sqlite3"
+    if not path.is_file() or path.is_symlink():
+        return []
+    with _open(path) as conn:
+        try:
+            rows=conn.execute("""
+                SELECT m.source_id,m.scene_index,m.source_kind,m.revision_id,
+                       m.digest,substr(m.text,1,850) AS excerpt
+                FROM search_fts f JOIN search_manifest m ON m.source_id=f.source_id
+                WHERE search_fts MATCH ? AND m.project_id=? AND m.branch_id='main'
+                  AND m.scene_index<=?
+                  AND ((m.revision_id='author' AND m.source_kind IN ('approved','synopsis'))
+                    OR (m.revision_id=? AND m.source_kind='draft'))
+                ORDER BY bm25(search_fts) LIMIT ?""",
+                (query,project_id,scene_index,job_id,max(1,min(8,limit)))
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [dict(r) for r in rows]
+
 
 def checkpoint_work(data_dir: Path, project_id: str, job_id: str, scene_id: str,
                     text: str, words: int) -> None:
