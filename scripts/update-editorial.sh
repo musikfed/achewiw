@@ -12,7 +12,8 @@ die() { printf 'ACHEWIW: ОСТАНОВЛЕНО — %s\n' "$*" >&2; exit 1; }
 [[ -d "$ROOT" && ! -L "$ROOT" ]] || die "Рабочий каталог не найден или является ссылкой"
 cd "$ROOT"
 [[ "$(git rev-parse --show-toplevel)" == "$ROOT" ]] || die "Это не корень репозитория ACHEWIW"
-[[ "$(git branch --show-current)" == "$BRANCH" ]] || die "Нужна ветка $BRANCH"
+BRANCH="$(git branch --show-current)"
+[[ "$BRANCH" == feature/technical-epub-first || "$BRANCH" == feature/production-conveyor-rtx3060 ]] || die "Нужна ветка $BRANCH"
 case "$(git remote get-url origin)" in
   https://github.com/$EXPECTED|https://github.com/$EXPECTED.git|\
 git@github.com:$EXPECTED|git@github.com:$EXPECTED.git) ;;
@@ -32,7 +33,7 @@ test -f app/static/index.html
 test -f app/static/style.css
 test -f app/static/app.js
 test -f scripts/monitor-v2.sh
-grep -Fq "editorial-v8" app/static/index.html || die "Нет новой версии ассетов"
+grep -Fq "editorial-v19" app/static/index.html || die "Нет новой версии ассетов"
 bash -n scripts/achewiw-control.sh
 bash -n scripts/monitor-v2.sh
 
