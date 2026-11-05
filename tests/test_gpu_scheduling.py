@@ -281,6 +281,12 @@ def test_browser_persistence_and_cache_scoping_markers():
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
     assert "comfyui-control-agent.sh reload" in updater
+    # A Git fast-forward may replace the updater itself. The running Bash process
+    # must re-exec the new script before validating the newly fetched assets.
+    assert 'updater_before="$(git hash-object scripts/update-studio-clean.sh)"' in updater
+    assert 'exec bash "$ROOT/scripts/update-studio-clean.sh" apply' in updater
+    assert 'class AssetParser(HTMLParser):' in updater
+    assert "grep -Fq '20261105-narrative-v12'" not in updater
     assert "docker system prune" not in updater
     assert "rm -rf" not in updater
     assert "data/achewiw.sqlite3" in updater
