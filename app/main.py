@@ -1722,6 +1722,37 @@ def _start_book(job_id: str) -> None:
     task.add_done_callback(_background_tasks.discard)
 
 
+def _current_book_job_id(connection: sqlite3.Connection, project_id: str) -> str | None:
+    """Select the real outstanding book, never a stale browser job ID.
+
+    An active job wins; otherwise select an interrupted/unaccepted job with the
+    most saved prose. Fully accepted books are history, not a blocked new run.
+    """
+    row=connection.execute("""
+        SELECT j.id,j.status,COALESCE(SUM(c.word_count),0) AS saved_words,
+               COUNT(c.scene_id) AS chapters,
+               COALESCE(SUM(CASE WHEN c.accepted_at IS NOT NULL THEN 1 ELSE 0 END),0) AS accepted
+          FROM ai_jobs j JOIN ai_book_chapters c ON c.job_id=j.id
+         WHERE j.project_id=? AND j.mode='book'
+         GROUP BY j.id
+        HAVING NOT (j.status='ready' AND accepted=chapters)
+         ORDER BY CASE WHEN j.status IN ('queued','running') THEN 0 ELSE 1 END,
+                  saved_words DESC,j.created_at DESC,j.rowid DESC
+         LIMIT 1
+    """,(project_id,)).fetchone()
+    return row["id"] if row else None
+
+
+@api.get("/projects/{project_id}/books/current")
+def current_book_job(project_id: str, response: Response):
+    """Canonical cross-tab/reload progress source; not browser localStorage."""
+    get_project(project_id)
+    response.headers["Cache-Control"]="no-store"
+    with db() as connection:
+        job_id=_current_book_job_id(connection,project_id)
+        return {"job":_book_record(connection,job_id) if job_id else None}
+
+
 @api.post("/books/generate", status_code=202)
 async def start_full_book(request: BookRequest):
     project = get_project(request.project_id)
@@ -1745,19 +1776,29 @@ async def start_full_book(request: BookRequest):
         for i, scene in enumerate(project.scenes)
     ]
     job_id = uuid.uuid4().hex
+    created = False
     try:
         with db() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            previous_id=_current_book_job_id(connection,project.id)
+            if previous_id:
+                # Button is idempotent. A return visit must NEVER silently
+                # replace previously generated text or create a second book.
+                return {**_book_record(connection,previous_id),"reused":True}
             if image_operation_active(connection):
                 raise HTTPException(409, "Сейчас работает ComfyUI: запуск книги отложен")
+            if active_job(connection):
+                raise HTTPException(409,"Другая генерация уже работает. Открой её проект.")
             create_job(connection, job_id, project.id, "book", request.model, None,
                        token_budget=total * 3)
             create_book_chapters(connection, job_id, chapters)
+            created = True
     except sqlite3.IntegrityError as exc:
         raise HTTPException(409, "Уже выполняется другая генерация") from exc
-    _start_book(job_id)
+    if created:
+        _start_book(job_id)
     with db() as connection:
-        return _book_record(connection, job_id)
+        return {**_book_record(connection, job_id),"reused":False}
 
 
 @api.get("/books/jobs/{job_id}")
