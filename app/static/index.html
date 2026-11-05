@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-editorial-v19"></head>
-<body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Типография в кармане · Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-editorial-v19"></head>
+<body><header><button class="brand home-brand" id="goHome" type="button" title="На главную страницу" aria-label="ACHEWIW — на главную"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></button><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
 <button type="button" data-kind-filter="fiction">✦ Фантастика и проза</button>
@@ -9,7 +9,7 @@
 <button type="button" data-kind-filter="nonfiction">▤ Нонфикшн</button>
 <button type="button" class="nav-all selected" data-kind-filter="all">Все произведения</button>
 </div><div class="sidehead"><span>БИБЛИОТЕКА</span><button type="button" id="newProject">+ Новая</button></div><div id="projects"></div><div class="sidebottom">ACHEWIW · ИЗДАНИЕ <span>v0.5</span><p>Идея → Каркас → Текст → QA → Книга</p></div></aside>
-<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Ваши истории начинаются здесь.</h1><p id="workIntro">Фантастика, нонфикшн, инженерные книги и выступления — отдельные редакционные пространства. От замысла до электронной и печатной версии.</p><div class="release-actions"><button type="button" id="openTypography" class="primary">06 · Типография: PDF / DOCX / EPUB</button><button type="button" id="openIllustrations">04 · Иллюстрации</button></div></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
+<main id="studioMain"><div class="page-shell"><div class="hero"><div class="hero-copy"><div class="eyebrow" id="workEyebrow">ИЗДАТЕЛЬСКАЯ МАСТЕРСКАЯ / ACHEWIW</div><h1 id="heading">Типография в кармане</h1><p id="workIntro">Закулисная мастерская рассказов, книг и выступлений: идея, сюжет, редактура и выпуск книги в PDF, DOCX и EPUB. Автор остаётся автором.</p><div class="release-actions"><button type="button" id="openTypography" class="primary">06 · Типография: PDF / DOCX / EPUB</button><button type="button" id="openIllustrations">04 · Иллюстрации</button></div></div><div class="model"><label>МОДЕЛЬ НА ХОСТЕ</label><select id="model"><option value="qwen3:8b">qwen3:8b</option></select><small id="ollamaStatus">Проверка Ollama...</small><small id="modelGuide" class="model-guide">Для универсальной русской прозы: qwen3:8b. Модель можно изменить.</small>
 <button type="button" id="unloadModel" class="model-unload" title="Выгрузить только выбранную LLM из общей Ollama" disabled>Освободить VRAM модели</button>
 <small class="model-warning">Не сбрасывает RTX 3060. Выгрузка выбранной модели может затронуть другие приложения, использующие ту же Ollama.</small></div></div>
 <section class="host-monitor" aria-label="Мониторинг сервера ACHEWIW">
@@ -330,8 +330,8 @@
 </section>
 <div class="actions" id="aiNextSteps" hidden><button id="aiGoStructure" type="button">02 · Исправить план сцен</button><button id="aiGoWriting" type="button">03 · Редактировать текст</button><button id="aiGoBook" class="primary" type="button">06 · Читать книгу</button></div>
 <div class="actions"><button id="applyAI" class="primary" hidden>Принять предложение</button><button id="copyAI">Копировать</button></div></div>
-<div class="footerbar"><span id="saveState">Все изменения сохраняйте кнопкой «Сохранить»</span><span id="meta"></span></div></div><div id="empty" class="empty-studio"><div class="emptyIcon">✍</div><h2>Выберите свою мастерскую</h2>
-<p>Заведите рукопись с подходящим редактором и потом выпустите её в EPUB, PDF, FB2 или DOCX.</p>
+<div class="footerbar"><span id="saveState">Все изменения сохраняйте кнопкой «Сохранить»</span><span id="meta"></span></div></div><div id="empty" class="empty-studio"><div class="emptyIcon">✍</div><h2>Ваша книга начинается здесь</h2>
+<p>Выберите существующую работу в библиотеке слева или создайте новую. Студия не открывает последний черновик без вашего действия.</p>
 <div class="quick-create">
 <button data-create-kind="fiction"><strong>Фантастика и романы</strong><small>Мир, персонажи, главы и интрига</small></button>
 <button data-create-kind="technical"><strong>Техническая литература</strong><small>Тезисы, главы, источники и проверка фактов</small></button>
