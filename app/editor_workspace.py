@@ -12,19 +12,26 @@ import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
+from contextlib import contextmanager
 
 def utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-def _open(path: Path) -> sqlite3.Connection:
+@contextmanager
+def _open(path: Path):
+    """Commit and CLOSE every derived SQLite connection after each operation."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise ValueError("SQLite symlink is not allowed")
     connection = sqlite3.connect(path, timeout=10)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys=ON")
-    connection.execute("PRAGMA busy_timeout=10000")
-    return connection
+    try:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA busy_timeout=10000")
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 def initialize(data_dir: Path) -> dict:
     """Add only separate disposable index + durable working DB, never rename canon."""
