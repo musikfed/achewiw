@@ -312,6 +312,9 @@ def check_new_prose(existing: str, proposed: str) -> None:
     current = normalize(proposed)
     if len(earlier) > 160 and len(current) > 160 and current[:160] in earlier:
         raise ValueError("ИИ повторил ранее написанный отрывок: глава сохранена до повтора")
+    from prose_quality import check_quality
+    # Detect loops in ONE answer (old guard only detected cross-chunk copies).
+    check_quality(proposed)
     paragraphs = [normalize(value) for value in re.split(r"\n\s*\n", proposed)]
     seen = set()
     for paragraph in paragraphs:
