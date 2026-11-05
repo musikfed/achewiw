@@ -131,7 +131,7 @@ function render(){
  for(const [id,suffix] of Object.entries({bookMarkdown:'.md',bookEpub:'.epub',bookFb2:'.fb2',bookPdf:'.pdf',bookPrint:'.print.pdf',bookDocx:'.docx'}))$('#'+id).href=prefix+suffix;
  updateWorkCopy();recommendModel();renderProjects();renderScenes();renderWriting();
 }
-function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.value})}
+function updateBrief(){document.querySelectorAll('[data-field]').forEach(el=>{project[el.dataset.field]=el.dataset.field==='publication_year'?(el.value?Number(el.value):null):el.value})}
 async function save(){if(!project)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;updateBrief();collectScenes();collectText();const saved=await api('/projects/'+project.id,{method:'PUT',body:JSON.stringify(project)});project=saved;try{sessionStorage.removeItem(uiKey('manuscriptDraft'))}catch{}await refreshProjects();$('#saveState').textContent='Сохранено · '+new Date().toLocaleTimeString();render();toast('Проект сохранён')}
 async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
@@ -208,9 +208,27 @@ async function renderBook(){
       'Ещё не написаны части: '+missing.join(' · ')+
       '. Открой 03 · Редактор, допиши и сохрани. Экспорт включает только готовые тексты.':
       'Все части содержат текст. Проверь последовательность и скачай книгу.';
+    $('#bookEditionStatus').textContent=
+      'Автор: '+(project.author_name||'не указан')+' · год: '+(project.publication_year||'не указан')+
+      ' · редакция: '+(project.edition_label||'не указана')+
+      ' · ACHEWIW StoryEngine v0.6.0 · Python / FastAPI / SQLite.';
+    const cover=artwork.find(a=>a.placement==='cover');
+    if(cover){
+      const fig=document.createElement('figure');fig.className='book-cover-preview';
+      const img=document.createElement('img');img.loading='lazy';
+      img.src='/api/projects/'+project.id+'/illustrations/'+cover.id+'.png';
+      img.alt='Обложка книги '+data.title;
+      fig.append(img);container.append(fig);
+    }
     const h=document.createElement('h2');
-    h.textContent=data.title;
-    container.append(h);
+    h.textContent=data.title;container.append(h);
+    if(project.author_name){
+      const author=document.createElement('p');author.className='book-author';
+      author.textContent=project.author_name;container.append(author);
+    }
+    const year=document.createElement('p');year.className='book-edition-year';
+    year.textContent=[project.edition_label,project.publisher_name,project.publication_year]
+        .filter(Boolean).join(' · ');container.append(year);
     if(!data.chapters.length){
       const p=document.createElement('p');
       p.className='book-empty';
@@ -220,6 +238,13 @@ async function renderBook(){
       container.append(p);
       return;
     }
+    const contents=document.createElement('nav');contents.className='book-toc';
+    const t=document.createElement('h3');t.textContent='Содержание';contents.append(t);
+    const ol=document.createElement('ol');
+    for(const ch of data.chapters){
+      const li=document.createElement('li');li.textContent=ch.index+'. '+ch.title;ol.append(li);
+    }
+    contents.append(ol);container.append(contents);
     for(const ch of data.chapters){
       const chapter=document.createElement('section');
       chapter.className='book-chapter';
@@ -227,29 +252,40 @@ async function renderBook(){
       title.textContent=ch.index+'. '+ch.title;
       chapter.append(title);
       const chapterArt=artwork.filter(a=>a.scene_id===ch.scene_id);
-      const appendFigures=(placement)=>{
-        for(const a of chapterArt.filter(x=>x.placement===placement)){
-          const figure=document.createElement('figure');
-          const img=document.createElement('img');
-          const caption=document.createElement('figcaption');
-          img.src='/api/projects/'+project.id+'/illustrations/'+a.id+'.png';
-          img.alt=a.caption||'Иллюстрация главы';
-          img.loading='lazy';
-          caption.textContent=a.caption;
-          figure.append(img,caption);
-          chapter.append(figure);
-        }
+      const appendFigure=a=>{
+        const figure=document.createElement('figure');
+        const img=document.createElement('img');
+        const caption=document.createElement('figcaption');
+        img.src='/api/projects/'+project.id+'/illustrations/'+a.id+'.png';
+        img.alt=a.caption||'Иллюстрация главы';
+        img.loading='lazy';
+        caption.textContent=a.caption||'';
+        figure.append(img,caption);chapter.append(figure);
       };
-      appendFigures('start');
-      for(const paragraph of ch.text.split(/\n\s*\n/)){
-        if(!paragraph.trim())continue;
-        const p=document.createElement('p');
-        p.textContent=paragraph.trim();
-        chapter.append(p);
-      }
-      appendFigures('end');
+      chapterArt.filter(a=>a.placement==='start').forEach(appendFigure);
+      const parts=ch.text.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+      parts.forEach((paragraph,i)=>{
+        const p=document.createElement('p');p.textContent=paragraph;chapter.append(p);
+        chapterArt.filter(a=>a.placement==='paragraph'&&a.paragraph_index===i+1)
+                  .forEach(appendFigure);
+      });
+      chapterArt.filter(a=>a.placement==='end'||
+         (a.placement==='paragraph'&&a.paragraph_index>parts.length))
+         .forEach(appendFigure);
       container.append(chapter);
     }
+    const credits=document.createElement('section');credits.className='book-credits';
+    const sub=document.createElement('h3');sub.textContent='Выходные сведения';credits.append(sub);
+    for(const line of [
+      project.author_name?'Автор: '+project.author_name:'',
+      project.publication_year?'Год выпуска: '+project.publication_year:'',
+      project.publisher_name?'Издатель: '+project.publisher_name:'',
+      project.edition_label?'Редакция: '+project.edition_label:'',
+      'Создано в ACHEWIW StoryEngine v0.6.0 · Python / FastAPI / SQLite · Ollama и ComfyUI при использовании'
+    ].filter(Boolean)){
+      const p=document.createElement('p');p.textContent=line;credits.append(p);
+    }
+    container.append(credits);
     for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=false;
   }catch(e){
     $('#bookSummary').textContent='Не удалось загрузить рукопись';
@@ -1003,6 +1039,7 @@ $('#aiGoBook').onclick=()=>gotoTab('book');
 $('#openBookFromAudit').onclick=()=>gotoTab('book');
 $('#openBookFromEditor').onclick=saveAndReadBook;
 $('#bookEdit').onclick=()=>gotoTab('write');
+$('#bookGoEdition').onclick=()=>gotoTab('brief');
 $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
 $('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
 $('#model').onchange=e=>{model=e.target.value;safeSet(localStorage,'achewiw.v8.selectedModel',model)};
