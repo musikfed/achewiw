@@ -71,7 +71,7 @@ def test_edition_cover_toc_and_middle_art(tmp_path,monkeypatch):
             assert "Содержание" in xml and "Автор теста" in xml
             assert "2026" in xml
             assert xml.index("Вторая сцена")<xml.index("Миирус у двери")<xml.index("Третья сцена")
-            assert len([x for x in z.namelist() if x.startswith("word/media/")])==2
+            # python-docx deduplicates byte-identical PNGs in the media package.\n            assert len([x for x in z.namelist() if x.startswith("word/media/")])>=1\n            assert xml.count("<w:drawing>")==2
 
         fb2=api.get(f"/api/projects/{p['id']}/manuscript.fb2")
         assert fb2.status_code==200,fb2.text
