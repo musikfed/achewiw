@@ -42,7 +42,7 @@ from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
 from editor_workspace import (initialize as initialize_workspace, sync_search,
     checkpoint_work, checkpoint_story_state, vector_index_status,
     status as storage_status)
-from book_rag_pipeline import hybrid_context, compact_hybrid_context
+from book_rag_pipeline import hybrid_context, compact_hybrid_context, flush_pending_vectors
 from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
@@ -1662,10 +1662,20 @@ async def execute_book(job_id: str) -> None:
             previous = text[-1500:]
         with db() as connection:
             summary = book_summary(connection, job_id)
+            update_job(connection, job_id,
+                       stage="Все главы написаны · завершаем векторный индекс RAG",
+                       output="Полный текст уже сохранён в SQLite, работаем только с поисковым кэшем.",
+                       percent=99)
+        final_index=await flush_pending_vectors(DATA_DIR,OLLAMA_BASE_URL,
+                                                project.id,job_id)
+        with db() as connection:
+            summary = book_summary(connection, job_id)
             update_job(connection, job_id, status="ready",
                        stage="Полный черновик книги готов · ожидает решения автора",
                        output=f"Черновик {summary['generated_words']} слов из цели {summary['target_words']}. "
-                              "Главы ещё не приняты в рукопись.", percent=100)
+                              "Главы ещё не приняты в рукопись. "
+                              f"RAG: {final_index['state']}, проиндексировано в конце {final_index['indexed']} фрагментов.",
+                       percent=100)
     except asyncio.CancelledError:
         with db() as connection:
             summary = book_summary(connection, job_id)
