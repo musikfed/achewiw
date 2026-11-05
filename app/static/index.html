@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-narrative-v12"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-storymemory-v13"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -58,6 +58,50 @@
  <div id="chapterPlanList" class="chapter-plan-list"></div>
  <small>Сохранённые настройки хранятся в SQLite отдельно от каркаса. Перераспределение не меняет событий, порядок сцен или принятый текст. Полное раскрытие разрешай только в подготовленной главе.</small>
  </div>
+ <section class="story-memory-panel" id="storyMemoryPanel" aria-label="Память сюжета и граф причин">
+   <div class="chapter-plan-top"><div><h4>Память сюжета · RAG + граф причин</h4>
+   <p>Авторский каркас становится последовательностью узлов графа. Ты можешь закрепить действующие факты, загадки, объекты и связи «причина → следствие». Черновик ИИ никогда автоматически не превращается в канон.</p></div>
+   <div class="actions"><button type="button" id="memoryReload">Обновить карту</button></div></div>
+   <p id="memoryStatus" role="status" aria-live="polite">Карта сюжета загружается…</p>
+   <label class="chapter-plan-field">Сюжетная ветка
+      <select id="memoryBranch"><option value="main">Основная история</option></select>
+   </label>
+   <div class="story-memory-layout">
+     <div class="story-memory-form">
+       <h5>Закрепить факт или событие</h5>
+       <label>Тип<select id="memoryNodeKind">
+         <option value="event">Событие</option><option value="character">Персонаж</option>
+         <option value="object">Предмет</option><option value="place">Место</option>
+         <option value="fact">Факт мира</option><option value="mystery">Загадка</option>
+         <option value="rule">Правило мира</option></select></label>
+       <label>Название<input id="memoryNodeTitle" maxlength="160" placeholder="Например, Миирус обнаружил передатчик"></label>
+       <label>Подтверждённая информация автора<textarea id="memoryNodeStatement" maxlength="2000" rows="3" placeholder="Что действительно произошло? Где? Откуда об этом известно?"></textarea></label>
+       <label>Первая глава появления<select id="memoryNodeScene"></select></label>
+       <button type="button" id="memoryAddNode">Закрепить в памяти</button>
+     </div>
+     <div class="story-memory-form">
+       <h5>Связать два узла</h5>
+       <label>Откуда<select id="memoryEdgeFrom"></select></label>
+       <label>Тип связи<select id="memoryEdgeKind">
+         <option value="causes">Вызывает →</option><option value="requires">Необходимо для →</option>
+         <option value="before">Происходит раньше →</option><option value="foreshadows">Предвещает →</option>
+         <option value="reveals">Раскрывает загадку →</option><option value="knows">Знает о →</option>
+         <option value="holds">Владеет →</option><option value="contradicts">Противоречит →</option>
+       </select></label>
+       <label>Куда<select id="memoryEdgeTo"></select></label>
+       <button type="button" id="memoryAddEdge">Добавить причинную связь</button>
+       <h5>Вариант развития событий</h5>
+       <label>Название альтернативы<input id="memoryBranchName" maxlength="120" placeholder="Что, если Миирус не вернулся?"></label>
+       <button type="button" id="memoryAddBranch">Создать изолированную ветку графа</button>
+       <small>Ветки графа изолированы. Генерация альтернативной рукописи по ветке — отдельный следующий этап; текущий генератор пишет только main.</small>
+     </div>
+   </div>
+   <details id="memoryDetails"><summary>Узлы графа, причинные связи и нерешённые загадки</summary>
+     <div class="story-memory-layout"><div id="memoryNodeList"></div><div id="memoryEdgeList"></div></div>
+   </details>
+   <p id="memoryAudit" role="status" aria-live="polite"></p>
+   <small>RAG использует SQLite FTS5: проверяемые цитаты из авторского текста и отдельные непринятые фрагменты текущей генерации. Семантические embeddings можно подключить позднее без пересборки графа.</small>
+ </section>
  <div class="actions"><button id="generateFullBook" class="primary" type="button">✦ Написать всю книгу</button>
  <button id="resumeFullBook" type="button" hidden>Продолжить прерванную генерацию</button>
  <button id="acceptFullBook" type="button" hidden>Принять все главы в рукопись</button></div>
@@ -197,4 +241,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-narrative-v12" defer></script><script src="/static/app.js?v=20261105-narrative-v12" defer></script><script src="/static/writing_blocks.js?v=20261105-narrative-v12" defer></script><script src="/static/illustrations.js?v=20261105-narrative-v12" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-storymemory-v13" defer></script><script src="/static/app.js?v=20261105-storymemory-v13" defer></script><script src="/static/writing_blocks.js?v=20261105-storymemory-v13" defer></script><script src="/static/illustrations.js?v=20261105-storymemory-v13" defer></script></body></html>
