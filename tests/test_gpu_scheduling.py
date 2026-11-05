@@ -285,7 +285,11 @@ def test_browser_persistence_and_cache_scoping_markers():
     # must re-exec the new script before validating the newly fetched assets.
     assert 'updater_before="$(git hash-object scripts/update-studio-clean.sh)"' in updater
     assert 'exec bash "$ROOT/scripts/update-studio-clean.sh" apply' in updater
-    assert 'class AssetParser(HTMLParser):' in updater
+    # The parser lives in its own tested verifier; the updater invokes it.
+    verifier=(Path(__file__).resolve().parents[1]/"scripts/verify-versioned-assets.py").read_text()
+    assert 'class AssetParser(HTMLParser):' in verifier
+    assert 'python3 scripts/verify-versioned-assets.py' in updater
+    assert '"/static/conveyor.js"' in verifier
     assert "grep -Fq '20261105-editorial-v19'" not in updater
     assert "docker system prune" not in updater
     assert "rm -rf" not in updater
