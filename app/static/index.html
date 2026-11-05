@@ -251,6 +251,42 @@
     </div>
     <p id="bookProductionHint">Текст старого каркаса — не книга. После запуска написанные главы сохраняются в SQLite. Экспорт PDF/EPUB использует только принятую автором рукопись.</p>
   </div>
+  <section id="conveyorSection" class="book-production" aria-label="Конвейер создания книги">
+    <div class="sectionhead"><h3>Издательский конвейер · RTX 3060 12 ГБ</h3>
+      <p>Писатель → независимый критик → редактор → художник → PDF-проба → автор → издание.
+      GPU занимается одной ролью за раз. Исходные главы и авторский текст не перезаписываются автоматически.</p></div>
+    <div class="formgrid">
+      <label>Писатель (Ollama)<select id="cvWriterModel" aria-label="Модель писателя"></select></label>
+      <label>Критик и редактор (Ollama)<select id="cvCriticModel" aria-label="Модель критика"></select></label>
+      <label>Иллюстрации<select id="cvImageMode">
+        <option value="none">Без новых рисунков</option>
+        <option value="cover" selected>Обложка (если отсутствует)</option>
+        <option value="cover_chapters">Обложка + рисунки к главам</option>
+      </select></label>
+      <label>Художественный стиль рисунков<input id="cvImageStyle" type="text" maxlength="400"
+        value="expressive ink and watercolor, vintage literary book illustration"></label>
+    </div>
+    <label class="checkbox-row"><input id="cvAllowUnload" type="checkbox">
+      Разрешаю ACHEWIW выгружать только выбранные для этой книги модели Ollama после их работы.
+      Другие модели и процессы не выгружать.</label>
+    <div class="actions">
+      <button id="cvStart" class="primary" type="button">Запустить конвейер по существующей книге / каркасу</button>
+      <button id="cvResume" type="button" hidden>Продолжить сохранённый этап</button>
+      <button id="cvRefresh" type="button">Обновить состояние</button>
+      <button id="cvCancel" type="button" hidden>Остановить после текущего шага</button>
+    </div>
+    <strong id="cvStatus" role="status" aria-live="polite">Ожидается запуск</strong>
+    <progress id="cvProgress" max="100" value="0" aria-label="Завершённые шаги конвейера"></progress>
+    <div id="cvSteps" class="cv-steps" aria-label="Этапы производства"></div>
+    <div id="cvFiles" class="actions" aria-label="Черновые и итоговые файлы"></div>
+    <div id="cvApproval" hidden><h4>Авторская приёмка редакций</h4>
+      <p>Выбери новую редакцию только после чтения. Если не отмечена, останется исходная версия
+      главы. Каждое принятие записывается в историю, а первоначальный AI-черновик остаётся.</p>
+      <div id="cvReviewItems"></div>
+      <button id="cvApprove" class="primary" type="button">Утвердить выбранные редакции и выпустить книгу</button>
+    </div>
+    <small>PDF A5 — проба для чтения, не PDF/X. Ни одна модель не загружается автоматически из интернета.</small>
+  </section>
   <div class="book-edition-fields"><h3>Паспорт издания</h3><p>Укажи автора, год, редакцию и издателя в разделе «01 · Задание». Они попадут на титул, в выходные сведения и метаданные EPUB. Технология и версия ACHEWIW впишутся автоматически.</p><div id="bookEditionStatus" role="status"></div><button type="button" id="bookGoEdition">Изменить автора и год</button></div>
   <div class="book-toolbar" id="bookSavedToolbar"><strong id="bookSummary">Проверка рукописи…</strong>
     <div class="export-grid">
@@ -302,4 +338,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-editorial-v19" defer></script><script src="/static/app.js?v=20261105-editorial-v19" defer></script><script src="/static/writing_blocks.js?v=20261105-editorial-v19" defer></script><script src="/static/illustrations.js?v=20261105-editorial-v19" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-editorial-v19" defer></script><script src="/static/app.js?v=20261105-editorial-v19" defer></script><script src="/static/writing_blocks.js?v=20261105-editorial-v19" defer></script><script src="/static/illustrations.js?v=20261105-editorial-v19" defer></script><script src="/static/conveyor.js?v=20261105-conveyor-v1" defer></script></body></html>
