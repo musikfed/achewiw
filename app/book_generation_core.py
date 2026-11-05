@@ -128,6 +128,15 @@ def init_book_tables(db: sqlite3.Connection) -> None:
             db.execute(f"ALTER TABLE ai_book_chapters ADD COLUMN {name} {definition}")
     db.execute("CREATE INDEX IF NOT EXISTS ai_book_chapters_job "
                "ON ai_book_chapters(job_id, scene_index)")
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS ai_book_stream_buffers (
+            job_id TEXT NOT NULL, scene_id TEXT NOT NULL,
+            base_digest TEXT NOT NULL, partial TEXT NOT NULL,
+            retry INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL,
+            PRIMARY KEY(job_id,scene_id),
+            FOREIGN KEY(job_id,scene_id) REFERENCES ai_book_chapters(job_id,scene_id)
+        )
+    """)
 
 
 def create_book_chapters(db: sqlite3.Connection, job_id: str, chapters: list[dict]) -> None:
@@ -181,6 +190,59 @@ def save_chapter(db: sqlite3.Connection, job_id: str, scene_id: str,
     """, (text, count_words(text), attempts, int(complete), now(), job_id, scene_id))
     if db.execute("SELECT changes()").fetchone()[0] != 1:
         raise ValueError("Глава не найдена или уже принята автором")
+
+
+def save_stream_buffer(db: sqlite3.Connection, job_id: str, scene_id: str,
+                       base_text: str, partial: str, retry: int) -> None:
+    """Durable power-loss checkpoint of an INCOMPLETE Ollama streaming answer.
+
+    It is never an approved draft or an author manuscript by itself.
+    Bound to exact committed chapter digest so it cannot apply twice.
+    """
+    import hashlib
+    if len(partial) > 30000:
+        raise ValueError("Stream buffer exceeds 30000 characters")
+    digest=hashlib.sha256(base_text.encode("utf-8")).hexdigest()
+    row=db.execute("""SELECT text,accepted_at FROM ai_book_chapters
+        WHERE job_id=? AND scene_id=?""",(job_id,scene_id)).fetchone()
+    if not row or row["accepted_at"] or hashlib.sha256(
+            row["text"].encode("utf-8")).hexdigest()!=digest:
+        raise ValueError("Chapter changed since stream started")
+    db.execute("""INSERT INTO ai_book_stream_buffers
+        (job_id,scene_id,base_digest,partial,retry,updated_at)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(job_id,scene_id) DO UPDATE SET
+          base_digest=excluded.base_digest,partial=excluded.partial,
+          retry=excluded.retry,updated_at=excluded.updated_at""",
+        (job_id,scene_id,digest,partial,retry,now()))
+
+
+def read_stream_buffer(db: sqlite3.Connection, job_id: str,
+                       scene_id: str, chapter_text: str) -> dict | None:
+    import hashlib
+    row=db.execute("SELECT * FROM ai_book_stream_buffers "
+                   "WHERE job_id=? AND scene_id=?",(job_id,scene_id)).fetchone()
+    if row is None:return None
+    digest=hashlib.sha256(chapter_text.encode("utf-8")).hexdigest()
+    if row["base_digest"]!=digest:
+        clear_stream_buffer(db,job_id,scene_id)
+        return None
+    return dict(row)
+
+
+def clear_stream_buffer(db: sqlite3.Connection, job_id: str, scene_id: str) -> None:
+    db.execute("DELETE FROM ai_book_stream_buffers WHERE job_id=? AND scene_id=?",
+               (job_id,scene_id))
+
+
+def recover_completed_sentences(partial: str) -> str:
+    """Salvage only sentences ending in punctuation, never a clipped sentence."""
+    if not partial or count_words(partial)<35:return ""
+    # Last complete sentence/paragraph, reject model marker or unfinished tail.
+    matches=list(re.finditer(r"[.!?…][\\\"»”']?(?=\\s|$)",partial))
+    if not matches:return ""
+    candidate=partial[:matches[-1].end()].strip()
+    return candidate if count_words(candidate)>=35 else ""
 
 
 def trim_repeated_tail(existing: str, proposed: str) -> str:
