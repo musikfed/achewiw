@@ -1931,6 +1931,19 @@ async def execute_book(job_id: str) -> None:
                               "Главы ещё не приняты в рукопись. "
                               f"RAG: {final_index['state']}, проиндексировано в конце {final_index['indexed']} фрагментов.",
                        percent=100)
+        # Automatically prepare the first *reviewable* graph candidates and
+        # immutable complete-draft edition. They live in work.sqlite3, not
+        # the approved author canon; no GPU or LLM is invoked at this stage.
+        # A cache problem never changes the already-ready book.
+        try:
+            with db() as connection:
+                completed_chapters=chapters_for_job(connection,job_id)
+            edition=snapshot_book(DATA_DIR,project,completed_chapters,
+                source_kind="draft",source_job_id=job_id,
+                label="Черновик ИИ · по завершении генерации")
+            propose_version_graph(DATA_DIR,project,edition["id"])
+        except (OSError,sqlite3.Error,ValueError):
+            pass
     except asyncio.CancelledError:
         with db() as connection:
             summary = book_summary(connection, job_id)
