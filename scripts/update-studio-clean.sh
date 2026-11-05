@@ -56,7 +56,7 @@ PY
 
 msg "Каталог: $ROOT; ветка: $BRANCH."
 msg "Защищены: SQLite, data/, .env, рукописи, ComfyUI, Ollama, NVIDIA и другие проекты."
-msg "Обновим страницу через новую версию ресурсов longbook-v11; браузерное хранилище не стираем."
+msg "Проверим версионированные ресурсы сайта после обновления; браузерное хранилище не стираем."
 msg "Docker studio будет пересобран без старых слоёв build cache, но без глобального prune."
 if [[ "$ACTION" == preview ]]; then
   msg "PREVIEW — ничего не меняем"
@@ -67,8 +67,16 @@ if [[ "$ACTION" == preview ]]; then
 fi
 check_idle
 msg "1/5 — скачиваем новые изменения безопасно"
+# Bash has already parsed this running script. If Git updates the updater itself,
+# the old process MUST NOT validate new assets with its outdated release marker.
+updater_before="$(git hash-object scripts/update-studio-clean.sh)"
 git fetch --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 git merge --ff-only "origin/$BRANCH"
+updater_after="$(git hash-object scripts/update-studio-clean.sh)"
+if [[ "$updater_before" != "$updater_after" ]]; then
+  msg "Сам обновлятор изменился: перезапускаем новую версию и повторяем безопасные проверки"
+  exec bash "$ROOT/scripts/update-studio-clean.sh" apply
+fi
 msg "2/5 — проверяем новую версию"
 for script in scripts/achewiw-control.sh scripts/monitor-v2.sh scripts/comfyui-local.sh scripts/comfyui-control-agent.sh; do
   bash -n "$script" || die "Неверный Bash-синтаксис в $script"
@@ -83,8 +91,50 @@ for name in ('app/main.py', 'scripts/comfyui_control_agent.py'):
 PY
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
-grep -Fq '20261105-narrative-v12' app/static/index.html ||
-  die "Нет новых ассетов; отмена пересборки"
+# Verify the VERSION ACTUALLY DECLARED by index.html, not a hardcoded version
+# from a potentially older updater. All five local assets must exist and share
+# the same cache-busting version; no browser storage is wiped.
+python3 - <<'PY'
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+expected = {
+    "/static/style.css", "/static/app.js", "/static/monitor.js",
+    "/static/writing_blocks.js", "/static/illustrations.js",
+}
+
+class AssetParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "link" and a.get("rel") == "stylesheet":
+            self.urls.append(a.get("href", ""))
+        elif tag == "script" and a.get("src"):
+            self.urls.append(a["src"])
+
+parser = AssetParser()
+parser.feed(Path("app/static/index.html").read_text(encoding="utf-8"))
+if len(parser.urls) != len(expected):
+    raise SystemExit("ОСТАНОВЛЕНО: неожиданное число версионированных ресурсов")
+paths, versions = set(), set()
+for url in parser.urls:
+    parsed = urlsplit(url)
+    path = parsed.path
+    version = parse_qs(parsed.query).get("v", [])
+    if path not in expected or not (Path("app") / path.lstrip("/")).is_file():
+        raise SystemExit("ОСТАНОВЛЕНО: отсутствует или неизвестен статический ресурс")
+    if len(version) != 1 or not version[0] or len(version[0]) > 80:
+        raise SystemExit("ОСТАНОВЛЕНО: отсутствует версия ресурса")
+    paths.add(path)
+    versions.add(version[0])
+if paths != expected or len(versions) != 1:
+    raise SystemExit("ОСТАНОВЛЕНО: несовпадение версий JS/CSS")
+print("ACHEWIW clean-update: Статические ресурсы согласованы: " + next(iter(versions)))
+PY
 msg "3/5 — удаляем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
 find -P "$ROOT/app" "$ROOT/tests" -depth -type d -name '__pycache__' -empty -delete
