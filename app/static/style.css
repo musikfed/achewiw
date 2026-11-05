@@ -1023,3 +1023,9 @@ header{
 #conveyorSection #cvReviewItems summary{cursor:pointer;font-weight:650}
 #conveyorSection .cv-pre{white-space:pre-wrap;overflow:auto;overflow-wrap:anywhere;max-height:390px;padding:.8rem;border-radius:8px;font-family:var(--book,serif);line-height:1.65;font-size:1rem;border:1px solid var(--line,rgba(128,128,128,.3))}
 @media(max-width:720px){#conveyorSection .formgrid{grid-template-columns:1fr}#conveyorSection .cv-steps{grid-template-columns:1fr}}
+
+/* Return to original landing page without auto-opening manuscript. */
+.home-brand{display:flex;align-items:center;gap:13px;padding:0;border:0;border-radius:8px;background:transparent;text-align:left;min-height:54px}
+.home-brand:hover{background:#f8f4ed}
+.home-brand:focus-visible{outline:3px solid #ab804e}
+#empty .quick-create{margin-top:26px}
