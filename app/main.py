@@ -520,6 +520,8 @@ def delete_project(project_id: str):
             "(SELECT id FROM ai_jobs WHERE project_id=?)", (project_id,)
         )
         connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
+        for puzzle in visual_puzzle_list(connection,project_id):
+            delete_visual_puzzle(connection,project_id,puzzle["id"])
         erase_story_memory(connection, project_id)
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
         # Files retained inside local data/ for recovery from SQLite backup.
@@ -581,6 +583,9 @@ def illustrations_delete(project_id: str, asset_id: str):
     except ValueError:
         raise HTTPException(404, "Иллюстрация не найдена") from None
     with db() as connection:
+        for puzzle in visual_puzzle_list(connection,project_id):
+            if puzzle["illustration_id"]==asset_id:
+                delete_visual_puzzle(connection,project_id,puzzle["id"])
         removed = connection.execute(
             "DELETE FROM illustrations WHERE id=? AND project_id=?",
             (asset_id, project_id)).rowcount
@@ -792,6 +797,175 @@ async def generate_book_illustration(project_id: str, request: ImageGenerationRe
     finally:
         with db() as connection:
             release_gpu(connection, token)
+
+
+
+class EditorialVersionCreate(BaseModel):
+    source: Literal["draft","manuscript"] = "draft"
+    job_id: str | None = Field(default=None,pattern=r"^[0-9a-f]{32}$")
+    label: str = Field(default="",max_length=160)
+
+
+@api.get("/projects/{project_id}/editorial/versions")
+def editorial_versions(project_id: str):
+    get_project(project_id)
+    return book_versions(DATA_DIR,project_id)
+
+
+@api.post("/projects/{project_id}/editorial/versions",status_code=201)
+def editorial_save_version(project_id: str, request: EditorialVersionCreate):
+    """Store immutable point-in-time copies, including mid-generation drafts."""
+    project=get_project(project_id)
+    if request.source=="draft":
+        with db() as connection:
+            job_id=request.job_id or _current_book_job_id(connection,project_id)
+            if not job_id:
+                raise HTTPException(404,"Для этого проекта нет сохранённого черновика книги")
+            job=_book_record(connection,job_id)
+            if job["project_id"]!=project_id:
+                raise HTTPException(404,"Задание не принадлежит выбранной книге")
+            chapters=chapters_for_job(connection,job_id)
+        source=job_id
+    else:
+        chapters=[{"scene_id":x.id,"title":x.title,"text":x.text,
+                   "complete":bool(x.text.strip())} for x in project.scenes]
+        source=""
+    try:
+        return snapshot_book(DATA_DIR,project,chapters,source_kind=request.source,
+                             source_job_id=source,label=request.label)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/editorial/versions/{version_id}")
+def editorial_version_details(project_id: str,version_id: str):
+    get_project(project_id)
+    try:
+        return get_book_version(DATA_DIR,project_id,version_id)
+    except ValueError as exc:
+        raise HTTPException(404,str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/editorial/compare")
+def editorial_compare_versions(project_id: str,left: str,right: str):
+    get_project(project_id)
+    try:
+        return compare_book_versions(DATA_DIR,project_id,left,right)
+    except ValueError as exc:
+        raise HTTPException(404,str(exc)) from exc
+
+
+@api.post("/projects/{project_id}/editorial/versions/{version_id}/review")
+def editorial_run_review(project_id: str,version_id: str):
+    project=get_project(project_id)
+    with db() as connection:
+        graph=audit_graph(connection,project_id)
+        assets=list_illustrations(connection,project_id)
+        puzzles=visual_puzzle_list(connection,project_id)
+        try:
+            return review_book_version(DATA_DIR,connection,project,version_id,assets,puzzles)
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+
+@api.post("/projects/{project_id}/editorial/versions/{version_id}/graph-proposals")
+def editorial_extract_proposals(project_id: str,version_id: str):
+    project=get_project(project_id)
+    try:
+        return propose_version_graph(DATA_DIR,project,version_id)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/editorial/versions/{version_id}/graph-proposals")
+def editorial_proposals(project_id: str,version_id: str):
+    get_project(project_id)
+    try:
+        version=get_book_version(DATA_DIR,project_id,version_id,include_text=False)
+        return {"suggestions":graph_suggestions(DATA_DIR,project_id,version["digest"])}
+    except ValueError as exc:
+        raise HTTPException(404,str(exc)) from exc
+
+
+class EditorialProposalDecision(BaseModel):
+    decision: Literal["approved","rejected"]
+
+
+@api.post("/projects/{project_id}/editorial/versions/{version_id}/graph-proposals/{proposal_id}")
+def editorial_proposal_decision(project_id: str,version_id: str,
+                                proposal_id: str, request: EditorialProposalDecision):
+    get_project(project_id)
+    try:
+        version=get_book_version(DATA_DIR,project_id,version_id,include_text=False)
+    except ValueError as exc:
+        raise HTTPException(404,str(exc)) from exc
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Во время генерации канон изменять нельзя")
+        rows=graph_suggestions(DATA_DIR,project_id,version["digest"])
+        candidate=next((p for p in rows if p["id"]==proposal_id),None)
+        if candidate is None:
+            raise HTTPException(404,"Предложение не найдено")
+        if candidate["status"]!="proposed":
+            raise HTTPException(409,"Решение по этому предложению уже сохранено")
+        if request.decision=="approved":
+            if candidate["scene_id"] not in {s.id for s in get_project(project_id).scenes}:
+                raise HTTPException(409,"Глава исходного предложения больше не существует")
+            # Stable ID prevents duplicate canon facts across retry/restart.
+            connection.execute("""INSERT OR IGNORE INTO story_nodes
+              (id,project_id,branch_id,kind,title,statement,scene_id,scene_index,status,created_at)
+              VALUES (? ,?,'main',?,?,?,?,?,'approved',?)""",
+              (candidate["id"],project_id,candidate["kind"],candidate["title"],
+               candidate["statement"],candidate["scene_id"],candidate["scene_index"],utc_now()))
+        try:
+            decide_graph_suggestion(DATA_DIR,project_id,version["digest"],
+                                    proposal_id,request.decision)
+        except ValueError as exc:
+            raise HTTPException(409,str(exc)) from exc
+    return {"id":proposal_id,"decision":request.decision}
+
+
+class VisualPuzzleCreate(BaseModel):
+    illustration_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    answer_scene_id: str
+    title: str = Field(min_length=1,max_length=160)
+    answer_note: str = Field(min_length=1,max_length=1500)
+
+
+@api.get("/projects/{project_id}/visual-puzzles")
+def visual_puzzles_for_project(project_id: str):
+    get_project(project_id)
+    with db() as connection:
+        return visual_puzzle_list(connection,project_id)
+
+
+@api.post("/projects/{project_id}/visual-puzzles",status_code=201)
+def create_visual_puzzle(project_id: str,request: VisualPuzzleCreate):
+    project=get_project(project_id)
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Создавать визуальную загадку можно после генерации")
+        sync_approved(connection,project)
+        try:
+            return add_visual_puzzle(connection,project,request.illustration_id,
+                                      request.answer_scene_id,request.title,
+                                      request.answer_note)
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+
+@api.delete("/projects/{project_id}/visual-puzzles/{puzzle_id}",status_code=204)
+def remove_visual_puzzle(project_id: str,puzzle_id: str):
+    get_project(project_id)
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Нельзя менять граф во время генерации")
+        if not delete_visual_puzzle(connection,project_id,puzzle_id):
+            raise HTTPException(404,"Загадка не найдена")
+    return Response(status_code=204)
 
 
 @api.get("/projects/{project_id}/continuity")
