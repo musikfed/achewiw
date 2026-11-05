@@ -366,7 +366,7 @@ run_update() {
   esac
   branch="$(git -C "$WORKSPACE" symbolic-ref --quiet --short HEAD)" ||
     die "Detached HEAD; ветку автоматически не переключаем"
-  [[ "$branch" == feature/technical-epub-first ]] ||
+  [[ "$branch" == feature/technical-epub-first || "$branch" == feature/production-conveyor-rtx3060 ]] ||
     die "Текущая ветка $branch; рабочая Compose-версия: feature/technical-epub-first. Автопереключения нет"
   dirty="$(git -C "$WORKSPACE" status --porcelain --untracked-files=normal)" ||
     die "Нельзя проверить Git status"
