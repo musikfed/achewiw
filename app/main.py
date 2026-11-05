@@ -21,6 +21,8 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from gpu_scheduling import init_gpu_leases, image_operation_active, reserve_gpu, release_gpu
+from conveyor_core import initialize as init_production_conveyor
+from conveyor_api import install as install_production_conveyor
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
@@ -126,6 +128,7 @@ def init_db() -> None:
         init_memory(connection)
         init_editorial_schema(connection)
         init_gpu_leases(connection)
+        init_production_conveyor(connection)
         init_illustrations(connection)
         init_visual_puzzles(connection)
         mark_interrupted(connection)
@@ -2424,4 +2427,5 @@ def project_generation_history(project_id: str,
     return items
 
 
+install_production_conveyor(api, globals())
 app.include_router(api)
