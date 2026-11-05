@@ -84,6 +84,13 @@ esac
 FAKE_CURL = r'''#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$TEST_CURL_LOG"
+if [[ -n "${TEST_HTTP_FAIL_FIRST:-}" ]]; then
+  calls=0
+  [[ ! -f "$TEST_CURL_COUNTER" ]] || calls="$(cat "$TEST_CURL_COUNTER")"
+  calls=$((calls+1))
+  printf '%s' "$calls" > "$TEST_CURL_COUNTER"
+  if (( calls <= TEST_HTTP_FAIL_FIRST )); then exit 7; fi
+fi
 if [[ "${TEST_HTTP_FAIL:-}" == 1 ]]; then exit 7; fi
 if [[ "${TEST_HTTP_UNIDENTIFIED:-}" == 1 ]]; then
   printf 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'
@@ -157,6 +164,7 @@ class ShutdownTests(unittest.TestCase):
             file.write_text(script, encoding="utf-8")
             file.chmod(0o755)
         self.curl_log = root / "curl.log"
+        self.curl_counter = root / "curl.counter"
         self.migrated = root / "migrated"
         self.log = root / "docker.log"
         self.systemctl_log = root / "systemctl.log"
@@ -173,6 +181,7 @@ class ShutdownTests(unittest.TestCase):
                         TEST_LOG=str(self.log), TEST_STATE=str(self.state),
                         TEST_MIGRATED=str(self.migrated),
                         TEST_CURL_LOG=str(self.curl_log),
+                        TEST_CURL_COUNTER=str(self.curl_counter),
                         TEST_SYSTEMCTL_LOG=str(self.systemctl_log), TEST_UNIT_STOPPED=str(self.unit_stopped))
 
     def run_switch(self, action="stop", **env):
@@ -239,6 +248,23 @@ class ShutdownTests(unittest.TestCase):
         self.assertNotIn("prune", self.commands())
         self.assertNotIn("stop --time", self.commands())
         self.assertFalse(self.unit_stopped.exists())
+
+    def test_rebuild_waits_for_delayed_uvicorn_and_preserves_other_services(self):
+        # Docker marks a container Started before Uvicorn has opened 7080.
+        # Two initial connection-refused responses must not fail a rebuild.
+        result = self.run_switch("rebuild-fresh", TEST_HTTP_FAIL_FIRST="2")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ожидаем HTTP-готовности", result.stdout)
+        self.assertEqual(int(self.curl_counter.read_text()), 5)
+        self.assertTrue((self.workspace / "data/.achewiw-deployed-commit").exists())
+        self.assertNotIn("stop --time", self.commands())
+        self.assertNotIn("prune", self.commands())
+
+    def test_manual_auth_check_stays_fail_fast_without_retry(self):
+        result = self.run_switch("auth-check", TEST_HTTP_FAIL_FIRST="2")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(int(self.curl_counter.read_text()), 1)
+        self.assertNotIn("up -d", self.commands())
 
     def test_rebuild_ignores_foreign_monitor_unit_and_does_not_touch_it(self):
         result = self.run_switch(
