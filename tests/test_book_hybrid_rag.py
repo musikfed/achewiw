@@ -37,7 +37,7 @@ def _prepare(tmp_path):
 def test_hybrid_vectors_scope_and_digest_refresh(tmp_path):
     main=_prepare(tmp_path)
     todo=pending_embeddings(tmp_path,"book","current","nomic-embed-text:latest")
-    assert {row["source_id"] for row in todo}=={"a","b","e","f"} or {row["source_id"] for row in todo}=={"a","b","e","f"} # branch filtered at query; indexing scope only
+    assert {row["source_id"] for row in todo}=={"a","b","e"}  # never index another branch
     vecs=[[1.,0.,0.,0.,0.,0.,0.,0.] for _ in todo]
     assert save_embeddings(tmp_path,"nomic-embed-text:latest",todo,vecs)==len(todo)
     results=semantic_snippets(tmp_path,"book","current",0,"nomic-embed-text:latest",
