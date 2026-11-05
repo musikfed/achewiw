@@ -725,10 +725,13 @@ async function reindexStorySearch(){
  const btn=$('#memoryReindex');btn.disabled=true;
  $('#memoryStorage').textContent='Проверяем текущие версии фрагментов и обновляем только изменённые…';
  try{
-   const result=await api('/storage/reindex',{method:'POST',body:'{}'});
+   const url='/storage/reindex'+(project?'?project_id='+encodeURIComponent(project.id):'');
+   const result=await api(url,{method:'POST',body:'{}'});
    await loadStorageStatus();
-   toast('RAG: обновлено '+result.indexed+', без изменений '+result.unchanged+
-     ', устаревших записей кэша удалено '+result.removed);
+   toast('RAG: FTS5 обновлено '+result.indexed+', без изменений '+result.unchanged+
+     '; векторов добавлено '+(result.vector_index?.indexed||0)+
+     (result.vector_index?.state==='fts5-only'?
+       '. Векторная модель недоступна, FTS5 и граф продолжают работать.':''));
  }catch(e){$('#memoryStorage').textContent='Индекс не обновлён: '+e.message;}
  finally{btn.disabled=false;}
 }
