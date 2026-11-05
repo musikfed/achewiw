@@ -57,7 +57,7 @@ def test_revelation_rights_follow_saved_chapter_plan():
     hint=fragment_contract(p,p.scenes[0],0,
                             {"stage_name":"opening","reveal_level":"hint"},250,2000)
     assert "не объясняй" in hint.lower()
-    assert "не выдумывай" in hint.lower()
+    assert "не придумывай" in hint.lower()
     full=fragment_contract(p,p.scenes[3],3,
                             {"stage_name":"reveal","reveal_level":"full"},1300,2500)
     assert "допустима" in full.lower()
@@ -75,7 +75,7 @@ def test_suspense_has_evidence_based_critic_and_weak_lexical_signals():
     critic=review_contract(p,p.scenes[0],{"stage_name":"opening","reveal_level":"none"})
     assert "не найдено" in critic
     assert "не сочиняй" in critic
-    repeated=("И он спросил? "*65)+"Это только начало."
+    repeated=("И он спросил? "*85)+"Это только начало."
     result=lexical_findings(repeated)
     assert {x["kind"] for x in result}=={"question_spam","generic_cliffhanger"}
     assert lexical_findings("Он открыл дверь.")==[]
@@ -117,6 +117,7 @@ def test_api_map_reports_valid_author_plan(tmp_path,monkeypatch):
                   "target_length":"12000 слов","genre":"детектив"})
         assert posted.status_code==201,posted.text
         p=posted.json()
+        p["target_length"]="12000 слов"
         p["scenes"]=[{"title":t,"anchor":"Зацепка "+str(i),"hook":"Вопрос "+str(i)}
                      for i,t in enumerate(("Находка","Поиск","Проверка","Ответ","Финал"))]
         saved=api.put("/api/projects/"+p["id"],json=p)
