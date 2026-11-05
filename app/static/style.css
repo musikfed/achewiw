@@ -951,3 +951,18 @@ header{
 .book-credits{border-top:1px solid #dfd4c6;margin-top:45px;padding-top:16px}
 .book-credits p{font-size:12px;line-height:1.65}
 #illustrationParagraphWrap[hidden]{display:none}
+
+/* One server-backed progress strip remains visible in Plan, Typography and
+   every other editorial tab. It never starts a task by itself. */
+.book-live-bar{display:grid;gap:9px;padding:16px 20px;margin:18px 0 12px;
+  background:#fffaf0;border:1px solid #d7bd8e;border-left:4px solid #9b764a;
+  border-radius:11px;box-shadow:0 5px 22px #2117080a}
+.book-live-bar[hidden]{display:none!important}
+.book-live-heading{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.book-live-heading strong{font-size:14px;line-height:1.5;color:#44352a}
+.book-live-heading small{font-size:12px;color:#8b7158}
+.book-live-bar progress{width:100%;height:11px;accent-color:#9b764a}
+.book-live-bar .actions{margin:0;display:flex;gap:9px;flex-wrap:wrap}
+.book-live-bar .actions button{padding:9px 15px}
+@media(max-width:700px){.book-live-bar{padding:12px}.book-live-bar .actions button{flex:1 1 100%}}
+@media print{#bookLiveBar{display:none!important}}
