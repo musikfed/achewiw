@@ -94,7 +94,7 @@ def test_branch_and_foreign_edges_are_isolated():
         assert nodes(db,"one","main")==[first]
         assert nodes(db,"one",alternate["id"])==[other]
         assert nodes(db,"two","main")==[second]
-        assert not retrieve(db,"one","job",2,"Миирус",branch=alternate["id"])["facts"]
+        assert all(n["branch_id"]==alternate["id"] for n in retrieve(db,"one","job",2,"Миирус",branch=alternate["id"])["facts"])
 
 
 def test_reindex_author_source_and_remove_project_memory():
@@ -140,7 +140,7 @@ def test_api_memory_never_auto_accepts_drafts(tmp_path,monkeypatch):
         prefix=f"/api/projects/{p['id']}/story-memory"
         initial=api.get(prefix)
         assert initial.status_code==200,initial.text
-        assert initial.json()["nodes"]==[]
+        assert len(initial.json()["nodes"])==2  # author-approved outline mirrored as PLAN, not canon
         one=api.post(prefix+"/nodes",json={"kind":"event","title":"Посадка",
             "statement":"Посадка произошла до погони","scene_id":p["scenes"][0]["id"]})
         assert one.status_code==201,one.text
@@ -150,7 +150,7 @@ def test_api_memory_never_auto_accepts_drafts(tmp_path,monkeypatch):
         link=api.post(prefix+"/edges",json={"source_id":one.json()["id"],
             "target_id":two.json()["id"],"relation":"causes"})
         assert link.status_code==201,link.text
-        assert api.get(prefix+"/audit").json()["edges"]==1
+        assert api.get(prefix+"/audit").json()["edges"]==2  # 1 outline order + 1 causal edge
         job=api.post("/api/books/generate",json={"project_id":p["id"],
                                                   "model":"qwen3:8b"})
         assert job.status_code==202,job.text
