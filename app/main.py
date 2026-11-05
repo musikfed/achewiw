@@ -29,7 +29,8 @@ from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epu
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter,
-    check_new_prose, trim_repeated_tail, continuation_repair_note)
+    check_new_prose, trim_repeated_tail, continuation_repair_note,
+    save_stream_buffer, read_stream_buffer, clear_stream_buffer, recover_completed_sentences)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
 from editorial_ledger import init_editorial_schema, editorial_schema_status
@@ -1433,6 +1434,13 @@ def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
         raise HTTPException(404, "Задание книги не найдено")
     record["book"] = book_summary(connection, job_id)
     record["book_chapters"] = chapters_for_job(connection, job_id, include_text=False)
+    # Incomplete model output has its own power-loss-safe SQLite buffer, never
+    # mixed into chapter word totals or author-approved manuscript.
+    streaming=connection.execute("""SELECT scene_id,length(partial) AS chars,
+        partial,updated_at FROM ai_book_stream_buffers
+        WHERE job_id=? ORDER BY updated_at DESC LIMIT 1""",(job_id,)).fetchone()
+    record["stream_words"]=book_words(streaming["partial"]) if streaming else 0
+    record["stream_updated_at"]=streaming["updated_at"] if streaming else None
     # Chapter texts are stored separately, not duplicated into the job result.
     return record
 
@@ -1560,6 +1568,32 @@ async def execute_book(job_id: str) -> None:
             if chapter["complete"]:
                 previous = text[-1500:]
                 continue
+            # Restore only complete sentences from an interrupted network
+            # stream, and only if the base chapter is byte-for-byte unchanged.
+            # This cannot replace or corrupt previously approved manuscript.
+            with db() as connection:
+                stale_buffer=read_stream_buffer(connection,job_id,scene.id,text)
+                if stale_buffer:
+                    recovered=recover_completed_sentences(stale_buffer["partial"])
+                    recovered=trim_repeated_tail(text,recovered)
+                    try:
+                        check_new_prose(text,recovered)
+                    except ValueError:
+                        # Invalid/repeated stream is NOT promoted to draft.
+                        clear_stream_buffer(connection,job_id,scene.id)
+                    else:
+                        text=(text.rstrip()+"\\n\\n"+recovered).strip()
+                        attempts+=1
+                        save_chapter(connection,job_id,scene.id,text,attempts,
+                                     complete=book_words(text)>=chapter["target_words"])
+                        for passage_index,passage in enumerate(memory_segments(recovered)):
+                            index_chunk(connection,project.id,"main",job_id,"draft",scene.id,
+                                        index,attempts*1000+passage_index,passage)
+                        clear_stream_buffer(connection,job_id,scene.id)
+                        update_job(connection,job_id,
+                                   stage=f"Восстановлено {book_words(recovered)} слов после выключения",
+                                   output="Незавершённый поток Ollama восстановлен из SQLite.",
+                                   percent=min(99,round(book_summary(connection,job_id)["percent_words"])))
             while book_words(text) < chapter["target_words"] and attempts < max_attempts(chapter["target_words"]):
                 remaining = chapter["target_words"] - book_words(text)
                 requested = chunk_size(remaining,last_output_words)
@@ -1606,6 +1640,7 @@ async def execute_book(job_id: str) -> None:
                     generated = ""
                     this_eval_tokens = None
                     this_prompt_tokens = None
+                    last_stream_flush = 0.0
                     async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
                         async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
                             response.raise_for_status()
@@ -1621,12 +1656,28 @@ async def execute_book(job_id: str) -> None:
                                     this_prompt_tokens=part.get("prompt_eval_count")
                                 if len(generated) > 30000:
                                     raise ValueError("Один фрагмент превышает лимит")
+                                # Power loss recovery: persist unfinished Ollama
+                                # output every few seconds, not only after an
+                                # entire 900-word generation has finished.
+                                stamp=time.monotonic()
+                                if len(generated)>=100 and (
+                                      stamp-last_stream_flush>=2.0 or part.get("done")):
+                                    with db() as connection:
+                                        save_stream_buffer(connection,job_id,scene.id,
+                                                           text,generated,retry)
+                                        update_job(connection,job_id,
+                                            stage=f"Глава {index+1} · поток Ollama: {book_words(generated)} слов",
+                                            output="Фрагмент записывается в буфер SQLite; законченный текст будет проверен.",
+                                            percent=pct)
+                                    last_stream_flush=stamp
                                 if part.get("done"):
                                     break
                     candidate = trim_repeated_tail(text, generated)
                     try:
                         check_new_prose(text, candidate)
                     except ValueError as exc:
+                        with db() as connection:
+                            clear_stream_buffer(connection,job_id,scene.id)
                         last_failure = str(exc)
                         if retry == 5 or not any(k in last_failure.casefold()
                                                   for k in ("повтор", "короткий")):
@@ -1655,6 +1706,7 @@ async def execute_book(job_id: str) -> None:
                 with db() as connection:
                     save_chapter(connection, job_id, scene.id, text, attempts,
                                  complete=book_words(text) >= chapter["target_words"])
+                    clear_stream_buffer(connection,job_id,scene.id)
                     # Passage indexing is independent of how many words the
                     # model generates. Store the FULL text in canon unchanged.
                     # Use smaller RAG passages only for retrieval/embeddings.
