@@ -122,6 +122,8 @@ bash scripts/achewiw-control.sh status
 - [RAG и сохранение длинной генерации](docs/BOOK-HYBRID-RAG-CONTINUATION-RU.md)
 - [Версии, QA и визуальные загадки](docs/EDITORIAL-VERSIONS-VISUAL-PUZZLES-RU.md)
 - [Идеи, найденные ошибки и предложения — GitHub Issues](https://github.com/musikfed/achewiw/issues)
+- [GitHub SEO: описание, темы, карточка и публикация релизов](docs/GITHUB-DISCOVERABILITY-RU.md)
+- [Порядок безопасной очистки старых веток](docs/BRANCH-CLEANUP-RU.md)
 
 **English:** ACHEWIW is a **self-hosted, local AI writing and book-production studio** using Ollama, FastAPI, SQLite and optional ComfyUI. It helps plan novels, technical books and speeches, review manuscripts, preserve author decisions, generate book artwork, and export PDF, DOCX, EPUB and FB2. One GPU role at a time; author approval before publication. It does not promise automatic literary excellence or PDF/X certification.
 
