@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-edition-v14"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ACHEWIW — Закулисная мастерская</title><link rel="stylesheet" href="/static/style.css?v=20261105-edition-v15"></head>
 <body><header><div class="brand"><span class="mark">✦</span><div><strong>ACHEWIW</strong><small>Закулисная мастерская</small></div></div><div class="server"><span id="signal">●</span> <span id="status">Подключение...</span></div></header>
 <div class="workspace"><aside aria-label="Навигация по мастерским и библиотеке"><div class="work-navigator" role="navigation" aria-label="Направления мастерской">
 <div class="nav-heading">Мастерские <span class="nav-heading-sub">направления работы</span></div>
@@ -61,8 +61,9 @@
  <section class="story-memory-panel" id="storyMemoryPanel" aria-label="Память сюжета и граф причин">
    <div class="chapter-plan-top"><div><h4>Память сюжета · RAG + граф причин</h4>
    <p>Авторский каркас становится последовательностью узлов графа. Ты можешь закрепить действующие факты, загадки, объекты и связи «причина → следствие». Черновик ИИ никогда автоматически не превращается в канон.</p></div>
-   <div class="actions"><button type="button" id="memoryReload">Обновить карту</button></div></div>
+   <div class="actions"><button type="button" id="memoryReload">Обновить карту</button><button type="button" id="memoryReindex">Обновить RAG-индекс</button></div></div>
    <p id="memoryStatus" role="status" aria-live="polite">Карта сюжета загружается…</p>
+   <p id="memoryStorage" role="status" aria-live="polite">Хранилища: проверяем канон, search и work SQLite…</p>
    <label class="chapter-plan-field">Сюжетная ветка
       <select id="memoryBranch"><option value="main">Основная история</option></select>
    </label>
@@ -242,4 +243,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-edition-v14" defer></script><script src="/static/app.js?v=20261105-edition-v14" defer></script><script src="/static/writing_blocks.js?v=20261105-edition-v14" defer></script><script src="/static/illustrations.js?v=20261105-edition-v14" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261105-edition-v15" defer></script><script src="/static/app.js?v=20261105-edition-v15" defer></script><script src="/static/writing_blocks.js?v=20261105-edition-v15" defer></script><script src="/static/illustrations.js?v=20261105-edition-v15" defer></script></body></html>
