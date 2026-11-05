@@ -49,7 +49,7 @@ jobs:
           grep -Fq 'org.achewiw.lifecycle: "managed"' compose.yaml
           grep -Fq 'org.achewiw.workspace: "/1tbdisk/achewiw"' compose.yaml
       - name: Validate Python monitor syntax
-        run: python3 -m py_compile scripts/comfyui_control_agent.py scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/book_generation_core.py app/chapter_planning.py app/story_memory.py app/editorial_ledger.py app/manuscript_core.py app/publishing_exports.py scripts/library_admin.py app/illustrations_core.py app/image_engine.py app/gpu_scheduling.py app/writing_blocks_core.py scripts/erase-studio-library.py app/main.py
+        run: python3 -m py_compile scripts/comfyui_control_agent.py scripts/achewiw_host_monitor.py app/monitoring_core.py app/generation_core.py app/book_generation_core.py app/book_layout_core.py app/editor_workspace.py app/chapter_planning.py app/story_memory.py app/editorial_ledger.py app/manuscript_core.py app/publishing_exports.py scripts/story-storage-maintenance.py scripts/library_admin.py app/illustrations_core.py app/image_engine.py app/gpu_scheduling.py app/writing_blocks_core.py scripts/erase-studio-library.py app/main.py
       - name: Read-only host metrics parsing tests
         run: python3 -m unittest discover -v -s tests -p 'test_*monitor*.py'
       - name: Durable SQLite generation jobs safety tests
@@ -70,11 +70,11 @@ jobs:
       - name: Install FastAPI and HTTPX for isolated API tests
         run: python3 -m pip install --disable-pip-version-check -r app/requirements.txt pytest
       - name: API generation, restart recovery, model-unload and auth tests
-        run: PYTHONPATH=app python3 -m pytest -q tests/test_app.py tests/test_book_generation_core.py tests/test_chapter_planning.py tests/test_story_memory.py tests/test_editorial_ledger.py
+        run: PYTHONPATH=app python3 -m pytest -q tests/test_editor_workspace.py tests/test_edition_storage.py tests/test_app.py tests/test_book_generation_core.py tests/test_chapter_planning.py tests/test_story_memory.py tests/test_editorial_ledger.py
       - name: Sequential GPU operations, optional Ollama-to-SDXL prompt and safe browser refresh
         run: |
           PYTHONPATH=app python3 -m pytest -q tests/test_gpu_scheduling.py
-          grep -Fq '20261105-storymemory-v13' app/static/index.html
+          grep -Fq '20261105-edition-v14' app/static/index.html
           grep -Fq 'rebuild-fresh' scripts/achewiw-control.sh
       - name: Persistent author-approved story blocks and continuity QA
         run: |
