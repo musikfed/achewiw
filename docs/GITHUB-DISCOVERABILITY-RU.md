@@ -52,9 +52,9 @@ GitHub Topics поддерживает до 20 тегов, строчные ла
 
 В `docs/index.html` добавлена **статическая публичная страница проекта**, не связанная с локальной SQLite, Ollama или рукописями. Там есть `title`, `description`, естественные русские тексты, заголовки, `alt` для схем, `canonical`, Open Graph и JSON-LD `SoftwareSourceCode`. На одной странице обсуждаются реальные сценарии использования и технические ограничения.
 
-**Состояние на 5 ноября 2026:** у репозитория GitHub Pages ещё не включён (`has_pages=false`). Пока страницу нельзя считать общедоступным сайтом или проиндексированной Google/Яндексом.
+**Состояние на 5 ноября 2026:** GitHub Pages включён, источник `main /docs` (снимок настроек владельца; API `has_pages=true`). Это **не доказывает**, что поисковики уже проиндексировали страницу.
 
-Чтобы запустить её, владелец репозитория открывает **Settings → Pages → Build and deployment → Deploy from a branch → main /docs → Save**. После включения проверяет в браузере `https://musikfed.github.io/achewiw/` и статус HTTP 200. Это **только публичная документация**, не сам ACHEWIW Studio. Нельзя публиковать `/data`, бэкапы SQLite, токены, Ollama, порт 7080, приватные рукописи.
+Настройка Pages уже выполнена владельцем. Теперь нужно проверить в браузере `https://musikfed.github.io/achewiw/` и статус HTTP 200. Это **только публичная документация**, не сам ACHEWIW Studio. Нельзя публиковать `/data`, бэкапы SQLite, токены, Ollama, порт 7080, приватные рукописи.
 
 После успешного включения:
 
@@ -72,3 +72,28 @@ GitHub Topics поддерживает до 20 тегов, строчные ла
 - [Яндекс — качество страниц, заголовки и описания](https://www.yandex.ru/support/webmaster/ru/site-quality-index)
 
 **Важно:** README GitHub, его `About` и Topics редактируются отдельно от метатегов `docs/index.html`. GitHub в данный момент не получил описание и темы через подключение — для них нужно вручную воспользоваться иконкой редактирования About. Поисковые позиции, сроки и количество звёзд никто не гарантирует.
+
+## Тематические метки и собственный домен: текущее состояние
+
+- Поиск **Google не использует `meta keywords`**, поэтому нужны понятные `title`, `description`, обычный текст, внутренние ссылки и реальные материалы. **Яндекс допускает учёт `keywords`**; аккуратный русскоязычный метатег добавлен в обе лендинговые страницы.
+- GitHub Topics и поле About остаются отдельными метаданными репозитория: API изменения требует `Administration: write`, а GitHub-подключение из диалога предоставляет только операции с файлами/ветками. GitHub Actions `contents: write` недостаточен для обновления этих полей. Не использовать небезопасные PAT в коммитах.
+- Если на локальном ПК или сервере есть **авторизованный `gh` CLI**, можно настроить всё одной командной последовательностью без раскрытия ключа:
+
+```bash
+# Требуется gh auth login владельца с правом Administration:write
+# Если gh не установлен/не авторизован, проще внести метаданные в About на GitHub.
+gh api -X PATCH repos/musikfed/achewiw \
+  -f description='Типография в кармане: локальная студия книг на Ollama — сюжет, редактура, RAG, иллюстрации, PDF/DOCX/EPUB' \
+  -f homepage='https://musikfed.github.io/achewiw/'
+gh api -X PUT repos/musikfed/achewiw/topics \
+  -f 'names[]=ollama' -f 'names[]=self-hosted' -f 'names[]=ai-writing' \
+  -f 'names[]=book-publishing' -f 'names[]=epub' \
+  -f 'names[]=writing-tools' -f 'names[]=storytelling' \
+  -f 'names[]=rag' -f 'names[]=fastapi' -f 'names[]=sqlite' \
+  -f 'names[]=comfyui' -f 'names[]=russian-language'
+```
+
+- У владельца есть домен **`peginelab.ru`** (именно так он указан в конфигурации `musikfed/peginelab`, не `peginela.ru`). В `musikfed/peginelab` на ветке `main` добавлены `/achewiw/`, sitemap, Nginx-маршрут и карточка в каталоге проектов. **Production-домен не обновлён до разрешённого выпуска из preprod/prod**: нельзя подменять опубликованный сайт старой локальной сборкой.
+- Страница на `peginelab.ru/achewiw/` должна быть самостоятельной индексируемой визиткой с ссылкой на **GitHub-репозиторий**, а не мгновенным 301-редиректом. Google может канонизировать 301 на GitHub, и тогда собственная тематическая страница не будет отдельным результатом поиска. Для быстрой навигации кнопка «Открыть ACHEWIW на GitHub» уже есть.
+
+Документация: [Google meta keywords не поддерживаются](https://developers.google.com/search/docs/crawling-indexing/special-tags), [метатеги Яндекс](https://yandex.ru/support/webmaster/ru/controlling-robot/metatags), [GitHub API Topics требует Administration](https://docs.github.com/en/rest/repos/repos).
