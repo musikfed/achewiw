@@ -1808,6 +1808,12 @@ def current_book_job(project_id: str, response: Response):
 @api.post("/books/generate", status_code=202)
 async def start_full_book(request: BookRequest):
     project = get_project(request.project_id)
+    # The return-to-book action must not depend on a subsequently edited
+    # outline or plan: first recover the existing job BEFORE validation.
+    with db() as connection:
+        prior_id=_current_book_job_id(connection,project.id)
+        if prior_id:
+            return {**_book_record(connection,prior_id),"reused":True}
     try:
         with db() as connection:
             plan = get_plan(connection, project)
