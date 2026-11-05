@@ -184,7 +184,7 @@ async function deleteCurrentProject(){
   toast('Работа удалена. Резервная копия SQLite сохранена.');
  }catch(e){toast('Удаление не выполнено: '+e.message)}
 }
-function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory()}if(name==='book'){renderBook();if(bookJobId)refreshFullBook();}document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
+function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory();refreshBookVersions()}if(name==='book'){renderBook();if(bookJobId)refreshFullBook();}document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
 async function renderAuditHistory(){
   if(!project)return;
   const target=$('#auditHistory');
@@ -588,6 +588,11 @@ function renderFullBookJob(job){
  $('#bookLiveJob').textContent='Задание '+job.id.slice(0,12)+
    ' · '+job.model+' · '+(job.book?.chapters_complete||0)+'/'+(job.book?.chapters||0)+' глав';
  $('#bookLiveResume').hidden=!['error','interrupted'].includes(job.status);
+ for(const id of ['bookLivePdf','bookPartialPdf','bookPartialPdfPlan']){
+   const link=$('#'+id);
+   link.hidden=!(written>0);
+   if(written>0)link.href='/api/books/jobs/'+encodeURIComponent(job.id)+'/draft.pdf';
+ }
  const changedJob=bookJobId!==job.id;
  bookJobId=job.id;
  if(changedJob){bookDraftWords=-1;bookDraftMode=true;}
@@ -679,6 +684,174 @@ async function restoreLatestBook(){
  }
 }
 
+
+let currentBookVersions=[];
+
+function versionChoice(){
+ return $('#versionFirst').value;
+}
+async function refreshBookVersions(){
+ if(!project)return;
+ const projectId=project.id;
+ try{
+   const items=await api('/projects/'+projectId+'/editorial/versions',{cache:'no-store'});
+   if(!project||project.id!==projectId)return;
+   currentBookVersions=items;
+   for(const id of ['versionFirst','versionSecond']){
+     const target=$('#'+id), selected=target.value;
+     target.replaceChildren();
+     if(id==='versionSecond'){
+       const none=document.createElement('option');none.value='';
+       none.textContent='Одна версия: проверить без сравнения';target.append(none);
+     }
+     for(const row of items){
+       const opt=document.createElement('option');opt.value=row.id;
+       opt.textContent=row.label+' · '+row.total_words+' слов · '+
+         new Date(row.created_at).toLocaleString('ru-RU');
+       target.append(opt);
+     }
+     if([...target.options].some(o=>o.value===selected))target.value=selected;
+     else if(id==='versionSecond')target.value='';
+   }
+   $('#versionStatus').textContent=items.length?
+     'В work.sqlite3 хранится '+items.length+' неизменяемых версий. '+
+     (items.length===1?'Достаточно проверить единственный вариант.':
+      'Можно сравнить выбранные версии и найти различия по главам.'):
+     'Пока нет редакций. Напиши хотя бы часть главы и сохрани её снимок.';
+ }catch(e){$('#versionStatus').textContent='Не удалось прочитать версии: '+e.message}
+}
+
+async function saveBookVersion(source){
+ if(!project)return;
+ const btn=$('#versionSave'+(source==='draft'?'Draft':'Manuscript'));btn.disabled=true;
+ const projectId=project.id;
+ try{
+   const created=await api('/projects/'+projectId+'/editorial/versions',{
+     method:'POST',body:JSON.stringify({source,label:$('#versionLabel').value.trim(),
+          job_id:source==='draft'?bookJobId:null})
+   });
+   await refreshBookVersions();
+   $('#versionFirst').value=created.id;
+   $('#versionStatus').textContent=(created.reused?
+      'Такая редакция уже сохранена. ': 'Снимок редакции сохранён. ')+
+      created.label+' · '+created.total_words+' слов. Оригинал не изменён.';
+   $('#versionReport').replaceChildren();$('#versionGraphProposals').replaceChildren();
+ }catch(e){$('#versionStatus').textContent='Нельзя сохранить редакцию: '+e.message}
+ finally{btn.disabled=false}
+}
+
+function renderEditorialReport(report){
+ const container=$('#versionReport');container.replaceChildren();
+ const heading=document.createElement('h4');heading.textContent=
+   (report.qa_result==='no_structural_issues_found'?
+      'Критических структурных ошибок не найдено':'Есть замечания перед выпуском')+
+   ' · '+report.words+' слов';container.append(heading);
+ const summary=document.createElement('p');summary.textContent=
+    'Граф: '+report.graph_nodes+' узлов, '+report.graph_edges+' связей. '+
+    'Найдено замечаний: '+report.issues.length+
+    '. Это проверка структуры, не гарантия литературной безошибочности.';
+ container.append(summary);
+ for(const issue of report.issues){
+   const box=document.createElement('article');box.className='version-issue';
+   const h=document.createElement('strong');h.textContent=
+     (issue.severity==='publication'?'Оформление':issue.severity==='review'?'На решение автора':'Проверить')+
+     ' · '+issue.kind+(issue.chapter?' · глава '+issue.chapter:'');
+   const p=document.createElement('p');p.textContent=issue.detail;
+   box.append(h,p);container.append(box);
+ }
+ if(!report.issues.length){
+   const ok=document.createElement('p');ok.textContent=
+     'Структурная проверка завершена без замечаний. Можно перечитать главы, '+
+     'проверить иллюстрации и принять рукопись для выпуска.';
+   container.append(ok);
+ }
+}
+async function reviewBookVersion(){
+ if(!project||!versionChoice()){toast('Сначала сохрани редакцию');return}
+ $('#versionStatus').textContent='Проверяем сохранённый снимок и граф SQLite…';
+ try{
+   const data=await api('/projects/'+project.id+'/editorial/versions/'+versionChoice()+'/review',
+     {method:'POST',body:'{}'});
+   renderEditorialReport(data);
+   $('#versionStatus').textContent='Проверка сохранена в work.sqlite3; тексты глав не изменены.';
+ }catch(e){$('#versionStatus').textContent='Проверка не выполнена: '+e.message}
+}
+async function compareBookVersions(){
+ if(!project||!versionChoice())return toast('Выбери сохранённый вариант');
+ const other=$('#versionSecond').value;
+ if(!other||other===versionChoice())return toast('Чтобы сравнить, выбери другую редакцию');
+ try{
+   const data=await api('/projects/'+project.id+'/editorial/compare?left='+
+     encodeURIComponent(versionChoice())+'&right='+encodeURIComponent(other));
+   const container=$('#versionReport');container.replaceChildren();
+   const h=document.createElement('h4');h.textContent='Изменено глав: '+data.changed_chapters;
+   container.append(h);
+   if(!data.changed_chapters){
+     const p=document.createElement('p');p.textContent='Тексты в выбранных редакциях совпадают.';
+     container.append(p);
+   }
+   for(const change of data.changes){
+     const item=document.createElement('details');item.className='version-diff';item.open=true;
+     const summary=document.createElement('summary');summary.textContent=
+       change.title+' · '+change.words_before+' → '+change.words_after+' слов';
+     const pre=document.createElement('pre');pre.textContent=change.diff_excerpt;
+     item.append(summary,pre);container.append(item);
+   }
+ }catch(e){toast('Сравнение не выполнено: '+e.message)}
+}
+async function renderGraphProposalList(versionId){
+ if(!project)return;
+ const data=await api('/projects/'+project.id+'/editorial/versions/'+versionId+'/graph-proposals');
+ const root=$('#versionGraphProposals');root.replaceChildren();
+ const head=document.createElement('h4');head.textContent=
+   'Предложения из текста · '+data.suggestions.length;root.append(head);
+ const note=document.createElement('p');note.textContent=
+   'Это кандидаты по написанному тексту и карточкам персонажей, а не доказанные причинные связи. '+
+   'Канон изменится только после твоего выбора.';
+ root.append(note);
+ for(const p of data.suggestions){
+   const box=document.createElement('article');box.className='version-issue';
+   const h=document.createElement('strong');h.textContent=
+     (p.kind==='character'?'Персонаж':'Событие')+' · '+p.title+
+     ' · глава '+(p.scene_index+1);
+   const detail=document.createElement('p');detail.textContent=p.statement;
+   box.append(h,detail);
+   const controls=document.createElement('div');controls.className='actions';
+   if(p.status==='proposed'){
+     for(const [choice,text] of [['approved','Закрепить в каноне'],['rejected','Отклонить']]){
+       const button=document.createElement('button');button.type='button';button.textContent=text;
+       button.onclick=async()=>{
+         button.disabled=true;
+         try{
+           await api('/projects/'+project.id+'/editorial/versions/'+versionId+
+             '/graph-proposals/'+p.id,{
+               method:'POST',body:JSON.stringify({decision:choice})
+             });
+           await renderGraphProposalList(versionId);
+           await loadStoryMemory();
+         }catch(e){toast('Решение не сохранено: '+e.message);button.disabled=false}
+       };
+       controls.append(button);
+     }
+   }else{
+     const state=document.createElement('small');state.textContent=
+       p.status==='approved'?'Утверждено автором':'Отклонено';controls.append(state);
+   }
+   box.append(controls);root.append(box);
+ }
+}
+async function proposeGraphFromVersion(){
+ if(!project||!versionChoice())return toast('Сначала сохрани снимок редакции');
+ $('#versionStatus').textContent='Подбираем подтверждаемые кандидаты из сохранённого текста…';
+ try{
+   await api('/projects/'+project.id+'/editorial/versions/'+versionChoice()+
+     '/graph-proposals',{method:'POST',body:'{}'});
+   await renderGraphProposalList(versionChoice());
+   $('#versionStatus').textContent=
+     'Кандидаты записаны в рабочую SQLite. Подтверди нужные, остальные не попадут в канон.';
+ }catch(e){$('#versionStatus').textContent='Кандидаты не созданы: '+e.message}
+}
+
 const memoryKinds={event:'Событие',character:'Персонаж',object:'Предмет',
  place:'Место',fact:'Факт',mystery:'Загадка',rule:'Правило'};
 const memoryRelations={causes:'вызывает',requires:'требуется для',before:'раньше',
@@ -695,6 +868,9 @@ function fillMemorySelect(id,options,selected){
 function renderStoryMemory(data){
  storyMemory=data;
  const graph=data.audit||{};
+ $('#memoryGraphCounts').textContent=' · '+(data.nodes||[]).filter(n=>n.status!=='outline').length+
+   ' утверждённых · '+(data.nodes||[]).filter(n=>n.status==='outline').length+
+   ' плановых';
  $('#memoryStatus').textContent='SQLite: '+(graph.nodes||0)+' узлов, '+(graph.edges||0)+
    ' связей · ветка '+(data.branch_id==='main'?'основная':'альтернативная')+
    ' · авторские факты отдельно от черновиков ИИ';
@@ -1131,12 +1307,22 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#memoryAddNode').onclick=addMemoryNode;
  $('#memoryAddEdge').onclick=addMemoryEdge;
  $('#memoryAddBranch').onclick=addMemoryBranch;
+ $('#versionSaveDraft').onclick=()=>saveBookVersion('draft');
+ $('#versionSaveManuscript').onclick=()=>saveBookVersion('manuscript');
+ $('#versionReload').onclick=refreshBookVersions;
+ $('#versionReview').onclick=reviewBookVersion;
+ $('#versionCompare').onclick=compareBookVersions;
+ $('#versionProposeGraph').onclick=proposeGraphFromVersion;
  $('#balanceChapterPlan').onclick=balanceChapterPlan;
  $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
  $('#bookResume').onclick=resumeFullBook;
  $('#bookLiveJump').onclick=()=>{showTab('book');$('#bookProduction').scrollIntoView({behavior:'smooth',block:'center'})};
  $('#bookLiveDraft').onclick=()=>{showTab('book');setBookReaderMode(true);$('#bookDraftPreview').scrollIntoView({behavior:'smooth',block:'start'})};
  $('#bookLiveResume').onclick=resumeFullBook;
+ // Link directly to the actual persisted prose PDF, not the old synopsis.
+ $('#bookLivePdf').addEventListener('click',event=>{
+   if(!bookJobId){event.preventDefault();toast('Книга ещё не создавалась')}
+ });
  $('#bookAccept').onclick=acceptFullBook;
  $('#bookViewDraft').onclick=()=>setBookReaderMode(true);
  $('#bookViewSaved').onclick=()=>setBookReaderMode(false);
