@@ -140,6 +140,8 @@ def add_edge(db: sqlite3.Connection, project_id: str, branch: str,
     indices = {row["id"]:row["scene_index"] for row in rows}
     if relation in ("causes", "before", "foreshadows") and indices[source_id] > indices[target_id]:
         raise ValueError("Причина или подсказка не может появиться позже следствия/раскрытия")
+    if relation == "requires" and indices[target_id] > indices[source_id]:
+        raise ValueError("Необходимый предмет или условие не может появиться позже зависимого события")
     # On causal edges detect any already-existing path back from target to source.
     if relation in ("causes", "requires", "before"):
         stack = [target_id]
@@ -192,9 +194,19 @@ def audit_graph(db: sqlite3.Connection, project_id: str,
         elif edge["relation"] in ("causes","before","foreshadows") and a["scene_index"] > b["scene_index"]:
             problems.append({"edge_id":edge["id"],"kind":"chronology",
                              "detail":a["title"]+" → "+b["title"]})
-    answered = {e["source_id"] for e in es if e["relation"]=="reveals"}
+    # An event or discovered fact reveals a mystery, not the reverse.
+    answered = {e["target_id"] for e in es if e["relation"]=="reveals"
+                and by_id.get(e["target_id"],{}).get("kind")=="mystery"}
     open_mysteries = [{"id":n["id"],"title":n["title"]} for n in ns
                       if n["kind"]=="mystery" and n["id"] not in answered]
+    for revelation in (e for e in es if e["relation"]=="reveals"):
+        reveal_event = by_id.get(revelation["source_id"])
+        for hint in (e for e in es if e["relation"]=="foreshadows"
+                     and e["target_id"]==revelation["target_id"]):
+            setup = by_id.get(hint["source_id"])
+            if setup and reveal_event and setup["scene_index"] > reveal_event["scene_index"]:
+                problems.append({"edge_id":revelation["id"],"kind":"premature_reveal",
+                                 "detail":"Подсказка появляется позже раскрытия загадки"})
     return {"nodes":len(ns),"edges":len(es),"issues":problems,
             "open_mysteries":open_mysteries,"branch_id":branch}
 
