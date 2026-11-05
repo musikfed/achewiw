@@ -1484,22 +1484,49 @@ async def execute_book(job_id: str) -> None:
                     update_job(connection, job_id, stage=f"Глава {index+1}/{len(project.scenes)} · фрагмент {attempts+1}",
                                output="Текст глав хранится в SQLite отдельно от каркаса.",
                                percent=pct)
-                async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
-                    async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
-                        response.raise_for_status()
-                        async for line in response.aiter_lines():
-                            if not line.strip():
-                                continue
-                            part = json.loads(line)
-                            if part.get("error"):
-                                raise ValueError("Ollama сообщила об ошибке генерации главы")
-                            generated += part.get("response", "")
-                            if len(generated) > 20000:
-                                raise ValueError("Один фрагмент превышает лимит")
-                            if part.get("done"):
-                                break
-                # Anti-loop guard: preserve existing chapter text on a repetitive answer.
-                check_new_prose(text, generated)
+                # Local models may repeat a generic paragraph. A rejected
+                # response is NEVER appended to manuscript or RAG. Retry with
+                # a new seed and a concrete non-recursive scene-writing brief.
+                for retry in range(3):
+                    payload["options"]["temperature"] = 0.72 + retry * 0.07
+                    payload["options"]["seed"] = (
+                        int(job_id[:8], 16) + (index+1)*101 + attempts*31 + retry*1009
+                    ) % 2147483647
+                    payload["prompt"] = prompt + (
+                        "\\nПОВТОР ОТКЛОНЁН. Не повторяй уже написанные образы, "
+                        "не рассуждай снова о неизвестности и важности пути. "
+                        "Продвигай непосредственно заданное событие через действие, "
+                        "конкретную обстановку, разговор и причинное следствие. "
+                        "Не выдумывай новый канон и не раскрывай запретные факты."
+                        if retry else ""
+                    )
+                    generated = ""
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
+                        async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
+                            response.raise_for_status()
+                            async for line in response.aiter_lines():
+                                if not line.strip():
+                                    continue
+                                part = json.loads(line)
+                                if part.get("error"):
+                                    raise ValueError("Ollama сообщила об ошибке генерации главы")
+                                generated += part.get("response", "")
+                                if len(generated) > 20000:
+                                    raise ValueError("Один фрагмент превышает лимит")
+                                if part.get("done"):
+                                    break
+                    try:
+                        check_new_prose(text, generated)
+                        break
+                    except ValueError as exc:
+                        if retry == 2 or not any(k in str(exc).casefold()
+                                                 for k in ("повтор", "короткий")):
+                            raise
+                        with db() as connection:
+                            update_job(connection, job_id,
+                                       stage="Обнаружен повтор · пробуем другую формулировку",
+                                       output="Отклонённый фрагмент не сохранён, предыдущий текст цел.",
+                                       percent=pct)
                 text = (text.rstrip() + "\n\n" + generated.strip()).strip()
                 attempts += 1
                 with db() as connection:
