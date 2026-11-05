@@ -85,7 +85,7 @@ import secrets,sys
 from pathlib import Path
 p=Path(sys.argv[1])
 p.write_text(secrets.token_hex(20)+"\n",encoding="ascii")
-p.chmod(0o600)
+p.chmod(0o644)  # browser epoch is public, not an authorization secret
 PY
 echo "=== Собираем ACHEWIW без старого Docker build cache (без system prune) ==="
 compose build --no-cache studio || die "Чистая сборка не удалась; Studio оставлен остановленным"
