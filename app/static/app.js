@@ -690,6 +690,12 @@ let currentBookVersions=[];
 function versionChoice(){
  return $('#versionFirst').value;
 }
+function syncVersionProofLink(){
+ const version=versionChoice(),link=$('#versionProofPdf');
+ link.hidden=!project||!version;
+ if(project&&version)link.href='/api/projects/'+encodeURIComponent(project.id)+
+   '/editorial/versions/'+encodeURIComponent(version)+'/proof.pdf';
+}
 async function refreshBookVersions(){
  if(!project)return;
  const projectId=project.id;
@@ -713,6 +719,7 @@ async function refreshBookVersions(){
      if([...target.options].some(o=>o.value===selected))target.value=selected;
      else if(id==='versionSecond')target.value='';
    }
+   syncVersionProofLink();
    $('#versionStatus').textContent=items.length?
      'В work.sqlite3 хранится '+items.length+' неизменяемых версий. '+
      (items.length===1?'Достаточно проверить единственный вариант.':
@@ -732,6 +739,7 @@ async function saveBookVersion(source){
    });
    await refreshBookVersions();
    $('#versionFirst').value=created.id;
+   syncVersionProofLink();
    $('#versionStatus').textContent=(created.reused?
       'Такая редакция уже сохранена. ': 'Снимок редакции сохранён. ')+
       created.label+' · '+created.total_words+' слов. Оригинал не изменён.';
@@ -1313,6 +1321,7 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#versionReview').onclick=reviewBookVersion;
  $('#versionCompare').onclick=compareBookVersions;
  $('#versionProposeGraph').onclick=proposeGraphFromVersion;
+ $('#versionFirst').onchange=syncVersionProofLink;
  $('#balanceChapterPlan').onclick=balanceChapterPlan;
  $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
  $('#bookResume').onclick=resumeFullBook;
