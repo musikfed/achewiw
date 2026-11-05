@@ -25,3 +25,9 @@ def test_home_is_independent_of_project_existence():
     assert "$('#editor').hidden=!active;$('#empty').hidden=active;" in APP
     assert "Типография в кармане" in HTML
     assert "Филинохомусы" not in HTML
+
+
+def test_home_marketing_copy_is_not_overwritten_by_fiction_preset():
+    assert "active?project.title:'Типография в кармане'" in APP
+    assert "if(!active){" in APP
+    assert "Закулисная мастерская рассказов" in APP
