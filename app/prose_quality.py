@@ -40,6 +40,7 @@ def first_cycle(text: str) -> dict | None:
             if count>=max(5,(30+size-1)//size) and count*size>=30:
                 return {
                     "kind":"phrase_loop","position":matches[i].start(),
+                    "end_position":matches[i+count*size-1].end(),
                     "repeats":count,"sample":" ".join(unit)[:140]
                 }
     return None
@@ -102,15 +103,21 @@ def prompt_tail(text: str, max_chars: int = 2200) -> str:
     tail=text[-max_chars:]
     issue=first_cycle(tail)
     if not issue:return tail
-    clean=tail[:issue["position"]].strip()
-    # The last few characters before a loop can be an incomplete sentence.
-    endings=list(re.finditer(r"[.!?…][»”']?(?=\s|$)",clean))
-    if endings:clean=clean[:endings[-1].end()]
-    if len(clean)<100:
-        # The loop fills the entire tail; search before it, without editing.
+    # Keep a NEW event after the repetition. Prior implementation cut the
+    # whole suffix and hid the genuine last saved sentence from Qwen.
+    before=tail[:issue["position"]].strip()
+    after=tail[issue["end_position"]:].strip()
+    if len(before)<100:
         absolute=len(text)-len(tail)+issue["position"]
-        clean=text[:absolute].rstrip()[-max_chars:]
-    return clean.rstrip()+"\n[Последующий повторяющийся поток в черновике пропущен только из промпта; не цитируй его.]"
+        before=text[:absolute].rstrip()[-max_chars:]
+    if len(before)>200:
+        endings=list(re.finditer(r"[.!?…][»”']?(?=\s|$)",before))
+        if endings:before=before[:endings[-1].end()]
+    if after:
+        clean=(before[-max_chars//2:]+"\n[Повторяющийся фрагмент пропущен из контекста.]\n"+after).strip()
+    else:
+        clean=before.rstrip()+"\n[Повторяющийся хвост пропущен из контекста.]"
+    return clean[-max_chars:]
 
 
 def streaming_loop(text: str) -> bool:
