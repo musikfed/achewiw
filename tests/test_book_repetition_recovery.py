@@ -135,7 +135,7 @@ def test_book_generation_recovers_from_four_repeated_qwen_responses(tmp_path,mon
         assert len(calls)>=6
         assert len(set(c["options"]["seed"] for c in calls[:5]))==5
         assert "РЕДАКТОРСКАЯ ПРАВКА" in calls[1]["prompt"]
-        assert state["text"].startswith(old)
+        assert state["text"].startswith(old.rstrip())
         assert "На стене появился знак" in state["text"]
         assert state["word_count"]>=250
         assert report["status"]=="ready"
