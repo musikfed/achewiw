@@ -680,6 +680,27 @@ function renderStoryMemory(data){
    (open.length?' ('+open.slice(0,8).join(', ')+')':'')+
    '. Эта проверка не доказывает литературную или фактическую правильность.';
 }
+async function loadStorageStatus(){
+ try{
+   const data=await api('/storage/status',{cache:'no-store'});
+   const items=data.storage||{};
+   $('#memoryStorage').textContent='SQLite · canon: '+(items.canon?.exists?'готова':'недоступна')+
+     ' · search: '+(items.search?.exists?'готова':'ещё не создана')+
+     ' · work: '+(items.work?.exists?'готова':'ещё не создана')+
+     ' · версия '+(data.version||'?')+'. Исторические задачи сохраняются в основной БД.';
+ }catch(e){$('#memoryStorage').textContent='Не удалось проверить базы: '+e.message;}
+}
+async function reindexStorySearch(){
+ const btn=$('#memoryReindex');btn.disabled=true;
+ $('#memoryStorage').textContent='Проверяем текущие версии фрагментов и обновляем только изменённые…';
+ try{
+   const result=await api('/storage/reindex',{method:'POST',body:'{}'});
+   await loadStorageStatus();
+   toast('RAG: обновлено '+result.indexed+', без изменений '+result.unchanged+
+     ', устаревших записей кэша удалено '+result.removed);
+ }catch(e){$('#memoryStorage').textContent='Индекс не обновлён: '+e.message;}
+ finally{btn.disabled=false;}
+}
 async function loadStoryMemory(branch='main'){
  if(!project)return;
  const projectId=project.id;
@@ -689,6 +710,7 @@ async function loadStoryMemory(branch='main'){
                         {cache:'no-store'});
    if(!project||projectId!==project.id)return;
    renderStoryMemory(data);
+   await loadStorageStatus();
  }catch(e){
    $('#memoryStatus').textContent='Память сюжета недоступна: '+e.message;
  }
@@ -1016,6 +1038,7 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#bookOpenChapterPlan').onclick=()=>gotoTab('structure');
  $('#recalculateChapterPlan').onclick=async()=>{await save();await loadChapterPlan(true)};
  $('#memoryReload').onclick=()=>loadStoryMemory(storyMemory?.branch_id||'main');
+ $('#memoryReindex').onclick=reindexStorySearch;
  $('#memoryBranch').onchange=e=>loadStoryMemory(e.target.value);
  $('#memoryAddNode').onclick=addMemoryNode;
  $('#memoryAddEdge').onclick=addMemoryEdge;
