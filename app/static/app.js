@@ -576,6 +576,17 @@ function updateBookProduction(job){
 
 function renderFullBookJob(job){
  if(!project||job.project_id!==project.id)return;
+ const written=job.book?.generated_words||0,target=job.book?.target_words||0;
+ $('#bookLiveBar').hidden=false;
+ $('#bookLiveProgress').value=Math.min(100,job.book?.percent_words||0);
+ $('#bookLiveStatus').textContent=(job.stage||job.status)+
+   ' · '+written.toLocaleString('ru-RU')+' / '+target.toLocaleString('ru-RU')+
+   ' слов ('+(job.book?.percent_words||0)+'%) · '+
+   (['queued','running'].includes(job.status)?'ГЕНЕРАЦИЯ ИДЁТ НА СЕРВЕРЕ':
+    job.status==='ready'?'Ожидает решения автора':'Можно продолжить с сохранённого текста');
+ $('#bookLiveJob').textContent='Задание '+job.id.slice(0,12)+
+   ' · '+job.model+' · '+(job.book?.chapters_complete||0)+'/'+(job.book?.chapters||0)+' глав';
+ $('#bookLiveResume').hidden=!['error','interrupted'].includes(job.status);
  const changedJob=bookJobId!==job.id;
  bookJobId=job.id;
  if(changedJob){bookDraftWords=-1;bookDraftMode=true;}
@@ -605,26 +616,47 @@ function renderFullBookJob(job){
  }));
 }
 async function refreshFullBook(){
- if(!project||!bookJobId||bookPollBusy)return;
+ if(!project||bookPollBusy)return;
+ const projectId=project.id;
  bookPollBusy=true;
  try{
-   const job=await api('/books/jobs/'+bookJobId,{cache:'no-store'});
-   renderFullBookJob(job);
- }catch(e){$('#fullBookStatus').textContent='Не удалось проверить книгу: '+e.message}
- finally{bookPollBusy=false}
+   const current=await api('/projects/'+projectId+'/books/current',{cache:'no-store'});
+   if(!project||project.id!==projectId)return;
+   if(current.job)renderFullBookJob(current.job);
+   else if(bookJobId){
+     const job=await api('/books/jobs/'+bookJobId,{cache:'no-store'});
+     if(project&&project.id===projectId)renderFullBookJob(job);
+   }
+ }catch(e){
+   if(project&&project.id===projectId){
+     $('#fullBookStatus').textContent='Ошибка чтения статуса книги: '+e.message;
+     $('#bookLiveStatus').textContent='Нет связи: '+e.message+
+       ' · последний сохранённый текст остался в SQLite';
+   }
+ }finally{bookPollBusy=false}
 }
 async function restoreLatestBook(){
  if(!project)return;
+ const projectId=project.id;
  bookJobId=null;
+ $('#bookLiveBar').hidden=true;
  $('#fullBookStatus').textContent='Проверяем сохранённую генерацию книги…';
- const jobs=await api('/projects/'+project.id+'/ai/jobs?mode=book',{cache:'no-store'});
- if(jobs.length){
-   bookJobId=jobs[0].id;
+ const current=await api('/projects/'+projectId+'/books/current',{cache:'no-store'});
+ if(!project||project.id!==projectId)return;
+ if(current.job){
    bookDraftMode=true;
    bookDraftWords=-1;
    bookDraftFetchedAt=0;
-   await refreshFullBook();
+   renderFullBookJob(current.job);
  }else{
+   const jobs=await api('/projects/'+projectId+'/ai/jobs?mode=book',{cache:'no-store'});
+   if(!project||project.id!==projectId)return;
+   if(jobs.length){
+     bookDraftMode=false;
+     renderFullBookJob(jobs[0]);
+     return;
+   }
+   $('#bookLiveBar').hidden=true;
    $('#fullBookStatus').textContent='Укажи целевой объём, утверди каркас и нажми «Написать всю книгу».';
    $('#fullBookChapters').textContent='';
    $('#fullBookProgress').hidden=true;
@@ -637,11 +669,10 @@ async function restoreLatestBook(){
    $('#bookGenerationProgress').value=0;
    $('#bookGenerationStatus').textContent='Генерация не запускалась. Цель: '+(project.target_length||'не указана')+
      '. Сохранённые краткие описания глав — это ещё не книга.';
-   $('#bookProductionHint').textContent='Нажми «Написать полноценную книгу по каркасу» — модель напишет реальные главы по частям. Уже сохранённые тексты не будут затронуты до принятия результата.';
+   $('#bookProductionHint').textContent='Начни новую книгу — главы будут сохранены в SQLite.';
    setBookReaderMode(false);
  }
 }
-
 
 const memoryKinds={event:'Событие',character:'Персонаж',object:'Предмет',
  place:'Место',fact:'Факт',mystery:'Загадка',rule:'Правило'};
@@ -947,8 +978,15 @@ async function startFullBook(){
    bookDraftFetchedAt=0;
    renderFullBookJob(job);
    showTab('book');
-   toast('Написание книги запущено. Слова и главы сохраняются на сервере.');
- }catch(e){toast('Книга не запущена: '+e.message)}
+   toast(job.reused?
+     (['queued','running'].includes(job.status)?
+       'Открыта уже выполняющаяся книга. Второго задания нет.':
+       'Найден прежний черновик. Нажми «Продолжить».'):
+     'Написание книги запущено. Текст сохраняется в SQLite.');
+ }catch(e){
+   toast('Запуск не выполнен: '+e.message);
+   await restoreLatestBook().catch(()=>{});
+ }
 }
 async function resumeFullBook(){
  if(!bookJobId)return;
@@ -1080,6 +1118,9 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#balanceChapterPlan').onclick=balanceChapterPlan;
  $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
  $('#bookResume').onclick=resumeFullBook;
+ $('#bookLiveJump').onclick=()=>{showTab('book');$('#bookProduction').scrollIntoView({behavior:'smooth',block:'center'})};
+ $('#bookLiveDraft').onclick=()=>{showTab('book');setBookReaderMode(true);$('#bookDraftPreview').scrollIntoView({behavior:'smooth',block:'start'})};
+ $('#bookLiveResume').onclick=resumeFullBook;
  $('#bookAccept').onclick=acceptFullBook;
  $('#bookViewDraft').onclick=()=>setBookReaderMode(true);
  $('#bookViewSaved').onclick=()=>setBookReaderMode(false);
@@ -1102,7 +1143,7 @@ $('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOu
 $('#model').onchange=e=>{model=e.target.value;safeSet(localStorage,'achewiw.v8.selectedModel',model)};
 $('#unloadModel').onclick=releaseSelectedModel;
 setInterval(()=>{if(!document.hidden){refreshGeneration();refreshFullBook()}},2000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshGeneration()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshGeneration();refreshFullBook()}});
 // Keep unsaved editor fields in this browser tab across refresh without
 // pushing drafts to the server. Revision matching prevents stale overwrite.
 document.addEventListener('input',event=>{
