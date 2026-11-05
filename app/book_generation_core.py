@@ -239,7 +239,7 @@ def recover_completed_sentences(partial: str) -> str:
     """Salvage only sentences ending in punctuation, never a clipped sentence."""
     if not partial or count_words(partial)<35:return ""
     # Last complete sentence/paragraph, reject model marker or unfinished tail.
-    matches=list(re.finditer(r"[.!?…][\\\"»”']?(?=\\s|$)",partial))
+    matches=list(re.finditer(r"""[.!?…]["»”']?(?=\s|$)""",partial))
     if not matches:return ""
     candidate=partial[:matches[-1].end()].strip()
     return candidate if count_words(candidate)>=35 else ""
