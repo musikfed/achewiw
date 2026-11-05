@@ -73,7 +73,7 @@ def test_book_generation_recovers_from_four_repeated_qwen_responses(tmp_path,mon
     monkeypatch.setattr(main,"DB_PATH",tmp_path/"book-recovery.sqlite3")
     monkeypatch.setattr(main,"_start_book",lambda job_id:None)
     old=("Кротомирус сидел на бронзовой лампе возле окна и смотрел на улицу. "
-         "Симса держала старую карту в лапах и ждала условленного сигнала. ")*16
+         "Симса держала старую карту в лапах и ждала условленного сигнала. ")*7
     accepted_1=("Симса услышала три удара и вышла в коридор. "
                 "На стене появился знак, которого раньше не было. "
                 "Кротомирус направился проверить дверь и увидел след. ")*8
