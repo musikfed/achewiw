@@ -27,19 +27,22 @@ from image_engine import status as illustration_engine_status, generate as gener
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from book_generation_core import (target_words as parse_book_target, distribute_words,
-    chunk_size, max_attempts, count_words as book_words, init_book_tables,
+    chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter,
     check_new_prose, trim_repeated_tail, continuation_repair_note)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
 from editorial_ledger import init_editorial_schema, editorial_schema_status
 from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
+    _segments as memory_segments,
     retrieve as retrieve_story, context_text, add_node as memory_add_node,
     add_edge as memory_add_edge, nodes as memory_nodes, edges as memory_edges,
     branches as memory_branches, create_branch as memory_create_branch,
     erase_node as memory_erase_node, audit_graph, erase_project as erase_story_memory)
 from editor_workspace import (initialize as initialize_workspace, sync_search,
-    checkpoint_work, search_snippets, status as storage_status)
+    checkpoint_work, checkpoint_story_state, vector_index_status,
+    status as storage_status)
+from book_rag_pipeline import hybrid_context, compact_hybrid_context
 from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
@@ -1390,7 +1393,8 @@ def studio_reset_epoch():
 def editor_storage_status():
     """Only file sizes/status. No arbitrary path or destructive DB operations."""
     return {"version":APP_VERSION,"storage":storage_status(DATA_DIR),
-            "note":"Legacy job checkpoints stay in canon until a verified, separate migration."}
+            "rag":vector_index_status(DATA_DIR),
+            "note":"Canon holds chapters; search holds FTS5/vector cache; work holds rolling chapter state."}
 
 
 @api.get("/projects/{project_id}/editorial-storage")
@@ -1513,7 +1517,13 @@ async def execute_book(job_id: str) -> None:
         project = get_project(job["project_id"])
         with db() as connection:
             sync_approved(connection,project)
+        with db() as connection:
+            # Cache is derived; restoring old book jobs must reindex before RAG.
+            sync_search(DATA_DIR,connection,project.id)
         previous = ""
+        last_output_words = None
+        tokens_per_word = None
+        prompt_tokens = None
         for index, chapter in enumerate(chapters_for_job_from_job(job_id)):
             scene = next((item for item in project.scenes if item.id == chapter["scene_id"]), None)
             if scene is None:
@@ -1528,29 +1538,28 @@ async def execute_book(job_id: str) -> None:
                 continue
             while book_words(text) < chapter["target_words"] and attempts < max_attempts(chapter["target_words"]):
                 remaining = chapter["target_words"] - book_words(text)
-                requested = chunk_size(remaining)
+                requested = chunk_size(remaining,last_output_words)
+                # The search query includes the true saved story endpoint,
+                # not just the (often generic) chapter title and synopsis.
                 memory_query=" ".join([scene.title,scene.anchor,scene.hook,
-                    " ".join(scene.active_objects),project.premise[:600],chapter.get("editorial_goal","")])
+                    " ".join(scene.active_objects),project.premise[:380],
+                    chapter.get("editorial_goal",""),text[-600:]])
                 with db() as connection:
                     packet=retrieve_story(connection,project.id,job_id,index,memory_query)
-                # Search cache and graph are logical single context. A stale or
-                # missing derived cache never hides canonical facts from Ollama.
-                try:
-                    snippets=search_snippets(DATA_DIR,project.id,job_id,index,memory_query)
-                except (sqlite3.Error,OSError,ValueError):
-                    snippets=[]
-                context=context_text(packet,max_chars=4800)
-                if snippets:
-                    context+="\\nДополнительные релевантные цитаты FTS5 (не новые факты):\\n"+json.dumps(
-                        [{"kind":x["source_kind"],"excerpt":x["excerpt"][:350],
-                          "scene":x["scene_index"]+1} for x in snippets],ensure_ascii=False)[:900]
+                hybrid=await hybrid_context(DATA_DIR,OLLAMA_BASE_URL,
+                                             project.id,job_id,scene.id,index,
+                                             memory_query,text)
+                context=context_text(packet,max_chars=2900)
+                context+="\\nПОИСК В SEARCH SQLITE И СОСТОЯНИЕ ИЗ WORK SQLITE:\\n"
+                context+=compact_hybrid_context(hybrid,max_chars=2600)
                 prompt = _book_prompt(project, scene, index, chapter["target_words"],
                                       previous, text, requested, chapter,context)
                 payload = {
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
                     "options": {"temperature": 0.72, "num_ctx": 16384,
-                                "num_predict": min(3900, max(1200, round(requested * 3.1)))},
+                                "num_predict": predict_output_tokens(
+                                    requested,tokens_per_word,prompt_tokens)},
                 }
                 generated = ""
                 with db() as connection:
@@ -1571,6 +1580,8 @@ async def execute_book(job_id: str) -> None:
                     ) % 2147483647
                     payload["prompt"] = prompt + continuation_repair_note(retry,text,last_failure)
                     generated = ""
+                    this_eval_tokens = None
+                    this_prompt_tokens = None
                     async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
                         async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
                             response.raise_for_status()
@@ -1581,7 +1592,10 @@ async def execute_book(job_id: str) -> None:
                                 if part.get("error"):
                                     raise ValueError("Ollama сообщила об ошибке генерации главы")
                                 generated += part.get("response", "")
-                                if len(generated) > 20000:
+                                if part.get("done"):
+                                    this_eval_tokens=part.get("eval_count")
+                                    this_prompt_tokens=part.get("prompt_eval_count")
+                                if len(generated) > 30000:
                                     raise ValueError("Один фрагмент превышает лимит")
                                 if part.get("done"):
                                     break
@@ -1605,12 +1619,24 @@ async def execute_book(job_id: str) -> None:
                         continue
                     generated = candidate
                     break
+                if isinstance(this_eval_tokens,int) and this_eval_tokens > 0:
+                    words_this=book_words(generated)
+                    if words_this:
+                        tokens_per_word=this_eval_tokens/words_this
+                if isinstance(this_prompt_tokens,int) and this_prompt_tokens>0:
+                    prompt_tokens=this_prompt_tokens
+                last_output_words=book_words(generated)
                 text = (text.rstrip() + "\n\n" + generated.strip()).strip()
                 attempts += 1
                 with db() as connection:
                     save_chapter(connection, job_id, scene.id, text, attempts,
                                  complete=book_words(text) >= chapter["target_words"])
-                    index_chunk(connection,project.id,"main",job_id,"draft",scene.id,index,attempts,generated)
+                    # Passage indexing is independent of how many words the
+                    # model generates. Store the FULL text in canon unchanged.
+                    # Use smaller RAG passages only for retrieval/embeddings.
+                    for passage_index,passage in enumerate(memory_segments(generated)):
+                        index_chunk(connection,project.id,"main",job_id,"draft",scene.id,
+                                    index,attempts*1000+passage_index,passage)
                     summary = book_summary(connection, job_id)
                     update_job(connection, job_id,
                                stage=f"Глава {index+1}/{len(project.scenes)} · {book_words(text)}/{chapter['target_words']} слов",
@@ -1618,6 +1644,8 @@ async def execute_book(job_id: str) -> None:
                                percent=min(99, round(summary["percent_words"])))
                 try:
                     checkpoint_work(DATA_DIR, project.id, job_id, scene.id, text, book_words(text))
+                    checkpoint_story_state(DATA_DIR,project.id,job_id,scene.id,index,
+                                           text,chapter.get("editorial_goal",""))
                     with db() as connection:
                         sync_search(DATA_DIR,connection,project.id)
                 except (OSError, sqlite3.Error, ValueError):
