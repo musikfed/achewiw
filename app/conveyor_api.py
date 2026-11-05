@@ -216,7 +216,7 @@ def install(api: APIRouter, env: dict) -> None:
         chapters=book_rows(job)
         d=digest_chapters(chapters)
         last=""
-        with (gpu_session(job["id"],"literary_qa")) as lease:
+        async with gpu_session(job["id"],"literary_qa") as lease:
             await check_gpu_models(job["critic_model"],job)
             p=project(job)
             for ch in chapters:
