@@ -96,6 +96,11 @@ def test_versions_are_immutable_diffable_and_project_scoped(tmp_path,monkeypatch
         two=second.json()
         assert two["id"]!=one["id"]
         older=c.get(url+"/"+one["id"]).json()
+        version_pdf=c.get(url+"/"+one["id"]+"/proof.pdf")
+        assert version_pdf.status_code==200,version_pdf.text[:200] if version_pdf.status_code!=200 else ""
+        assert version_pdf.content.startswith(b"%PDF")
+        assert version_pdf.headers["x-achewiw-export"]=="archived-editorial-version"
+        assert version_pdf.headers["cache-control"]=="no-store"
         assert older["chapters"][0]["text"]==first_text
         assert second_text not in older["chapters"][0]["text"]
         changes=c.get("/api/projects/"+p["id"]+"/editorial/compare",
