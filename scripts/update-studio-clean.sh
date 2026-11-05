@@ -61,6 +61,9 @@ msg "Docker studio будет пересобран без старых слоё�
 if [[ "$ACTION" == preview ]]; then
   msg "PREVIEW — ничего не меняем"
   check_idle
+  if [[ -f scripts/story-storage-maintenance.py ]]; then
+    python3 scripts/story-storage-maintenance.py preview
+  fi
   git status -sb
   msg "Для применения: bash scripts/update-studio-clean.sh apply"
   exit 0
@@ -91,6 +94,9 @@ for name in ('app/main.py', 'scripts/comfyui_control_agent.py'):
 PY
 test -f app/static/writing_blocks.js
 test -f app/gpu_scheduling.py
+test -f app/editor_workspace.py
+test -f app/book_layout_core.py
+python3 -m py_compile scripts/story-storage-maintenance.py app/editor_workspace.py app/book_layout_core.py app/manuscript_core.py app/publishing_exports.py
 # Verify the VERSION ACTUALLY DECLARED by index.html, not a hardcoded version
 # from a potentially older updater. All five local assets must exist and share
 # the same cache-busting version; no browser storage is wiped.
@@ -135,7 +141,9 @@ if paths != expected or len(versions) != 1:
     raise SystemExit("ОСТАНОВЛЕНО: несовпадение версий JS/CSS")
 print("ACHEWIW clean-update: Статические ресурсы согласованы: " + next(iter(versions)))
 PY
-msg "3/5 — удаляем только временные .pyc под app/ и tests/"
+msg "3/5 — делаем безопасную миграцию/обновление поискового кэша"
+python3 scripts/story-storage-maintenance.py apply || die "Проверка/индексирование SQLite не прошла; сборка остановлена, существующие книги не удалены"
+msg "Очищаем только временные .pyc под app/ и tests/"
 find -P "$ROOT/app" "$ROOT/tests" -type f -name '*.pyc' -delete
 find -P "$ROOT/app" "$ROOT/tests" -depth -type d -name '__pycache__' -empty -delete
 msg "4/5 — пересборка без кэша только подтверждённого контейнера ACHEWIW"
