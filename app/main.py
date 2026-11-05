@@ -31,6 +31,11 @@ from book_generation_core import (target_words as parse_book_target, distribute_
     create_book_chapters, chapters_for_job, book_summary, save_chapter, check_new_prose)
 from chapter_planning import (init_plan_tables, get_plan, store_plan, prose_phase,
                               suggested_plan, validate_plan)
+from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
+    retrieve as retrieve_story, context_text, add_node as memory_add_node,
+    add_edge as memory_add_edge, nodes as memory_nodes, edges as memory_edges,
+    branches as memory_branches, create_branch as memory_create_branch,
+    erase_node as memory_erase_node, audit_graph, erase_project as erase_story_memory)
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
@@ -99,6 +104,7 @@ def init_db() -> None:
         init_jobs(connection)
         init_book_tables(connection)
         init_plan_tables(connection)
+        init_memory(connection)
         init_gpu_leases(connection)
         init_illustrations(connection)
         mark_interrupted(connection)
@@ -450,6 +456,7 @@ def update_project(project_id: str, project: Project):
             "UPDATE projects SET data=?,updated_at=? WHERE id=?",
             (project.model_dump_json(), project.updated_at, project_id),
         )
+        sync_approved(connection, project)
     return project
 
 
@@ -481,6 +488,7 @@ def delete_project(project_id: str):
             "(SELECT id FROM ai_jobs WHERE project_id=?)", (project_id,)
         )
         connection.execute("DELETE FROM ai_jobs WHERE project_id=?", (project_id,))
+        erase_story_memory(connection, project_id)
         connection.execute("DELETE FROM projects WHERE id=?", (project_id,))
         # Files retained inside local data/ for recovery from SQLite backup.
         # A deliberate project-scoped cleanup can remove illustrations later.
@@ -1235,7 +1243,8 @@ def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
 def _book_prompt(project: Project, scene: Scene, chapter_index: int,
                  chapter_target: int, previous_chapter_tail: str,
                  existing_text: str, requested_words: int,
-                 chapter_plan: dict | None = None) -> str:
+                 chapter_plan: dict | None = None,
+                 knowledge_context: str = "") -> str:
     """Never feed the entire book back through the limited context window."""
     chapter_cards = [
         {"n": index + 1, "title": card.title, "anchor": card.anchor,
@@ -1302,8 +1311,13 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
         "Не повторяй мораль, общие рассуждения и одинаковые концовки. "
         "Вместо растягивания текста углубляй действие, диалог, пространственные "
         "детали и последствия в рамках согласованного сюжета. "
+        "\nПАМЯТЬ ИСТОРИИ — RAG и проверенные авторские факты:\n"
+        "Разделяй подтверждённые факты автора и непринятый текст прошлого черновика. "
+        "Непринятое не является каноном. Не выдумывай новое объяснение старой загадке "
+        "и не отменяй установленные причины. Запрещено пересказывать найденные куски дословно.\n"
+        + knowledge_context[:5800] +
         "\nУтверждённый каркас и редакционное задание:\n" +
-        json.dumps(brief, ensure_ascii=False)[:14500] +
+        json.dumps(brief, ensure_ascii=False)[:9800] +
         "\nФинал предыдущей главы (контекст, НЕ повторять):\n" + previous_chapter_tail[-1100:] +
         "\nУже написанный текст этой главы (последний фрагмент, НЕ повторять):\n" +
         existing_text[-2200:] +
@@ -1317,6 +1331,8 @@ async def execute_book(job_id: str) -> None:
         with db() as connection:
             job = _book_record(connection, job_id)
         project = get_project(job["project_id"])
+        with db() as connection:
+            sync_approved(connection,project)
         previous = ""
         for index, chapter in enumerate(chapters_for_job_from_job(job_id)):
             scene = next((item for item in project.scenes if item.id == chapter["scene_id"]), None)
@@ -1324,14 +1340,21 @@ async def execute_book(job_id: str) -> None:
                 raise ValueError("Каркас изменился; безопасное продолжение остановлено")
             text = chapter["text"]
             attempts = chapter["attempts"]
+            if text.strip():
+                with db() as connection:
+                    ensure_draft(connection,project.id,job_id,scene.id,index,text)
             if chapter["complete"]:
                 previous = text[-1500:]
                 continue
             while book_words(text) < chapter["target_words"] and attempts < max_attempts(chapter["target_words"]):
                 remaining = chapter["target_words"] - book_words(text)
                 requested = chunk_size(remaining)
+                memory_query=" ".join([scene.title,scene.anchor,scene.hook,
+                    " ".join(scene.active_objects),project.premise[:600],chapter.get("editorial_goal","")])
+                with db() as connection:
+                    packet=retrieve_story(connection,project.id,job_id,index,memory_query)
                 prompt = _book_prompt(project, scene, index, chapter["target_words"],
-                                      previous, text, requested, chapter)
+                                      previous, text, requested, chapter,context_text(packet))
                 payload = {
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
@@ -1366,6 +1389,7 @@ async def execute_book(job_id: str) -> None:
                 with db() as connection:
                     save_chapter(connection, job_id, scene.id, text, attempts,
                                  complete=book_words(text) >= chapter["target_words"])
+                    index_chunk(connection,project.id,"main",job_id,"draft",scene.id,index,attempts,generated)
                     summary = book_summary(connection, job_id)
                     update_job(connection, job_id,
                                stage=f"Глава {index+1}/{len(project.scenes)} · {book_words(text)}/{chapter['target_words']} слов",
@@ -1556,6 +1580,7 @@ def accept_full_book(job_id: str, request: AcceptanceRequest):
         project.updated_at = utc_now()
         connection.execute("UPDATE projects SET data=?,updated_at=? WHERE id=?",
                            (project.model_dump_json(), project.updated_at, project.id))
+        sync_approved(connection,project)
         return {"status": "accepted_by_author", "chapters": len(chapters),
                 "words": sum(book_words(chapter["text"]) for chapter in chapters)}
 
