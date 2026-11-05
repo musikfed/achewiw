@@ -488,6 +488,11 @@ def install(api: APIRouter, env: dict) -> None:
         rows=book_rows(job)
         if not all(x["accepted_at"] for x in rows):
             raise ValueError("Нельзя архивировать не принятую автором книгу")
+        decision=json.loads(get(job["id"],"author_review","decisions")["body"])
+        expected=decision.get("accepted_chapter_sha",{})
+        for scene in p.scenes:
+            if expected.get(scene.id)!=cv.fingerprint(scene.text):
+                raise ValueError("Автор изменил главу после приёмки; выпуск отменён до нового утверждения")
         with conn() as db:
             arts=env["export_illustrations"](data_dir,db,p.id)
         files=[]
@@ -563,6 +568,12 @@ def install(api: APIRouter, env: dict) -> None:
 
     @api.post("/projects/{project_id}/conveyor",status_code=202)
     async def start_conveyor(project_id: str, request: ConveyorRequest):
+        # Automated role swaps affect the shared Ollama daemon. Require
+        # explicit opt-in before even creating the writer job.
+        if not request.allow_shared_unload:
+            raise HTTPException(422,
+                "Для автоматического конвейера разреши выгрузку выбранных моделей Ollama. "
+                "Чужие модели не выгружаются.")
         env["get_project"](project_id)
         with conn() as db:
             existing=db.execute("""SELECT id FROM production_jobs WHERE project_id=?
