@@ -1582,7 +1582,7 @@ async def execute_book(job_id: str) -> None:
                         # Invalid/repeated stream is NOT promoted to draft.
                         clear_stream_buffer(connection,job_id,scene.id)
                     else:
-                        text=(text.rstrip()+"\\n\\n"+recovered).strip()
+                        text=(text.rstrip()+"\n\n"+recovered).strip()
                         attempts+=1
                         save_chapter(connection,job_id,scene.id,text,attempts,
                                      complete=book_words(text)>=chapter["target_words"])
