@@ -1,7 +1,7 @@
 {
   "version": 2,
   "verified_public_repositories": 20,
-  "source": "20 public repositories reviewed from GitHub, November 5, 2026. Private repositories excluded.",
+  "source": "Twenty verified public GitHub repositories; visual SVG previews mirrored to same-origin GitHub Pages. Private repositories are never indexed.",
   "project": [
     {
       "repository": "musikfed/achewiw",
@@ -20,7 +20,7 @@
         "be": "achewiw — Лакальная кніжная студыя. Этапы: Book idea → Canon / RAG → Local LLM roles → PDF / EPUB / DOCX."
       },
       "showcase": "https://github.com/musikfed/achewiw/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/achewiw/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/achewiw.svg"
     },
     {
       "repository": "musikfed/muzikfed",
@@ -39,7 +39,7 @@
         "be": "muzikfed — Алгарытмічнае стварэнне музыкі. Этапы: Music prompt → CPU composition → MusicXML / MIDI → Listening preview."
       },
       "showcase": "https://github.com/musikfed/muzikfed/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/muzikfed/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/muzikfed.svg"
     },
     {
       "repository": "musikfed/YadroKreator",
@@ -58,7 +58,7 @@
         "be": "YadroKreator — Сістэмныя зборкі і Linux. Этапы: Git sources → Isolated build → Artifact validation → Download / logs."
       },
       "showcase": "https://github.com/musikfed/YadroKreator/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/YadroKreator/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/YadroKreator.svg"
     },
     {
       "repository": "musikfed/Irila_baikal_v1.0",
@@ -77,7 +77,7 @@
         "be": "Irila_baikal_v1.0 — Сістэмныя зборкі і Linux. Этапы: Ubuntu / Linux → Secure Boot → XFCE / Desktop → USB hardware tests."
       },
       "showcase": "https://github.com/musikfed/Irila_baikal_v1.0/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/Irila_baikal_v1.0/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/Irila_baikal_v1.0.svg"
     },
     {
       "repository": "musikfed/wificam_T23N",
@@ -96,7 +96,7 @@
         "be": "wificam_T23N — Эксперыменты з прашыўкай IP-камер. Этапы: SD boot firmware → Linux / BusyBox → H.264 / PTZ → Hardware tests."
       },
       "showcase": "https://github.com/musikfed/wificam_T23N/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/wificam_T23N/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/wificam_T23N.svg"
     },
     {
       "repository": "musikfed/myipcam",
@@ -115,7 +115,7 @@
         "be": "myipcam — Эксперыменты з прашыўкай IP-камер. Этапы: microSD boot → Ingenic T23N → Video / PTZ → Web administration."
       },
       "showcase": "https://github.com/musikfed/myipcam/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/myipcam/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/myipcam.svg"
     },
     {
       "repository": "musikfed/wifcam_helper",
@@ -134,7 +134,7 @@
         "be": "wifcam_helper — Эксперыменты з прашыўкай IP-камер. Этапы: T23N camera head → Audio / Video → Firmware overlay → Hardware test bench."
       },
       "showcase": "https://github.com/musikfed/wifcam_helper/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/wifcam_helper/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/wifcam_helper.svg"
     },
     {
       "repository": "musikfed/micro",
@@ -153,7 +153,7 @@
         "be": "micro — Робататэхніка і галасавое кіраванне. Этапы: Micro development → Voice assistant → Local services → Integration tests."
       },
       "showcase": "https://github.com/musikfed/micro/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/micro/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/micro.svg"
     },
     {
       "repository": "musikfed/Hombo3_3.0.0",
@@ -172,7 +172,7 @@
         "be": "Hombo3_3.0.0 — Робататэхніка і галасавое кіраванне. Этапы: ESP32-S3 robot → Sensors / Camera → Voice / LLM → OTA controls."
       },
       "showcase": "https://github.com/musikfed/Hombo3_3.0.0/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/Hombo3_3.0.0/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/Hombo3_3.0.0.svg"
     },
     {
       "repository": "musikfed/esp32s3devkitC-1N16R8",
@@ -191,7 +191,7 @@
         "be": "esp32s3devkitC-1N16R8 — Інструменты распрацоўкі ESP32. Этапы: ESP32-C3 / S3 → MicroPython → Cross-platform UI → Device setup."
       },
       "showcase": "https://github.com/musikfed/esp32s3devkitC-1N16R8/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/esp32s3devkitC-1N16R8/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/esp32s3devkitC-1N16R8.svg"
     },
     {
       "repository": "musikfed/diskshellhdd",
@@ -210,7 +210,7 @@
         "be": "diskshellhdd — Інструменты адміністравання Windows. Этапы: Windows storage → Placement / Analytics → Disk safety rules → Operation reports."
       },
       "showcase": "https://github.com/musikfed/diskshellhdd/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/diskshellhdd/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/diskshellhdd.svg"
     },
     {
       "repository": "musikfed/pitools",
@@ -229,7 +229,7 @@
         "be": "pitools — Інфраструктурныя інструменты. Этапы: .prj manifest → SSH connections → Parallel deploy → Result logs."
       },
       "showcase": "https://github.com/musikfed/pitools/blob/pitools/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/pitools/pitools/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/pitools.svg"
     },
     {
       "repository": "musikfed/registry-change-explorer",
@@ -248,7 +248,7 @@
         "be": "registry-change-explorer — Інструменты адміністравання Windows. Этапы: Windows Registry → SQLite index → Search UI → Diff roadmap."
       },
       "showcase": "https://github.com/musikfed/registry-change-explorer/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/registry-change-explorer/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/registry-change-explorer.svg"
     },
     {
       "repository": "musikfed/pgsql",
@@ -267,7 +267,7 @@
         "be": "pgsql — Інфраструктурныя інструменты. Этапы: PostgreSQL 16 → Ubuntu / Docker → Patroni / etcd → Kubernetes lab."
       },
       "showcase": "https://github.com/musikfed/pgsql/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/pgsql/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/pgsql.svg"
     },
     {
       "repository": "musikfed/postgresql1c",
@@ -286,7 +286,7 @@
         "be": "postgresql1c — Інфраструктурныя інструменты. Этапы: Container → PostgresPro 1C → Docker build → 1C server."
       },
       "showcase": "https://github.com/musikfed/postgresql1c/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/postgresql1c/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/postgresql1c.svg"
     },
     {
       "repository": "musikfed/analitikhhru",
@@ -305,7 +305,7 @@
         "be": "analitikhhru — Лакальная аналітыка даных. Этапы: hh.ru browser → Aggregate counts → Local analytics → Trends dashboard."
       },
       "showcase": "https://github.com/musikfed/analitikhhru/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/analitikhhru/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/analitikhhru.svg"
     },
     {
       "repository": "musikfed/smilegun",
@@ -324,7 +324,7 @@
         "be": "smilegun — Гульні з камп'ютарным зрокам. Этапы: Webcam stream → Computer vision → Hand / face gestures → Browser game."
       },
       "showcase": "https://github.com/musikfed/smilegun/blob/my-game/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/smilegun/my-game/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/smilegun.svg"
     },
     {
       "repository": "musikfed/smilegun_v2",
@@ -343,7 +343,7 @@
         "be": "smilegun_v2 — Гульні з камп'ютарным зрокам. Этапы: Camera input → MediaPipe → Gesture controller → Arcade UI."
       },
       "showcase": "https://github.com/musikfed/smilegun_v2/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/smilegun_v2/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/smilegun_v2.svg"
     },
     {
       "repository": "musikfed/docker-compose-ui",
@@ -362,7 +362,7 @@
         "be": "docker-compose-ui — Форк праекта іншага аўтара. Этапы: Docker Compose → Web dashboard → REST API → Container management."
       },
       "showcase": "https://github.com/musikfed/docker-compose-ui/blob/master/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/docker-compose-ui/master/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/docker-compose-ui.svg"
     },
     {
       "repository": "musikfed/ai_video3060_12G",
@@ -381,7 +381,7 @@
         "be": "ai_video3060_12G — Пусты публічны рэпазіторый. Этапы: Repository created → No source files → Not yet documented → No verified release."
       },
       "showcase": "https://github.com/musikfed/ai_video3060_12G/blob/main/docs/showcase/README.md",
-      "diagram": "https://raw.githubusercontent.com/musikfed/ai_video3060_12G/main/docs/showcase/overview.svg"
+      "diagram": "/achewiw/works/previews/ai_video3060_12G.svg"
     }
   ],
   "languages": [
