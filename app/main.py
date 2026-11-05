@@ -1230,6 +1230,118 @@ def save_chapter_plan(project_id: str, request: BookPlanUpdate):
         raise HTTPException(422, str(exc)) from exc
 
 
+
+class StoryNodeRequest(BaseModel):
+    kind: Literal["character","object","place","event","fact","mystery","rule"]
+    title: str = Field(min_length=1,max_length=160)
+    statement: str = Field(min_length=1,max_length=2000)
+    scene_id: str | None = None
+    branch_id: str = Field(default="main",max_length=100)
+
+
+class StoryEdgeRequest(BaseModel):
+    source_id: str
+    target_id: str
+    relation: Literal["causes","requires","before","knows","holds","foreshadows","reveals","contradicts"]
+    note: str = Field(default="",max_length=1000)
+    branch_id: str = Field(default="main",max_length=100)
+
+
+class StoryBranchRequest(BaseModel):
+    name: str = Field(min_length=1,max_length=120)
+    parent_id: str = Field(default="main",max_length=100)
+    fork_scene_id: str | None = None
+
+
+@api.get("/projects/{project_id}/story-memory")
+def story_memory_overview(project_id: str, branch: str = "main"):
+    project = get_project(project_id)
+    with db() as connection:
+        branches=memory_branches(connection,project_id)
+        if branch not in {x["id"] for x in branches}:
+            raise HTTPException(404,"Ветка не найдена")
+        return {
+            "project_id":project_id,"branch_id":branch,
+            "branches":branches,
+            "nodes":memory_nodes(connection,project_id,branch),
+            "edges":memory_edges(connection,project_id,branch),
+            "audit":audit_graph(connection,project_id,branch),
+            "source":"SQLite graph + FTS5; only author-entered facts are canon",
+            "scenes":[{"id":x.id,"title":x.title} for x in project.scenes],
+        }
+
+
+@api.post("/projects/{project_id}/story-memory/nodes",status_code=201)
+def story_memory_create_node(project_id: str, request: StoryNodeRequest):
+    project = get_project(project_id)
+    scene_ids=[scene.id for scene in project.scenes]
+    if request.scene_id is not None and request.scene_id not in scene_ids:
+        raise HTTPException(422,"Глава узла отсутствует в каркасе")
+    scene_index=scene_ids.index(request.scene_id) if request.scene_id is not None else 0
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Изменять сюжетный граф во время генерации нельзя")
+        try:
+            return memory_add_node(connection,project_id,request.branch_id,
+                                   request.kind,request.title,request.statement,
+                                   request.scene_id,scene_index)
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+
+@api.post("/projects/{project_id}/story-memory/edges",status_code=201)
+def story_memory_create_edge(project_id: str, request: StoryEdgeRequest):
+    get_project(project_id)
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Изменять сюжетный граф во время генерации нельзя")
+        try:
+            return memory_add_edge(connection,project_id,request.branch_id,
+                                   request.source_id,request.target_id,
+                                   request.relation,request.note)
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(409,"Такая связь уже существует") from exc
+
+
+@api.delete("/projects/{project_id}/story-memory/nodes/{node_id}",status_code=204)
+def story_memory_delete_node(project_id: str,node_id: str,branch: str = "main"):
+    get_project(project_id)
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Нельзя удалять узлы во время генерации")
+        if not memory_erase_node(connection,project_id,branch,node_id):
+            raise HTTPException(404,"Узел не найден")
+    return Response(status_code=204)
+
+
+@api.post("/projects/{project_id}/story-memory/branches",status_code=201)
+def story_memory_new_branch(project_id: str, request: StoryBranchRequest):
+    project=get_project(project_id)
+    if request.fork_scene_id and request.fork_scene_id not in {scene.id for scene in project.scenes}:
+        raise HTTPException(422,"Точка ветвления не принадлежит каркасу")
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection):
+            raise HTTPException(409,"Нельзя создавать ветку во время генерации")
+        try:
+            return memory_create_branch(connection,project_id,request.name,
+                                        request.parent_id,request.fork_scene_id)
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/story-memory/audit")
+def story_memory_audit(project_id: str,branch: str = "main"):
+    get_project(project_id)
+    with db() as connection:
+        return audit_graph(connection,project_id,branch)
+
+
 def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
     record = get_job(connection, job_id)
     if record is None or record["mode"] != "book":
