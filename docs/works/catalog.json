@@ -1,0 +1,287 @@
+{
+  "version": 1,
+  "verified_public_repositories": 20,
+  "source": "Public GitHub visibility checked on 2026-11-05",
+  "project": [
+    {
+      "repository": "musikfed/achewiw",
+      "type": "author",
+      "descriptions": {
+        "ru": "Локальная студия создания, редактуры и выпуска книг.",
+        "en": "Local AI studio for writing, reviewing and publishing books.",
+        "zh": "本地 AI 图书写作、审校与出版工作室。",
+        "de": "Lokales KI-Studio zum Schreiben, Prüfen und Veröffentlichen von Büchern.",
+        "hi": "पुस्तक लेखन, समीक्षा और प्रकाशन के लिए स्थानीय AI स्टूडियो।",
+        "fr": "Studio IA local pour écrire, réviser et publier des livres.",
+        "fi": "Paikallinen tekoälystudio kirjojen kirjoittamiseen, tarkistamiseen ja julkaisuun.",
+        "ko": "책 집필·검토·출판을 위한 로컬 AI 스튜디오."
+      }
+    },
+    {
+      "repository": "musikfed/muzikfed",
+      "type": "music",
+      "descriptions": {
+        "ru": "Pocket Orchestra: алгоритмическая оркестровка, MIDI и MusicXML.",
+        "en": "Pocket Orchestra: algorithmic orchestration, MIDI and MusicXML.",
+        "zh": "Pocket Orchestra：算法编曲、MIDI 与 MusicXML。",
+        "de": "Pocket Orchestra: algorithmische Orchestrierung, MIDI und MusicXML.",
+        "hi": "Pocket Orchestra: एल्गोरिदमिक ऑर्केस्ट्रेशन, MIDI और MusicXML।",
+        "fr": "Pocket Orchestra : orchestration algorithmique, MIDI et MusicXML.",
+        "fi": "Pocket Orchestra: algoritminen orkestrointi, MIDI ja MusicXML.",
+        "ko": "Pocket Orchestra: 알고리즘 편곡, MIDI 및 MusicXML."
+      }
+    },
+    {
+      "repository": "musikfed/YadroKreator",
+      "type": "systems",
+      "descriptions": {
+        "ru": "Панель управляемой сборки прошивок и системных образов.",
+        "en": "Controlled workbench for building firmware and system images.",
+        "zh": "固件和系统映像的受控构建工作台。",
+        "de": "Kontrollierte Werkstatt für Firmware und Systemabbilder.",
+        "hi": "फ़र्मवेयर और सिस्टम इमेज बनाने का नियंत्रित कार्यक्षेत्र।",
+        "fr": "Atelier contrôlé de compilation de firmwares et d'images système.",
+        "fi": "Hallittu työpöytä laiteohjelmistojen ja järjestelmäkuvien rakentamiseen.",
+        "ko": "펌웨어와 시스템 이미지 빌드를 관리하는 작업대."
+      }
+    },
+    {
+      "repository": "musikfed/Irila_baikal_v1.0",
+      "type": "systems",
+      "descriptions": {
+        "ru": "Экспериментальная Linux-система «Ирина Байкал 1.0».",
+        "en": "Irina Baikal 1.0: an experimental Linux-based operating system.",
+        "zh": "Irina Baikal 1.0：实验性 Linux 操作系统。",
+        "de": "Irina Baikal 1.0: experimentelles Linux-basiertes Betriebssystem.",
+        "hi": "Irina Baikal 1.0: प्रयोगात्मक Linux-आधारित ऑपरेटिंग सिस्टम।",
+        "fr": "Irina Baikal 1.0 : système d'exploitation expérimental basé sur Linux.",
+        "fi": "Irina Baikal 1.0: kokeellinen Linux-pohjainen käyttöjärjestelmä.",
+        "ko": "Irina Baikal 1.0: 실험적인 Linux 기반 운영체제."
+      }
+    },
+    {
+      "repository": "musikfed/wificam_T23N",
+      "type": "camera",
+      "descriptions": {
+        "ru": "Экспериментальная загрузка и прошивка камеры Ingenic T23N.",
+        "en": "Experimental boot firmware for an Ingenic T23N camera.",
+        "zh": "Ingenic T23N 摄像头的实验性启动固件。",
+        "de": "Experimentelle Boot-Firmware für eine Ingenic-T23N-Kamera.",
+        "hi": "Ingenic T23N कैमरे के लिए प्रयोगात्मक बूट फ़र्मवेयर।",
+        "fr": "Firmware de démarrage expérimental pour caméra Ingenic T23N.",
+        "fi": "Kokeellinen käynnistysohjelmisto Ingenic T23N -kameralle.",
+        "ko": "Ingenic T23N 카메라용 실험적 부팅 펌웨어."
+      }
+    },
+    {
+      "repository": "musikfed/myipcam",
+      "type": "camera",
+      "descriptions": {
+        "ru": "MyIPCam OS: локальная экспериментальная ОС IP-камеры.",
+        "en": "MyIPCam OS: experimental local-first IP camera operating system.",
+        "zh": "MyIPCam OS：本地优先的实验性网络摄像头系统。",
+        "de": "MyIPCam OS: experimentelles lokales IP-Kamera-System.",
+        "hi": "MyIPCam OS: स्थानीय IP कैमरे के लिए प्रयोगात्मक सिस्टम।",
+        "fr": "MyIPCam OS : système expérimental de caméra IP locale.",
+        "fi": "MyIPCam OS: kokeellinen paikallinen IP-kamerajärjestelmä.",
+        "ko": "MyIPCam OS: 로컬 IP 카메라용 실험적 운영체제."
+      }
+    },
+    {
+      "repository": "musikfed/wifcam_helper",
+      "type": "camera",
+      "descriptions": {
+        "ru": "Отдельная прошивка и испытательный стенд камерной головы T23N.",
+        "en": "Separate firmware and test bench for a T23N camera head.",
+        "zh": "T23N 摄像头模块的独立固件和测试台。",
+        "de": "Separate Firmware und Testumgebung für einen T23N-Kamerakopf.",
+        "hi": "T23N कैमरा हेड का अलग फ़र्मवेयर और परीक्षण मंच।",
+        "fr": "Firmware séparé et banc d'essai pour une tête caméra T23N.",
+        "fi": "Erillinen laiteohjelmisto ja testipenkki T23N-kamerapäälle.",
+        "ko": "T23N 카메라 헤드용 별도 펌웨어와 테스트 환경."
+      }
+    },
+    {
+      "repository": "musikfed/micro",
+      "type": "robot",
+      "descriptions": {
+        "ru": "Экспериментальный репозиторий голосового помощника MICRO.",
+        "en": "Experimental MICRO voice-assistant development repository.",
+        "zh": "MICRO 语音助手实验性开发仓库。",
+        "de": "Experimentelles Entwicklungsrepository für den Sprachassistenten MICRO.",
+        "hi": "MICRO वॉइस असिस्टेंट का प्रयोगात्मक विकास रिपॉज़िटरी।",
+        "fr": "Dépôt expérimental de développement de l'assistant vocal MICRO.",
+        "fi": "MICRO-puheavustimen kokeellinen kehitysrepositorio.",
+        "ko": "MICRO 음성 비서의 실험적 개발 저장소."
+      }
+    },
+    {
+      "repository": "musikfed/Hombo3_3.0.0",
+      "type": "robot",
+      "descriptions": {
+        "ru": "Управление ESP32-S3-роботом: камера, сенсоры, голос и OTA.",
+        "en": "ESP32-S3 robot controls: camera, sensors, voice and OTA.",
+        "zh": "ESP32-S3 机器人控制：摄像头、传感器、语音与 OTA。",
+        "de": "ESP32-S3-Robotersteuerung mit Kamera, Sensoren, Sprache und OTA.",
+        "hi": "ESP32-S3 रोबोट नियंत्रण: कैमरा, सेंसर, आवाज़ और OTA।",
+        "fr": "Commande d'un robot ESP32-S3 : caméra, capteurs, voix et OTA.",
+        "fi": "ESP32-S3-robotin ohjaus: kamera, anturit, puhe ja OTA.",
+        "ko": "ESP32-S3 로봇 제어: 카메라, 센서, 음성 및 OTA."
+      }
+    },
+    {
+      "repository": "musikfed/esp32s3devkitC-1N16R8",
+      "type": "electronics",
+      "descriptions": {
+        "ru": "Кроссплатформенная студия ESP32-C3/S3 и MicroPython.",
+        "en": "Cross-platform ESP32-C3/S3 and MicroPython development studio.",
+        "zh": "跨平台 ESP32-C3/S3 与 MicroPython 开发工作室。",
+        "de": "Plattformübergreifende Entwicklungsumgebung für ESP32-C3/S3 und MicroPython.",
+        "hi": "ESP32-C3/S3 और MicroPython के लिए क्रॉस-प्लेटफ़ॉर्म स्टूडियो।",
+        "fr": "Studio multiplateforme ESP32-C3/S3 et MicroPython.",
+        "fi": "Monialustainen ESP32-C3/S3- ja MicroPython-kehitysympäristö.",
+        "ko": "ESP32-C3/S3 및 MicroPython용 크로스플랫폼 개발 스튜디오."
+      }
+    },
+    {
+      "repository": "musikfed/diskshellhdd",
+      "type": "windows",
+      "descriptions": {
+        "ru": "Локальная мастерская администрирования накопителей Windows.",
+        "en": "Local Windows storage and disk administration workbench.",
+        "zh": "本地 Windows 磁盘与存储管理工作台。",
+        "de": "Lokale Verwaltungswerkstatt für Windows-Datenträger.",
+        "hi": "Windows डिस्क और स्टोरेज प्रशासन का स्थानीय कार्यक्षेत्र।",
+        "fr": "Atelier local d'administration des disques sous Windows.",
+        "fi": "Paikallinen Windows-levyjen ja tallennuksen hallintatyökalu.",
+        "ko": "로컬 Windows 디스크·스토리지 관리 도구."
+      }
+    },
+    {
+      "repository": "musikfed/pitools",
+      "type": "infra",
+      "descriptions": {
+        "ru": "Параллельное развёртывание по SSH с файлами проектов .prj.",
+        "en": "Parallel SSH deployment driven by .prj project files.",
+        "zh": "基于 .prj 项目文件的并行 SSH 部署。",
+        "de": "Paralleles SSH-Deployment mit .prj-Projektdateien.",
+        "hi": ".prj प्रोजेक्ट फ़ाइलों पर आधारित समानांतर SSH तैनाती।",
+        "fr": "Déploiement SSH parallèle piloté par des fichiers .prj.",
+        "fi": "Rinnakkainen SSH-julkaisu .prj-projektitiedostoilla.",
+        "ko": " .prj 프로젝트 파일 기반 병렬 SSH 배포."
+      }
+    },
+    {
+      "repository": "musikfed/registry-change-explorer",
+      "type": "windows",
+      "descriptions": {
+        "ru": "Поиск и исследование реестра Windows с локальным индексом SQLite.",
+        "en": "Explore the Windows Registry with a local SQLite search index.",
+        "zh": "借助本地 SQLite 索引探索 Windows 注册表。",
+        "de": "Windows-Registrierung mit lokalem SQLite-Suchindex erkunden.",
+        "hi": "स्थानीय SQLite सूचकांक से Windows रजिस्ट्री की खोज।",
+        "fr": "Explorer le registre Windows avec un index SQLite local.",
+        "fi": "Windows-rekisterin tutkiminen paikallisen SQLite-hakuindeksin avulla.",
+        "ko": "로컬 SQLite 검색 색인으로 Windows 레지스트리 탐색."
+      }
+    },
+    {
+      "repository": "musikfed/pgsql",
+      "type": "infra",
+      "descriptions": {
+        "ru": "Лаборатория PostgreSQL 16, 1С, Patroni/etcd и Kubernetes.",
+        "en": "PostgreSQL 16 lab for 1C, Patroni/etcd and Kubernetes.",
+        "zh": "PostgreSQL 16、1C、Patroni/etcd 与 Kubernetes 实验室。",
+        "de": "PostgreSQL-16-Labor für 1C, Patroni/etcd und Kubernetes.",
+        "hi": "PostgreSQL 16, 1C, Patroni/etcd और Kubernetes प्रयोगशाला।",
+        "fr": "Laboratoire PostgreSQL 16, 1C, Patroni/etcd et Kubernetes.",
+        "fi": "PostgreSQL 16 -laboratorio: 1C, Patroni/etcd ja Kubernetes.",
+        "ko": "PostgreSQL 16, 1C, Patroni/etcd 및 Kubernetes 실험실."
+      }
+    },
+    {
+      "repository": "musikfed/postgresql1c",
+      "type": "infra",
+      "descriptions": {
+        "ru": "Эксперименты PostgreSQL и инфраструктуры для 1С.",
+        "en": "PostgreSQL and 1C infrastructure experiments.",
+        "zh": "PostgreSQL 与 1C 基础设施实验。",
+        "de": "Experimente mit PostgreSQL- und 1C-Infrastruktur.",
+        "hi": "PostgreSQL और 1C इन्फ्रास्ट्रक्चर प्रयोग।",
+        "fr": "Expériences d'infrastructure PostgreSQL et 1C.",
+        "fi": "PostgreSQL- ja 1C-infrastruktuurikokeiluja.",
+        "ko": "PostgreSQL 및 1C 인프라 실험."
+      }
+    },
+    {
+      "repository": "musikfed/analitikhhru",
+      "type": "analytics",
+      "descriptions": {
+        "ru": "Анализ агрегированных вакансий и резюме hh.ru в локальной панели.",
+        "en": "Local dashboard for aggregate hh.ru vacancies and résumés.",
+        "zh": "用于 hh.ru 职位与简历汇总分析的本地面板。",
+        "de": "Lokales Dashboard für aggregierte hh.ru-Stellen und Lebensläufe.",
+        "hi": "hh.ru नौकरी और रिज़्यूमे आँकड़ों के लिए स्थानीय डैशबोर्ड।",
+        "fr": "Tableau de bord local pour offres et CV agrégés de hh.ru.",
+        "fi": "Paikallinen hallintapaneeli hh.ru-työpaikkojen ja ansioluetteloiden koosteille.",
+        "ko": "hh.ru 채용공고와 이력서 집계용 로컬 대시보드."
+      }
+    },
+    {
+      "repository": "musikfed/smilegun",
+      "type": "games",
+      "descriptions": {
+        "ru": "Экспериментальная браузерная игра с управлением жестами и камерой.",
+        "en": "Experimental browser game controlled through camera gestures.",
+        "zh": "使用摄像头手势控制的实验性浏览器游戏。",
+        "de": "Experimentelles Browserspiel mit Kameragesten als Steuerung.",
+        "hi": "कैमरे के इशारों से नियंत्रित प्रयोगात्मक ब्राउज़र गेम।",
+        "fr": "Jeu expérimental dans le navigateur contrôlé par gestes et caméra.",
+        "fi": "Kokeellinen selainpeli, jota ohjataan kameran eleillä.",
+        "ko": "카메라 제스처로 조작하는 실험적 브라우저 게임."
+      }
+    },
+    {
+      "repository": "musikfed/smilegun_v2",
+      "type": "games",
+      "descriptions": {
+        "ru": "Аркадная игра с компьютерным зрением, жестами и мимикой.",
+        "en": "Computer-vision arcade game using gestures and facial actions.",
+        "zh": "使用计算机视觉、手势与表情控制的街机游戏。",
+        "de": "Arcade-Spiel mit Computer Vision, Gesten und Mimik.",
+        "hi": "कंप्यूटर विज़न, इशारों और चेहरे के भाव वाला आर्केड गेम।",
+        "fr": "Jeu d'arcade avec vision artificielle, gestes et expressions du visage.",
+        "fi": "Tietokonenäköön, eleisiin ja ilmeisiin perustuva arcade-peli.",
+        "ko": "컴퓨터 비전, 제스처, 표정으로 조작하는 아케이드 게임."
+      }
+    },
+    {
+      "repository": "musikfed/docker-compose-ui",
+      "type": "fork",
+      "descriptions": {
+        "ru": "Форк веб-интерфейса Docker Compose; исходная разработка другого автора.",
+        "en": "Fork of a Docker Compose web UI; original project by another author.",
+        "zh": "Docker Compose 网页界面的分支；原项目由其他作者开发。",
+        "de": "Fork einer Docker-Compose-Weboberfläche; Originalprojekt eines anderen Autors.",
+        "hi": "Docker Compose वेब UI का फ़ोर्क; मूल परियोजना अन्य लेखक की है।",
+        "fr": "Fork d'une interface web Docker Compose ; projet d'origine tiers.",
+        "fi": "Docker Compose -verkkokäyttöliittymän forkki; alkuperäinen tekijä on muu.",
+        "ko": "Docker Compose 웹 UI 포크; 원본 프로젝트는 다른 개발자의 것입니다."
+      }
+    },
+    {
+      "repository": "musikfed/ai_video3060_12G",
+      "type": "empty",
+      "descriptions": {
+        "ru": "Публичный пустой репозиторий; описание проекта пока отсутствует.",
+        "en": "Public empty repository; no project description yet.",
+        "zh": "公开的空仓库；暂无项目说明。",
+        "de": "Öffentliches leeres Repository; bisher keine Projektbeschreibung.",
+        "hi": "सार्वजनिक खाली रिपॉज़िटरी; अभी परियोजना विवरण नहीं है।",
+        "fr": "Dépôt public vide ; pas encore de description du projet.",
+        "fi": "Julkinen tyhjä repositorio; projektikuvaus puuttuu vielä.",
+        "ko": "공개된 빈 저장소로 아직 프로젝트 설명이 없습니다."
+      }
+    }
+  ]
+}
