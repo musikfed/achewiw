@@ -29,7 +29,7 @@ port_status() {
   if ! listeners="$(ss -H -ltn "( sport = :$PORT )" 2>/dev/null)"; then
     echo "Порт $PORT: ошибка проверки"
   elif [[ -n "$listeners" ]]; then
-    echo "Порт $PORT: занят. Чужой процесс не трогаем."
+    echo "Порт $PORT: есть TCP-слушатель (принадлежность по ss не определяем; постороннее не трогаем)."
     printf '%s\n' "$listeners"
   else
     echo "Порт $PORT: TCP-слушателя нет"
@@ -289,6 +289,37 @@ auth_check() {
   done
 }
 
+# Docker 'Started' means the container process launched, NOT that Uvicorn has
+# finished importing the app and initializing SQLite. Wait for the verified
+# Studio HTTP listener; never stop other services or mistake a foreign HTTP 200
+# for our application. Manual 'auth-check' remains immediate/read-only.
+wait_studio_ready() {
+  command -v curl >/dev/null 2>&1 || die "Нужен curl для проверки готовности"
+  local attempt headers status ids
+  echo "ACHEWIW: ожидаем HTTP-готовности собственной Studio (не дольше 60 сек)."
+  for ((attempt=1; attempt<=60; attempt++)); do
+    ids="$(containers false)" || die "Не удалось прочитать состояние контейнеров во время запуска"
+    [[ -n "$ids" ]] || die "Контейнер ACHEWIW завершился до открытия HTTP-порта. Проверь docker compose ps и docker logs --tail 80 achewiw-studio"
+    preflight_all || die "Во время ожидания обнаружен неподтверждённый контейнер"
+    if headers="$(curl --silent --max-time 3 --noproxy '*' \
+      --header "Host: 192.168.0.100:$PORT" --dump-header - --output /dev/null \
+      "http://127.0.0.1:$PORT/" 2>/dev/null)"; then
+      status="$(printf '%s\n' "$headers" | awk '/^HTTP/ {code=$2} END {print code}')"
+      case "$status" in
+        200|401|403|404)
+          # These are definitive HTTP responses. The existing strict
+          # auth/identity check rejects a wrong app, HTTP Basic or 403.
+          auth_check
+          return 0
+          ;;
+        *) ;; # 500/502/503 during initialization: bounded retry.
+      esac
+    fi
+    if ((attempt < 60)); then sleep 1; fi
+  done
+  die "Studio не стала доступна за 60 сек. Посмотри docker compose ps и docker logs --tail 80 achewiw-studio; база данных не удалялась."
+}
+
 # Unlike restart, rebuild explicitly creates a NEW image and recreates ONLY the
 # verified ACHEWIW studio container. No docker compose down, no pruning.
 run_rebuild() {
@@ -313,7 +344,7 @@ run_rebuild() {
   fi
   preflight_all
   [[ -n "$(containers false)" ]] || die "Контейнер ACHEWIW после пересборки не запущен"
-  auth_check || die "Новая сборка не прошла проверку отсутствия пароля"
+  wait_studio_ready || die "Новая сборка не прошла проверку готовности"
   current="$(git -C "$WORKSPACE" rev-parse --short HEAD 2>/dev/null || true)"
   if [[ -n "$current" ]]; then
     [[ ! -L "$WORKSPACE/data/.achewiw-deployed-commit" ]] ||
@@ -363,7 +394,7 @@ run_update() {
       die "Git обновлён, но пересборка studio не удалась. Старые данные не удалены"
     preflight_all
     [[ -n "$(containers false)" ]] || die "После обновления studio не запущен"
-    auth_check || die "Studio не прошёл HTTP-проверку: возможно, порт 7080 обслуживает прежний сервер"
+    wait_studio_ready || die "Studio не прошла проверку готовности HTTP"
     printf '%s\n' "$after" > "$deployed_marker"
     echo "Обновлён только работающий ACHEWIW Studio"
   elif [[ -z "$running" ]]; then
