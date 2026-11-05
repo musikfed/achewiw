@@ -18,14 +18,6 @@
 
 *Чистая стартовая страница. Это векторный демонстрационный макет, без личных проектов и тестовых повторов; реальные показатели сервера здесь не изображены.*
 
-## Многоязычное портфолио и контакты
-
-[**Все публичные работы musikfed — 20 репозиториев, 11 языков**](https://musikfed.github.io/achewiw/works/): [Русский](https://musikfed.github.io/achewiw/works/) · [English](https://musikfed.github.io/achewiw/works/en/) · [简体中文](https://musikfed.github.io/achewiw/works/zh/) · [Deutsch](https://musikfed.github.io/achewiw/works/de/) · [हिन्दी](https://musikfed.github.io/achewiw/works/hi/) · [Français](https://musikfed.github.io/achewiw/works/fr/) · [Suomi](https://musikfed.github.io/achewiw/works/fi/) · [한국어](https://musikfed.github.io/achewiw/works/ko/) · [日本語](https://musikfed.github.io/achewiw/works/ja/) · [Italiano](https://musikfed.github.io/achewiw/works/it/) · [Беларуская](https://musikfed.github.io/achewiw/works/be/).
-
-**Публичные контакты для сотрудничества:** [Telegram @Feudorlab1](https://t.me/Feudorlab1) · [+7 926 041 1145](tel:+79260411145) · [feudor.lab@yandex.ru](mailto:feudor.lab@yandex.ru) · [obzorniky@gmail.com](mailto:obzorniky@gmail.com) · [peginelab.ru](https://peginelab.ru/).
-
-Каталог содержит только публичные GitHub-репозитории. Частные проекты не включены. Переводы относятся к кратким описаниям проектов в каталоге, а не ко всему исходному коду и технической документации каждого репозитория.
-
 ## Для чего это нужно
 
 Здесь можно вести **роман, рассказ, фантастику, техническую книгу, нонфикшн или выступление**. Не одной кнопкой «напиши 300 страниц», а с раздельными, проверяемыми этапами:
@@ -171,4 +163,7 @@ bash scripts/achewiw-control.sh status
 
 [**Multilingual project presentation, architecture SVG and contacts**](docs/showcase/README.md)
 
-![achewiw project architecture](docs/showcase/overview.svg)
+![Реальный интерфейс издательской студии](docs/media/achewiw-home.svg)
+
+
+Другие приложения и их самостоятельные презентации: [**VIEW_MY_PRJ**](https://github.com/musikfed/view_my_prj). Этот репозиторий посвящён только ACHEWIW.
