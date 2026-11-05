@@ -941,6 +941,27 @@ async function loadStorageStatus(){
      ' · версия '+(data.version||'?')+'. Черновики не становятся каноном автоматически.';
  }catch(e){$('#memoryStorage').textContent='Не удалось проверить базы: '+e.message;}
 }
+async function loadRealRagDiagnostics(){
+ if(!project)return;
+ const id=project.id;
+ try{
+   const status=await api('/projects/'+id+'/rag-diagnostics',{cache:'no-store'});
+   if(!project||project.id!==id)return;
+   const last=status.last_retrieval,graph=status.graph||{},index=status.index||{};
+   const basic='Граф: '+(graph.approved||0)+' подтверждённых узлов / '+
+     (graph.planned||0)+' плановых / '+(graph.edges||0)+' связей; '+
+     'индекс: '+(index.sources||0)+' фрагментов, '+(index.stored_vectors||0)+' векторов. ';
+   $('#memoryRagRuntime').textContent=basic+(last?
+     ('ПОСЛЕДНИЙ РЕАЛЬНЫЙ ЗАПРОС генератора: глава '+(last.scene_index+1)+
+      ' · FTS5 найдено '+last.fts_hits+' · семантически '+last.semantic_hits+
+      ' · в контекст отобрано '+last.used_passages+
+      ' · граф '+last.graph_facts+' узлов / '+last.graph_links+' связей'+
+      ' · векторный поиск '+(last.vector_state==='active'?'работал':'недоступен, использован FTS5')+
+      ' · '+last.updated_at):
+     'Нет зарегистрированного запроса от книжного генератора. Наличие индекса само по себе не доказывает, что он использовался.');
+ }catch(e){$('#memoryRagRuntime').textContent=
+   'Данные фактической работы RAG пока недоступны: '+e.message}
+}
 async function reindexStorySearch(){
  const btn=$('#memoryReindex');btn.disabled=true;
  $('#memoryStorage').textContent='Проверяем текущие версии фрагментов и обновляем только изменённые…';
@@ -964,7 +985,7 @@ async function loadStoryMemory(branch='main'){
                         {cache:'no-store'});
    if(!project||projectId!==project.id)return;
    renderStoryMemory(data);
-   await loadStorageStatus();
+   await Promise.all([loadStorageStatus(),loadRealRagDiagnostics()]);
  }catch(e){
    $('#memoryStatus').textContent='Память сюжета недоступна: '+e.message;
  }
