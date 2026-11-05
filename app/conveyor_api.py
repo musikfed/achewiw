@@ -326,47 +326,56 @@ def install(api: APIRouter, env: dict) -> None:
                         continue
                 except ValueError:
                     pass
-                critique=json.loads(get(job["id"],"literary_qa",key)["body"])["report"]
-                prompt=(
-                    "Ты редактор книги. Исправления ТОЛЬКО в виде JSON объекта с полем edits "
-                    "(не более 5 объектов). У каждого объекта original и replacement и reason. "
-                    "original — точная непрерывная цитата из предоставленного фрагмента, "
-                    "replacement — литературная замена, не меняющая утверждённые факты. "
-                    "Предлагай только доказуемые исправления, без новых персонажей и событий. "
-                    "Не удаётся доказать качество замены — верни {\"edits\":[]}. "
-                    "Не пиши объяснений вне JSON.\n"
-                    "ОТЧЁТ КРИТИКА:\n"+critique[:4700]+
-                    "\nПЕРВАЯ ЧАСТЬ ГЛАВЫ:\n"+ch["text"][:7600])
-                raw=await call_model(job,job["critic_model"],prompt,num_predict=2200,
-                                     temperature=0.08)
-                # A model is not a trusted patch engine. Exact non-overlapping
-                # matches only, no free-form whole-chapter overwrite.
-                try:
-                    raw_obj=json.loads(re.sub(r"^\x60{3}(?:json)?\s*|\s*\x60{3}$","",raw.strip(),
-                                          flags=re.IGNORECASE))
-                    items=raw_obj.get("edits",[])
-                    if not isinstance(items,list):
-                        raise ValueError("Invalid edits array")
-                except (ValueError,TypeError,AttributeError) as exc:
-                    raise ValueError("Редактор вернул некорректный JSON; глава не менялась") from exc
                 candidate=ch["text"]
                 applied=[]
-                for item in items[:5]:
-                    if not isinstance(item,dict):
-                        continue
-                    original=item.get("original","")
-                    replacement=item.get("replacement","")
-                    if (not isinstance(original,str) or not isinstance(replacement,str) or
-                        len(original)<35 or len(original)>1600 or not replacement.strip() or
-                        len(replacement)>2500 or candidate.count(original)!=1 or
-                        original==replacement):
-                        continue
-                    test=candidate.replace(original,replacement,1)
-                    if len(quality_findings(test,limit=10))>len(quality_findings(candidate,limit=10)):
-                        continue
-                    candidate=test
-                    applied.append({"original":original,"replacement":replacement,
-                                    "reason":str(item.get("reason",""))[:500]})
+                parts=review_windows(ch["text"])
+                for part_index,part in enumerate(parts,1):
+                    part_key=key+"."+str(part_index)
+                    critique=json.loads(
+                        get(job["id"],"literary_qa",part_key)["body"])["report"]
+                    prompt=(
+                        "Ты редактор книги. Исправления ТОЛЬКО в виде JSON объекта с полем edits "
+                        "(не более 5 объектов). У каждого объекта original и replacement и reason. "
+                        "original — точная непрерывная цитата ИМЕННО из приведённого фрагмента, "
+                        "replacement — литературная замена, не меняющая утверждённые факты. "
+                        "Предлагай только доказуемые исправления, без новых персонажей и событий. "
+                        "Если нет точных правок, верни {\"edits\":[]}. "
+                        "Не пиши объяснений вне JSON. Редактируй полноценную прозу, не сценарий. "
+                        "Отдельно устраняй смысловые повторы и пустой диалог. "
+                        "\nЧАСТЬ "+str(part_index)+" ИЗ "+str(len(parts))+
+                        "\nОТЧЁТ КРИТИКА:\n"+critique[:3900]+
+                        "\nТЕКСТ ФРАГМЕНТА:\n"+part)
+                    raw=await call_model(job,job["critic_model"],prompt,
+                                         num_predict=1700,temperature=0.08)
+                    # Never trust model-proposed patches blindly; they must
+                    # match a unique original span and not worsen loop QA.
+                    try:
+                        cleaned=re.sub(r"^\x60{3}(?:json)?\s*|\s*\x60{3}$","",
+                                       raw.strip(),flags=re.IGNORECASE)
+                        raw_obj=json.loads(cleaned)
+                        items=raw_obj.get("edits",[])
+                        if not isinstance(items,list):
+                            raise ValueError("Invalid edits array")
+                    except (ValueError,TypeError,AttributeError) as exc:
+                        raise ValueError("Редактор вернул некорректный JSON: часть "+
+                                         part_key+"; глава не принималась") from exc
+                    for item in items[:5]:
+                        if not isinstance(item,dict):
+                            continue
+                        original=item.get("original","")
+                        replacement=item.get("replacement","")
+                        if (not isinstance(original,str) or not isinstance(replacement,str)
+                            or len(original)<35 or len(original)>1600
+                            or not replacement.strip() or len(replacement)>2500
+                            or candidate.count(original)!=1 or original==replacement):
+                            continue
+                        test=candidate.replace(original,replacement,1)
+                        if len(quality_findings(test,limit=10))>len(
+                            quality_findings(candidate,limit=10)):
+                            continue
+                        candidate=test
+                        applied.append({"original":original,"replacement":replacement,
+                                        "reason":str(item.get("reason",""))[:500]})
                 body={"original_sha":old_source,
                       "candidate_sha":cv.fingerprint(candidate),
                       "candidate_text":candidate,
