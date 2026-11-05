@@ -52,7 +52,7 @@ from story_memory import (init_memory, sync_approved, ensure_draft, index_chunk,
     erase_node as memory_erase_node, audit_graph, erase_project as erase_story_memory)
 from editor_workspace import (initialize as initialize_workspace, sync_search,
     checkpoint_work, checkpoint_story_state, vector_index_status,
-    status as storage_status)
+    record_rag_runtime, read_rag_runtime, status as storage_status)
 from book_rag_pipeline import hybrid_context, compact_hybrid_context, flush_pending_vectors
 from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
@@ -1624,6 +1624,27 @@ def editor_storage_status():
             "note":"Canon holds chapters; search holds FTS5/vector cache; work holds rolling chapter state."}
 
 
+@api.get("/projects/{project_id}/rag-diagnostics")
+def current_rag_diagnostics(project_id: str):
+    """Explain whether retrieval ACTUALLY ran for a book, not just DB sizes."""
+    get_project(project_id)
+    with db() as connection:
+        job=connection.execute(
+            "SELECT id FROM ai_jobs WHERE project_id=? AND mode='book' "
+            "ORDER BY created_at DESC,rowid DESC LIMIT 1",(project_id,)).fetchone()
+        report=audit_graph(connection,project_id)
+        graph_nodes=memory_nodes(connection,project_id)
+    job_id=job["id"] if job else None
+    trace=read_rag_runtime(DATA_DIR,project_id,job_id) if job_id else None
+    return {"project_id":project_id,"job_id":job_id,
+            "last_retrieval":trace,
+            "index":vector_index_status(DATA_DIR,project_id),
+            "graph":{"planned":sum(n["status"]=="outline" for n in graph_nodes),
+                     "approved":sum(n["status"]=="approved" for n in graph_nodes),
+                     "edges":report["edges"]},
+            "note":"FTS5-векторы/граф являются памятью; счётчики не доказывают литературную связность."}
+
+
 @api.get("/projects/{project_id}/editorial-storage")
 def project_editorial_storage(project_id: str,branch: str = "main"):
     # Explicitly describe the storage stage, not a completed literary editor.
@@ -1840,7 +1861,20 @@ async def execute_book(job_id: str) -> None:
                 ]
                 context=context_text(packet,max_chars=2900)
                 context+="\\nПОИСК В SEARCH SQLITE И СОСТОЯНИЕ ИЗ WORK SQLITE:\\n"
+                # Exclude pathological snippets from MODEL context only.
+                # Stored draft text and its search indices remain unchanged.
+                hybrid["evidence"]=[entry for entry in hybrid.get("evidence",[])
+                     if not first_cycle(entry.get("excerpt",""))]
                 context+=compact_hybrid_context(hybrid,max_chars=2600)
+                try:
+                    record_rag_runtime(DATA_DIR,project.id,job_id,index,{
+                        **hybrid,"graph_facts":len(packet["facts"]),
+                        "graph_links":len(packet["links"]),
+                        "used_passages":len(packet["evidence"])+len(hybrid["evidence"])
+                    })
+                except (sqlite3.Error,OSError,ValueError):
+                    # Telemetry must never interrupt or replace manuscript.
+                    pass
                 prompt = _book_prompt(project, scene, index, chapter["target_words"],
                                       previous, text, requested, chapter,context)
                 payload = {
