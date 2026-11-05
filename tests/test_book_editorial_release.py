@@ -113,6 +113,9 @@ def test_versions_are_immutable_diffable_and_project_scoped(tmp_path,monkeypatch
         items=proposed.json()["suggestions"]
         assert items and any(x["kind"]=="character" for x in items)
         candidate=items[0]
+        with main.db() as db:
+            update_job(db,j,status="error",stage="Снимок редакции ждёт автора",
+                       error="Тест завершил генерацию для ручного решения по канону")
         choice=c.post(url+"/"+two["id"]+"/graph-proposals/"+candidate["id"],
                       json={"decision":"approved"})
         assert choice.status_code==200,choice.text
@@ -156,4 +159,4 @@ def test_visual_riddle_has_later_answer_and_never_leaks_secret_into_graph(tmp_pa
         deleted=c.delete(url+"/"+clue["id"])
         assert deleted.status_code==204
         assert c.get(url).json()==[]
-        assert c.get("/api/projects/"+p["id"]+"/illustrations")
+        assert len(c.get("/api/projects/"+p["id"]+"/illustrations").json())==1
