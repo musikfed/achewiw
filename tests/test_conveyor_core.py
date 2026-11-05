@@ -91,3 +91,11 @@ def test_gpu_refresh_does_not_steal_or_revive(tmp_path):
 def test_core_code_is_safe_to_import():
     import conveyor_api
     assert conveyor_api.ConveyorRequest(image_mode="none").image_mode=="none"
+
+
+def test_single_word_ai_spam_rejected_but_literary_emphasis_allowed():
+    from prose_quality import first_cycle, check_quality, ProseDegeneration
+    assert first_cycle("шёпотом " * 45)["kind"] == "word_loop"
+    with pytest.raises(ProseDegeneration):
+        check_quality("шёпотом " * 45)
+    assert first_cycle(("Да. " * 6) + ("Событие изменило ситуацию. " * 10)) is None
