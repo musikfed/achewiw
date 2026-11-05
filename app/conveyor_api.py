@@ -439,7 +439,7 @@ def install(api: APIRouter, env: dict) -> None:
                 "status":"author_approved","usage":"local_RAG_reference",
                 "training_opt_in":False
             },ensure_ascii=False,sort_keys=True))
-        corpus=("\\n".join(examples)+"\\n").encode("utf-8")
+        corpus=("\n".join(examples)+"\n").encode("utf-8")
         files.append(file_atomically(job["id"],"approved-corpus.jsonl",corpus))
         snapshot=edition_snapshot(data_dir,p,[
             {"scene_id":s.id,"title":s.title,"text":s.text,"complete":True}
