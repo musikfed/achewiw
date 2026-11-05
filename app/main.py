@@ -24,6 +24,7 @@ from gpu_scheduling import init_gpu_leases, image_operation_active, reserve_gpu,
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
+from prose_quality import (check_quality, streaming_loop, prompt_tail, ProseDegeneration)
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
     versions as book_versions, get_version as get_book_version,
@@ -1745,9 +1746,9 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
     # The exact saved chapter ending is ALWAYS at the very end of the prompt.
     # Never cut this anchor off by slicing a giant concatenation at 22k chars.
     anchor = ("\nФинал предыдущей главы (контекст, НЕ повторять):\n" +
-              previous_chapter_tail[-1100:] +
+              prompt_tail(previous_chapter_tail,1100) +
               "\nУже написанный текст этой главы (последний фрагмент, НЕ повторять):\n" +
-              existing_text[-2200:] +
+              prompt_tail(existing_text,2200) +
               "\nПродолжи текст этой же главы прямо с места остановки:")
     return guidance[:max(0, 22000-len(anchor))] + anchor
 
@@ -1768,6 +1769,12 @@ async def execute_book(job_id: str) -> None:
         tokens_per_word = None
         prompt_tokens = None
         for index, chapter in enumerate(chapters_for_job_from_job(job_id)):
+            # Earlier generated chapters are reference evidence, not a
+            # license to repeat or restart an earlier scene.
+            with db() as connection:
+                earlier_chapters = "\n\n".join(
+                    c["text"] for c in chapters_for_job(connection,job_id)
+                    if c["scene_index"] < index and c["text"].strip())
             scene = next((item for item in project.scenes if item.id == chapter["scene_id"]), None)
             if scene is None:
                 raise ValueError("Каркас изменился; безопасное продолжение остановлено")
@@ -1789,6 +1796,7 @@ async def execute_book(job_id: str) -> None:
                     recovered=trim_repeated_tail(text,recovered)
                     try:
                         check_new_prose(text,recovered)
+                        check_quality(recovered,previous_chapters=earlier_chapters)
                     except ValueError:
                         # Invalid/repeated stream is NOT promoted to draft.
                         clear_stream_buffer(connection,job_id,scene.id)
@@ -1827,6 +1835,9 @@ async def execute_book(job_id: str) -> None:
                     "model": job["model"], "prompt": prompt, "stream": True,
                     "think": False, "keep_alive": "5m",
                     "options": {"temperature": 0.72, "num_ctx": 16384,
+                                "repeat_penalty": 1.15,
+                                "repeat_last_n": 512,
+                                "top_p": 0.90, "min_p": 0.05,
                                 "num_predict": predict_output_tokens(
                                     requested,tokens_per_word,prompt_tokens)},
                 }
@@ -1852,40 +1863,58 @@ async def execute_book(job_id: str) -> None:
                     this_eval_tokens = None
                     this_prompt_tokens = None
                     last_stream_flush = 0.0
-                    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
-                        async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
-                            response.raise_for_status()
-                            async for line in response.aiter_lines():
-                                if not line.strip():
-                                    continue
-                                part = json.loads(line)
-                                if part.get("error"):
-                                    raise ValueError("Ollama сообщила об ошибке генерации главы")
-                                generated += part.get("response", "")
-                                if part.get("done"):
-                                    this_eval_tokens=part.get("eval_count")
-                                    this_prompt_tokens=part.get("prompt_eval_count")
-                                if len(generated) > 30000:
-                                    raise ValueError("Один фрагмент превышает лимит")
-                                # Power loss recovery: persist unfinished Ollama
-                                # output every few seconds, not only after an
-                                # entire 900-word generation has finished.
-                                stamp=time.monotonic()
-                                if len(generated)>=100 and (
-                                      stamp-last_stream_flush>=2.0 or part.get("done")):
-                                    with db() as connection:
-                                        save_stream_buffer(connection,job_id,scene.id,
-                                                           text,generated,retry)
-                                        update_job(connection,job_id,
-                                            stage=f"Глава {index+1} · поток Ollama: {book_words(generated)} слов",
-                                            output="Фрагмент записывается в буфер SQLite; законченный текст будет проверен.",
-                                            percent=pct)
-                                    last_stream_flush=stamp
-                                if part.get("done"):
-                                    break
+                    last_loop_check_length = 0
+                    try:
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10)) as client:
+                            async with client.stream("POST", OLLAMA_BASE_URL + "/api/generate", json=payload) as response:
+                                response.raise_for_status()
+                                async for line in response.aiter_lines():
+                                    if not line.strip():
+                                        continue
+                                    part = json.loads(line)
+                                    if part.get("error"):
+                                        raise ValueError("Ollama сообщила об ошибке генерации главы")
+                                    generated += part.get("response", "")
+                                    if part.get("done"):
+                                        this_eval_tokens=part.get("eval_count")
+                                        this_prompt_tokens=part.get("prompt_eval_count")
+                                    if len(generated) > 30000:
+                                        raise ValueError("Один фрагмент превышает лимит")
+                                    if len(generated)-last_loop_check_length >= 250 or part.get("done"):
+                                        if streaming_loop(generated):
+                                            raise ProseDegeneration(
+                                                "Повтор в потоке Ollama: модель зациклилась на одной фразе")
+                                        last_loop_check_length=len(generated)
+                                    stamp=time.monotonic()
+                                    if len(generated)>=100 and (
+                                          stamp-last_stream_flush>=2.0 or part.get("done")):
+                                        with db() as connection:
+                                            save_stream_buffer(connection,job_id,scene.id,
+                                                               text,generated,retry)
+                                            update_job(connection,job_id,
+                                                stage=f"Глава {index+1} · поток Ollama: {book_words(generated)} слов",
+                                                output="Фрагмент записывается в буфер SQLite; законченный текст будет проверен.",
+                                                percent=pct)
+                                        last_stream_flush=stamp
+                                    if part.get("done"):
+                                        break
+                    except ProseDegeneration as exc:
+                        with db() as connection:
+                            clear_stream_buffer(connection,job_id,scene.id)
+                            update_job(connection,job_id,
+                                stage=f"Глава {index+1} · отклонён зацикленный поток ({retry+1}/6)",
+                                output="Поток Ollama отклонён; сохранённые главы не менялись.",
+                                percent=pct)
+                        last_failure=str(exc)
+                        if retry==5:
+                            raise ValueError(
+                                f"Глава {index+1}: все попытки зациклились; "
+                                "черновик сохранён, продолжение возможно после проверки.") from exc
+                        continue
                     candidate = trim_repeated_tail(text, generated)
                     try:
                         check_new_prose(text, candidate)
+                        check_quality(candidate, previous_chapters=earlier_chapters)
                     except ValueError as exc:
                         with db() as connection:
                             clear_stream_buffer(connection,job_id,scene.id)
