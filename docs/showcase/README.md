@@ -46,7 +46,6 @@ Studio locale per scrittura, revisione e pubblicazione di libri. **achewiw** —
 ## Contacts · Контакты
 
 - Telegram: [@Feudorlab1](https://t.me/Feudorlab1)
-- Phone: [+7 926 041 1145](tel:+79260411145)
 - Email: [feudor.lab@yandex.ru](mailto:feudor.lab@yandex.ru)
 - Email: [obzorniky@gmail.com](mailto:obzorniky@gmail.com)
 - Website: [peginelab.ru](https://peginelab.ru/)
