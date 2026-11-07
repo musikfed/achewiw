@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "id": "achewiw",
+  "title": "ACHEWIW",
+  "version": "—",
+  "description": "Локальная издательская студия для автора: от идеи, плана и канона мира до редакторских проверок, иллюстраций и выпуска книги в PDF, DOCX, EPUB и FB2. Работает локально с Ollama, FastAPI и SQLite.",
+  "tags": [
+    "Python",
+    "FastAPI",
+    "Ollama",
+    "SQLite",
+    "ComfyUI"
+  ],
+  "visibility": "public",
+  "publication": "approved",
+  "public_private_approved": false,
+  "display_mode": "interface",
+  "status": "Активная разработка · ожидает решения автора",
+  "repo_url": "https://github.com/musikfed/achewiw",
+  "screenshots": [
+    "https://raw.githubusercontent.com/musikfed/achewiw/main/docs/media/achewiw-home.svg",
+    "https://raw.githubusercontent.com/musikfed/achewiw/main/docs/media/achewiw-social-preview.svg",
+    "https://raw.githubusercontent.com/musikfed/achewiw/main/docs/media/achewiw-conveyor-demo.svg"
+  ],
+  "cover": "docs/media/achewiw-home.svg",
+  "cover_type": "source-vector-mockup",
+  "subtitle": "Типография в кармане"
+}
