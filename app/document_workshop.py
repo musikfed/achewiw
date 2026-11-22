@@ -103,18 +103,22 @@ def preview_docx(data: bytes) -> dict:
     for idx, paragraph in enumerate(doc.paragraphs):
         kind = inferred_kind(paragraph)
         kinds[kind] += 1
-        if len(rows) < 160 and (paragraph.text.strip() or kind != "body"):
+        # The full manuscript must be navigable, not just its first 160 paragraphs.
+        # Limit excessive API payloads for unusually large documents.
+        if len(rows) < 3000 and (paragraph.text.strip() or kind != "body"):
             protected = _complex_paragraph(paragraph) or len(paragraph.text) > 5000
             rows.append({"index": idx, "kind": kind, "style": paragraph.style.name,
                          "text": paragraph.text if len(paragraph.text) <= 5000 else paragraph.text[:300],
                          "editable": not protected})
+    warnings = [
+        "Список абзацев — структурный просмотр. Для настоящей вёрстки нажмите «Посмотреть страницы PDF».",
+        "Таблицы, изображения и колонтитулы остаются в DOCX; массовые стили применяются к обычным абзацам.",
+    ]
+    if len(rows) >= 3000:
+        warnings.append("Список ограничен первыми 3000 непустыми абзацами; остальной документ сохраняется в экспорте.")
     return {"type": "docx", "paragraph_count": len(doc.paragraphs),
             "tables": len(doc.tables), "sections": len(doc.sections), "kinds": kinds,
-            "paragraphs": rows,
-            "warnings": [
-                "Предварительный просмотр показывает структуру, но не точную постраничную вёрстку Word.",
-                "Таблицы, изображения и колонтитулы остаются в DOCX; массовые стили применяются к обычным абзацам.",
-            ]}
+            "paragraphs": rows, "warnings": warnings}
 
 
 def preview_pdf(data: bytes) -> dict:
