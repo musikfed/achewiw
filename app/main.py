@@ -10,6 +10,7 @@ import time
 import re
 import secrets
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,8 @@ from prose_quality import (check_quality, streaming_loop, prompt_tail, first_cyc
 from narrative_direction import scene_contract, reject_vacant_dialogue
 from reader_engagement import map_chapters as map_reader_engagement, fragment_contract as reader_fragment_contract
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
+from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorkshopError,
+    preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
 from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
     versions as book_versions, get_version as get_book_version,
     compare as compare_book_versions, review as review_book_version,
@@ -411,6 +414,12 @@ def build_prompt(project: Project, request: AIRequest) -> str:
             + task + extra)[:35000]
 
 
+@app.get("/docwork/")
+def document_workshop_page(_=Depends(require_auth)):
+    return FileResponse(STATIC_DIR / "docwork.html", headers={"Cache-Control": "no-store",
+        "X-ACHEWIW-App": "document-workshop"})
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "ollama": "external-host"}
@@ -427,7 +436,7 @@ def index(_=Depends(require_auth)):
 
 
 @app.get("/static/{filename}")
-def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js", "writing_blocks.js"], _=Depends(require_auth)):
+def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js", "writing_blocks.js", "docwork.js", "docwork.css"], _=Depends(require_auth)):
     return FileResponse(STATIC_DIR / filename, headers={"Cache-Control": "no-store"})
 
 
@@ -2440,6 +2449,43 @@ def project_generation_history(project_id: str,
             for j in items
         ]
     return items
+
+
+
+@api.post("/docwork/inspect")
+async def document_workshop_inspect(file: UploadFile = File(...)):
+    """Inspect an uploaded file in memory; never modify the book library."""
+    data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
+    try:
+        return await asyncio.to_thread(docwork_preview, data, file.filename or "")
+    except (DocumentWorkshopError, ValueError, OSError, zipfile.BadZipFile) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@api.post("/docwork/export")
+async def document_workshop_export(
+    file: UploadFile = File(...),
+    options: str = Form("{}"),
+    target: Literal["docx", "pdf"] = Form("docx"),
+):
+    """Create an independent DOCX/PDF export, no background book edits."""
+    if len(options) > 150000:
+        raise HTTPException(422, "Слишком много параметров")
+    try:
+        values = json.loads(options)
+        if not isinstance(values, dict):
+            raise DocumentWorkshopError("Некорректные настройки")
+        data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
+        result, filename, mime = await asyncio.to_thread(
+            docwork_export, data, file.filename or "", values, target
+        )
+    except (DocumentWorkshopError, ValueError, OSError, zipfile.BadZipFile, json.JSONDecodeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(content=result, media_type=mime, headers={
+        "Content-Disposition": docwork_disposition(filename),
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    })
 
 
 install_production_conveyor(api, globals())

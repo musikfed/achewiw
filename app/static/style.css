@@ -1036,3 +1036,7 @@ header{
 #readerEngagementPanel .engagement-beat{min-width:0;border:1px solid #e6e0d6;border-radius:12px;padding:16px;background:#fff}
 #readerEngagementPanel .engagement-beat strong{display:block;line-height:1.5;color:#3b434a}
 #readerEngagementPanel .engagement-beat p{font-size:13px;line-height:1.65;margin:.55rem 0;overflow-wrap:anywhere}
+
+/* Independent Word/PDF workshop shortcut: no project is selected or modified. */
+.docwork-nav-entry{display:block;margin:14px 2px 12px;padding:12px 10px;border:1px solid #a7bfae;border-radius:9px;color:#225b3b;background:#f2faf3;font-size:12px;font-weight:700;line-height:1.45;text-decoration:none}
+.docwork-nav-entry:hover{background:#e4f4e7;color:#164329;text-decoration:none}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACHEWIW · Умный редактор DOCX / PDF</title>
+<link rel="stylesheet" href="/static/docwork.css?v=1">
+<script src="/static/docwork.js?v=1" defer></script>
+</head><body>
+<header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
+<main class="layout">
+  <div class="intro"><p class="eyebrow">НЕЗАВИСИМАЯ МАСТЕРСКАЯ · КОПИЯ ИСХОДНОГО ФАЙЛА</p>
+    <h1>Редактор Word и PDF</h1>
+    <p>Загрузите документ, выберите оформление, найдите главы, исправьте отдельные абзацы и скачайте новую редакцию в DOCX или PDF. Рукопись и редакции в библиотеке ACHEWIW не изменяются.</p>
+  </div>
+  <div class="columns">
+    <section class="control">
+      <h2>01 · Исходный документ</h2>
+      <label class="upload" for="sourceFile">
+        <strong>Выбрать DOCX или PDF</strong>
+        <span id="fileLabel">Файл ещё не выбран · до 20 МиБ</span>
+      </label>
+      <input id="sourceFile" type="file" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Загрузить документ Word или PDF">
+      <div class="actions"><button id="inspect" type="button" class="primary" disabled>Проверить структуру</button><span id="summary" class="minor">Работа только с выбранной копией</span></div>
+      <h2>02 · Издательский стиль</h2>
+      <label>Оформление
+        <select id="preset">
+          <option value="preserve">Сохранить исходное</option>
+          <option value="book">Книжная классика · A5</option>
+          <option value="technical">Техническая книга</option>
+          <option value="modern">Современный документ</option>
+          <option value="karate">KARATE LINUX · зелёные заголовки</option>
+        </select>
+      </label>
+      <div class="font-grid">
+        <label>Шрифт основного текста<select id="bodyFont"><option value="keep">По стилю документа</option><option>Times New Roman</option><option>Liberation Serif</option><option>DejaVu Serif</option><option>Arial</option><option>Calibri</option></select></label>
+        <label>Размер текста, пт<input id="bodySize" type="number" min="8" max="16" step="0.5" placeholder="По шаблону"></label>
+        <label>Шрифт глав<select id="chapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Размер глав, пт<input id="chapterSize" type="number" min="11" max="30" step="0.5" placeholder="По шаблону"></label>
+        <label>Шрифт подглав<select id="subchapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Размер подглав, пт<input id="subchapterSize" type="number" min="9" max="25" step="0.5" placeholder="По шаблону"></label>
+      </div>
+      <div class="checklist"><label><input type="checkbox" id="headingBold" checked> Заголовки глав и подглав — жирным</label>
+        <label><input type="checkbox" id="autoHeadings" checked> Автоматически распознать главы и подглавы</label>
+        <label><input type="checkbox" id="clearHighlights" checked> Очистить подсветку и серую заливку абзацев</label>
+        <label><input type="checkbox" id="hideProofing" checked> Скрыть красные волнистые подчёркивания Word</label>
+      </div>
+      <p class="hint">Красная волнистая линия — подсказка проверки орфографии Word, а не цвет шрифта. Скрытие не исправляет словарь или ошибки текста.</p>
+      <h2>03 · Имя и формат</h2>
+      <label>Имя нового файла (без расширения)<input type="text" id="outputName" maxlength="120" placeholder="Karate Linux — белый пояс — редакция 2"></label>
+      <div class="actions buttons"><button type="button" id="downloadDocx" class="primary" disabled>↓ Скачать DOCX</button><button type="button" id="downloadPdf" disabled>↓ Скачать PDF</button></div>
+      <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: извлечение текста без гарантии сохранения колонок, рисунков и точной вёрстки. Сканам нужен OCR.</p>
+    </section>
+    <section class="preview" aria-label="Предпросмотр и ручная редактура">
+      <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Абзацы и заголовки</h2></div><span id="changeCounter">0 правок</span></div>
+      <div id="warnings" class="notice">Сначала выберите и проверьте документ. Здесь появятся главы и подглавы, как их распознал редактор.</div>
+      <div id="paragraphList" class="paragraphList" aria-live="polite"></div>
+      <div id="editPane" class="editPane" hidden>
+        <h3 id="editTitle">Абзац</h3>
+        <label>Роль абзаца
+          <select id="paragraphRole">
+            <option value="keep">Сохранить / автоопределение</option>
+            <option value="heading1">Глава · Заголовок 1</option>
+            <option value="heading2">Подглава · Заголовок 2</option>
+            <option value="body">Обычный текст</option>
+          </select>
+        </label>
+        <label>Текст выбранного абзаца
+          <textarea id="paragraphText" rows="5" spellcheck="false"></textarea>
+        </label>
+        <p id="editWarning" class="hint">Изменение текста затронет только этот абзац. Его локальное форматирование внутри строки может упроститься; остальные элементы сохраняются.</p>
+        <div class="actions"><button type="button" id="saveParagraph" class="primary">Применить правку</button><button type="button" id="resetParagraph">Сбросить правку</button></div>
+      </div>
+    </section>
+  </div>
+  <section class="help">
+    <h2>Как пользоваться</h2><p>Сначала просмотр → выберите стиль → при необходимости укажите роль заголовка или измените абзац → скачайте новую редакцию. Не нужно открывать существующую книгу в генераторе. Перед публикацией PDF обязательно просмотрите страницы в программе чтения, а DOCX — в Word или LibreOffice.</p>
+  </section>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+</body></html>
