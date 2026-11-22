@@ -30,7 +30,15 @@
           <option value="karate">KARATE LINUX · зелёные заголовки</option>
         </select>
       </label>
-      <div class="checklist">
+      <div class="font-grid">
+        <label>Шрифт основного текста<select id="bodyFont"><option value="keep">По стилю документа</option><option>Times New Roman</option><option>Liberation Serif</option><option>DejaVu Serif</option><option>Arial</option><option>Calibri</option></select></label>
+        <label>Размер текста, пт<input id="bodySize" type="number" min="8" max="16" step="0.5" placeholder="По шаблону"></label>
+        <label>Шрифт глав<select id="chapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Размер глав, пт<input id="chapterSize" type="number" min="11" max="30" step="0.5" placeholder="По шаблону"></label>
+        <label>Шрифт подглав<select id="subchapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Размер подглав, пт<input id="subchapterSize" type="number" min="9" max="25" step="0.5" placeholder="По шаблону"></label>
+      </div>
+      <div class="checklist"><label><input type="checkbox" id="headingBold" checked> Заголовки глав и подглав — жирным</label>
         <label><input type="checkbox" id="autoHeadings" checked> Автоматически распознать главы и подглавы</label>
         <label><input type="checkbox" id="clearHighlights" checked> Очистить подсветку и серую заливку абзацев</label>
         <label><input type="checkbox" id="hideProofing" checked> Скрыть красные волнистые подчёркивания Word</label>
