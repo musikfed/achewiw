@@ -104,9 +104,10 @@ def preview_docx(data: bytes) -> dict:
         kind = inferred_kind(paragraph)
         kinds[kind] += 1
         if len(rows) < 160 and (paragraph.text.strip() or kind != "body"):
-            protected = _complex_paragraph(paragraph)
+            protected = _complex_paragraph(paragraph) or len(paragraph.text) > 5000
             rows.append({"index": idx, "kind": kind, "style": paragraph.style.name,
-                         "text": paragraph.text[:300], "editable": not protected})
+                         "text": paragraph.text if len(paragraph.text) <= 5000 else paragraph.text[:300],
+                         "editable": not protected})
     return {"type": "docx", "paragraph_count": len(doc.paragraphs),
             "tables": len(doc.tables), "sections": len(doc.sections), "kinds": kinds,
             "paragraphs": rows,
@@ -219,6 +220,41 @@ def _apply_preset(doc, name: str):
         h.paragraph_format.keep_with_next = True
 
 
+def _custom_heading_fonts(doc, options: dict):
+    """Override font family/size per role without rewriting paragraph text."""
+    font_names = {
+        "body_font": "Normal",
+        "chapter_font": "Heading 1",
+        "subchapter_font": "Heading 2",
+    }
+    for key, stylename in font_names.items():
+        family = options.get(key, "keep")
+        if family in (None, "keep", ""):
+            continue
+        if not isinstance(family, str) or family not in FONT_NAMES:
+            raise DocumentWorkshopError("Шрифт вне разрешённого списка")
+        style = doc.styles[stylename]
+        style.font.name = family
+        _set_east_asia(style, family)
+    sizes = {"body_size": ("Normal", 8, 16),
+             "chapter_size": ("Heading 1", 11, 30),
+             "subchapter_size": ("Heading 2", 9, 25)}
+    for key, (stylename, lower, upper) in sizes.items():
+        size = options.get(key)
+        if size in (None, ""):
+            continue
+        try:
+            numeric = float(size)
+        except (TypeError, ValueError) as exc:
+            raise DocumentWorkshopError("Размер шрифта должен быть числом") from exc
+        if not lower <= numeric <= upper:
+            raise DocumentWorkshopError("Размер шрифта вне допустимого диапазона")
+        doc.styles[stylename].font.size = Pt(numeric)
+    if options.get("heading_bold", True):
+        doc.styles["Heading 1"].font.bold = True
+        doc.styles["Heading 2"].font.bold = True
+
+
 def _replace_simple_text(paragraph, new_text):
     if _complex_paragraph(paragraph):
         raise DocumentWorkshopError("Нельзя менять текст абзаца с изображением, полем или гиперссылкой")
@@ -250,6 +286,7 @@ def transform_docx(data: bytes, options: dict) -> bytes:
     if len(doc.paragraphs) > MAX_PARAGRAPHS:
         raise DocumentWorkshopError("Слишком большой документ")
     _apply_preset(doc, preset)
+    _custom_heading_fonts(doc, options)
     if options.get("clear_highlights", False):
         _remove_shading(doc.element.body)
         # Also clear direct run shading in table content without changing cell shading.
@@ -268,8 +305,9 @@ def transform_docx(data: bytes, options: dict) -> bytes:
                 inferred_kind(paragraph) if options.get("auto_headings", False) else "keep")
         if kind in ("heading1", "heading2"):
             paragraph.style = doc.styles["Heading " + kind[-1]]
-            for run in paragraph.runs:
-                run.bold = True
+            if options.get("heading_bold", True):
+                for run in paragraph.runs:
+                    run.bold = True
         elif kind == "body":
             paragraph.style = doc.styles["Normal"]
     out = BytesIO()
