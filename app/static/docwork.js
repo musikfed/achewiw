@@ -52,7 +52,8 @@ function drawRows() {
     const number = document.createElement('span'); number.className = 'index'; number.textContent = '#' + (item.index+1);
     const body = document.createElement('span'); body.className = 'body';
     const text = document.createElement('strong');
-    text.textContent = Object.prototype.hasOwnProperty.call(replacements,key) ? replacements[key] : item.text;
+    const fullText = Object.prototype.hasOwnProperty.call(replacements,key) ? replacements[key] : item.text;
+    text.textContent = fullText.length > 320 ? fullText.slice(0, 320) + '…' : fullText;
     const meta = document.createElement('small'), labels = {heading1:'Глава',heading2:'Подглава',body:'Текст'};
     meta.textContent = (labels[rowKind(item)] || 'Абзац') + ' · ' + item.style +
       ((overrides[key] || Object.prototype.hasOwnProperty.call(replacements,key)) ? ' · изменено' : '') +
@@ -117,7 +118,12 @@ async function download(target) {
   try {
     const options = {preset:$('preset').value, output_name:$('outputName').value,
       auto_headings:$('autoHeadings').checked, clear_highlights:$('clearHighlights').checked,
-      hide_proofing:$('hideProofing').checked, overrides, replacements};
+      hide_proofing:$('hideProofing').checked, heading_bold:$('headingBold').checked,
+      body_font:$('bodyFont').value, chapter_font:$('chapterFont').value,
+      subchapter_font:$('subchapterFont').value,
+      body_size:$('bodySize').value, chapter_size:$('chapterSize').value,
+      subchapter_size:$('subchapterSize').value,
+      overrides, replacements};
     const form = new FormData(); form.append('file', source, source.name);
     form.append('target', target); form.append('options', JSON.stringify(options));
     tell('Готовим новый файл…');
