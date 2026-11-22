@@ -11,6 +11,16 @@
     <h1>Редактор Word и PDF</h1>
     <p>Загрузите документ, выберите оформление, найдите главы, исправьте отдельные абзацы и скачайте новую редакцию в DOCX или PDF. Рукопись и редакции в библиотеке ACHEWIW не изменяются.</p>
   </div>
+  <div class="guidebar" aria-label="Этапы работы">
+    <span><b>1</b> Загрузить файл</span><span><b>2</b> Выбрать стиль</span>
+    <span><b>3</b> Посмотреть страницы</span><span><b>4</b> Скачать новую копию</span>
+  </div>
+  <div class="workshop-actions" id="workshopActions">
+    <div><strong>Результат редактора</strong><small id="workflowStatus">Выберите файл DOCX или PDF, затем нажмите «Проверить структуру».</small></div>
+    <button type="button" id="quickPreviewPdf" disabled>◉ Показать страницы PDF</button>
+    <button type="button" id="quickDownloadDocx" class="primary" disabled>↓ Новый DOCX</button>
+    <button type="button" id="quickDownloadPdf" disabled>↓ Новый PDF</button>
+  </div>
   <div class="columns">
     <section class="control">
       <h2>01 · Исходный документ</h2>
@@ -44,15 +54,26 @@
         <label><input type="checkbox" id="hideProofing" checked> Скрыть красные волнистые подчёркивания Word</label>
       </div>
       <p class="hint">Красная волнистая линия — подсказка проверки орфографии Word, а не цвет шрифта. Скрытие не исправляет словарь или ошибки текста.</p>
-      <h2>03 · Имя и формат</h2>
+      <h2 id="exportSection">03 · Имя и формат</h2>
       <label>Имя нового файла (без расширения)<input type="text" id="outputName" maxlength="120" placeholder="Karate Linux — белый пояс — редакция 2"></label>
       <div class="actions buttons"><button type="button" id="downloadDocx" class="primary" disabled>↓ Скачать DOCX</button><button type="button" id="downloadPdf" disabled>↓ Скачать PDF</button></div>
       <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: извлечение текста без гарантии сохранения колонок, рисунков и точной вёрстки. Сканам нужен OCR.</p>
     </section>
     <section class="preview" aria-label="Предпросмотр и ручная редактура">
       <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Абзацы и заголовки</h2></div><span id="changeCounter">0 правок</span></div>
-      <div id="warnings" class="notice">Сначала выберите и проверьте документ. Здесь появятся главы и подглавы, как их распознал редактор.</div>
+      <div class="preview-switch">
+        <button type="button" id="showStructure" class="selected" aria-pressed="true">Структура и правки</button>
+        <button type="button" id="previewPdf" disabled>◉ Посмотреть страницы PDF</button>
+      </div>
+      <div id="structurePane">
+        <div class="structure-filter">
+          <label>Поиск по документу<input type="search" id="paragraphSearch" placeholder="Название главы или фрагмент текста"></label>
+          <label>Показывать<select id="paragraphFilter"><option value="headings">Только заголовки</option><option value="all">Все абзацы</option></select></label>
+        </div>
+        <div id="outlineCount" class="outline-count">Сначала загрузите документ</div>
+        <div id="warnings" class="notice">Сначала выберите и проверьте документ. Здесь появятся главы и подглавы, как их распознал редактор.</div>
       <div id="paragraphList" class="paragraphList" aria-live="polite"></div>
+      <button type="button" id="loadMoreParagraphs" hidden>Показать следующие абзацы</button>
       <div id="editPane" class="editPane" hidden>
         <h3 id="editTitle">Абзац</h3>
         <label>Роль абзаца
@@ -68,6 +89,12 @@
         </label>
         <p id="editWarning" class="hint">Изменение текста затронет только этот абзац. Его локальное форматирование внутри строки может упроститься; остальные элементы сохраняются.</p>
         <div class="actions"><button type="button" id="saveParagraph" class="primary">Применить правку</button><button type="button" id="resetParagraph">Сбросить правку</button></div>
+      </div>
+      </div>
+      <div id="pdfPane" hidden>
+        <p class="hint" id="pdfPreviewStatus">PDF-предпросмотр не построен.</p>
+        <iframe id="pdfFrame" title="Визуальный предпросмотр страниц книги в PDF"></iframe>
+        <p class="hint">Так выглядит новая редакция после конвертации LibreOffice. Это предпросмотр PDF, а не редактируемое поле Word. После изменения настроек нажмите «Посмотреть страницы» повторно.</p>
       </div>
     </section>
   </div>
