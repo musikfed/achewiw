@@ -100,3 +100,28 @@ def test_api_and_private_access(tmp_path,monkeypatch):
     with TestClient(main.app,base_url="http://127.0.0.1:7080",client=("203.0.113.15",12345)) as outside:
         assert outside.get("/docwork/").status_code==403
         assert outside.post("/api/docwork/inspect",files={"file":("book.docx",raw)}).status_code==403
+
+
+
+def test_preview_reaches_later_chapters_not_just_first_160():
+    doc = Document()
+    for i in range(185):
+        doc.add_paragraph("Обычный абзац книги " + str(i))
+    doc.add_paragraph("Глава 12. Дальнейшая история")
+    output = BytesIO()
+    doc.save(output)
+    info = workshop.preview(output.getvalue(), "large.docx")
+    assert info["paragraph_count"] == 186
+    assert len(info["paragraphs"]) == 186
+    assert info["paragraphs"][-1]["index"] == 185
+    assert info["paragraphs"][-1]["kind"] == "heading1"
+
+
+def test_workshop_navigation_and_pdf_preview_ui():
+    html = (main.STATIC_DIR / "docwork.html").read_text(encoding="utf-8")
+    js = (main.STATIC_DIR / "docwork.js").read_text(encoding="utf-8")
+    for name in ("quickPreviewPdf", "quickDownloadDocx", "quickDownloadPdf",
+                 "pdfFrame", "paragraphFilter", "paragraphSearch", "loadMoreParagraphs"):
+        assert 'id="' + name + '"' in html
+    assert "buildPdfPreview" in js
+    assert "application/json" in js
