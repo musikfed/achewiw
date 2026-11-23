@@ -65,7 +65,7 @@ def test_ci_success_without_human_signoff_is_not_publication_approval(tmp_path):
     test_copy.write_text(json.dumps(register), encoding="utf-8")
     result = _run("--json", "--release", "--manifest", test_copy)
     assert result.returncode == 2
-    assert "MANUAL" in json.loads(result.stdout)["blockers"]
+    assert any("MANUAL" in blocker for blocker in json.loads(result.stdout)["blockers"])
 
 
 def test_unavailable_register_fails_closed(tmp_path):
