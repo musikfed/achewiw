@@ -33,6 +33,7 @@ function changeButtons(){
   $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbImportGraph').disabled=!exportScope()||operationBusy;
   $('wbVisionFile').disabled=!exportScope()||operationBusy;
+  $('wbVisionPreflight').disabled=!exportScope()||operationBusy;
   $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
@@ -647,6 +648,30 @@ $('wbExportGraph').addEventListener('click',()=>{
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
 });
 
+$('wbVisionPreflight').addEventListener('click',async()=>{
+  const scope=exportScope();
+  if(!scope)return status('Сначала выбери исходный рисунок DOCX.',true);
+  const draft=host.current().draft;
+  const button=$('wbVisionPreflight');
+  button.disabled=true;
+  status('Проверяем список моделей Ollama и занятость GPU. Ничего не загружаем.');
+  try{
+    const response=await fetch('/api/docwork/drafts/'+encodeURIComponent(draft.id)+
+      '/vision/preflight',{
+        headers:{'X-ACHEWIW-Docwork-Token':draft.token},cache:'no-store'
+      });
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const result=await response.json();
+    if(JSON.stringify(exportScope())!==JSON.stringify(scope))return;
+    const available=Array.isArray(result.models)?result.models.join(', '):'';
+    const loaded=Array.isArray(result.loaded_models)?result.loaded_models.join(', '):'';
+    status('Ollama Vision: '+result.reason+
+      '. Доступные: '+(available||'нет')+
+      '. Загружены: '+(loaded||'нет')+
+      '. Запуск распознавания пока отключён.');
+  }catch(error){status('Проверка Ollama Vision: '+error.message,true);}
+  finally{changeButtons();}
+});
 // Vision suggestions are never a drawing layer until individually accepted.
 let visionReview=null;
 function clearVisionReview(){
