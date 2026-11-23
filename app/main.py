@@ -36,6 +36,7 @@ from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorks
 from docwork_image_layout import thumbnail as docwork_image_thumbnail, IllustrationLayoutError
 from docwork_vector import convert_picture as docwork_vectorize_picture, VectorExperimentError
 from docwork_vector import source_image as docwork_original_picture
+from docwork_normative import (audit_docx as docwork_normative_audit, available_profiles as docwork_normative_profiles, NormativePreflightError)
 from docwork_assets import (
     initialize as init_docwork_assets, add as add_docwork_asset,
     get as get_docwork_asset, replacements as get_docwork_asset_replacements,
@@ -2669,6 +2670,28 @@ async def document_workshop_inspect(file: UploadFile = File(...)):
     try:
         return await asyncio.to_thread(docwork_preview, data, file.filename or "")
     except (DocumentWorkshopError, ValueError, OSError, zipfile.BadZipFile) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@api.get("/docwork/normative-profiles")
+def document_workshop_normative_profiles():
+    """Reference scopes for editorial review — not a GOST certification."""
+    return {"profiles": docwork_normative_profiles(),
+            "notice": "Нормативный профиль зависит от вида документа. Отчёт не заменяет редактора."}
+
+
+@api.post("/docwork/preflight")
+async def document_workshop_normative_preflight(
+    file: UploadFile = File(...),
+    profile: str = Form("author_book"),
+):
+    """Read-only inspection of the exported DOCX, without database writes."""
+    if not (file.filename or "").lower().endswith(".docx"):
+        raise HTTPException(422, "R4 проверяет готовый DOCX. Для PDF нужен отдельный preflight.")
+    data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
+    try:
+        return await asyncio.to_thread(docwork_normative_audit, data, profile)
+    except (NormativePreflightError, ValueError, OSError, zipfile.BadZipFile) as exc:
         raise HTTPException(422, str(exc)) from exc
 
 
