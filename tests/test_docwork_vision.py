@@ -42,6 +42,27 @@ class VisionParserTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["confidence"], 0)
 
+    def test_reject_extreme_numbers_and_boolean_coordinates(self):
+        payload = {"proposals": [
+            {"type": "rectangle", "x": 10**400, "y": 0, "w": 10, "h": 10},
+            {"type": "rectangle", "x": True, "y": 0, "w": 10, "h": 10},
+            {"type": "rectangle", "x": 0, "y": 0, "w": 10, "h": 10}
+        ]}
+        result = parse_vision_reply(json.dumps(payload), width=100, height=100)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["id"], "candidate-1")
+
+    def test_gpu_reservation_is_exclusive(self):
+        import sqlite3
+        from gpu_scheduling import init_gpu_leases, reserve_gpu, release_gpu
+        conn = sqlite3.connect(":memory:")
+        init_gpu_leases(conn)
+        self.assertTrue(reserve_gpu(conn, "one", "docwork_vision", at=1000))
+        self.assertFalse(reserve_gpu(conn, "two", "docwork_vision", at=1001))
+        release_gpu(conn, "one")
+        self.assertTrue(reserve_gpu(conn, "two", "docwork_vision", at=1001))
+        conn.close()
+
     def test_prompt_is_bounded_and_explicit(self):
         s = vision_prompt(800, 500)
         self.assertIn("800x500", s)
