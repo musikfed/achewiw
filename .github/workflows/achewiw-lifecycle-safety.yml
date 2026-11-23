@@ -124,6 +124,21 @@ jobs:
         run: |
           PYTHONPATH=app python3 -m pytest -q tests/test_publishing_exports.py tests/test_book_editorial_release.py tests/test_r2_illustration_fidelity.py
           PYTHONPATH=app python3 -m pytest -q tests/test_app.py
+      - name: R1-R3 actual HTTP smoke against disposable CI server
+        run: |
+          export ACHEWIW_DATA_DIR="$(mktemp -d)"
+          export ACHEWIW_ALLOWED_HOSTS="127.0.0.1,localhost"
+          export PYTHONPATH=app
+          python3 -m uvicorn main:app --host 127.0.0.1 --port 7080 > /tmp/achewiw-r123-ci-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 40); do
+            if curl --noproxy '*' --silent --fail http://127.0.0.1:7080/api/health > /dev/null; then ready=1; break; fi
+            sleep 0.5
+          done
+          if [ "$ready" != 1 ]; then cat /tmp/achewiw-r123-ci-server.log; exit 1; fi
+          python3 scripts/r1-r3-host-smoke.py
       - name: Check user systemd telemetry ownership
         run: |
           grep -Fq 'WorkingDirectory=/1tbdisk/achewiw' ops/achewiw-host-monitor.service
