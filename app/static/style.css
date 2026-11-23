@@ -1040,3 +1040,13 @@ header{
 /* Independent Word/PDF workshop shortcut: no project is selected or modified. */
 .docwork-nav-entry{display:block;margin:14px 2px 12px;padding:12px 10px;border:1px solid #a7bfae;border-radius:9px;color:#225b3b;background:#f2faf3;font-size:12px;font-weight:700;line-height:1.45;text-decoration:none}
 .docwork-nav-entry:hover{background:#e4f4e7;color:#164329;text-decoration:none}
+
+/* Library project deletion: explicit control on every project card. */
+.projectEntry{position:relative;display:flex;align-items:stretch;margin-top:12px;border:1px solid transparent;border-radius:10px;min-width:0}
+.projectEntry.selected{background:#f8f4ed;border-color:#efe4d3}
+.projectEntry .projectItem{flex:1;min-width:0;margin-top:0;padding-right:38px;border:0;background:transparent;border-radius:10px}
+.projectEntry .projectItem.selected{background:transparent}
+.projectRemove{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:28px;width:28px;height:28px;padding:0!important;border-radius:7px;border:1px solid #e9d6cf!important;background:#fff7f4!important;color:#9c4538!important;opacity:.72;cursor:pointer;font-size:17px}
+.projectEntry:hover .projectRemove,.projectRemove:focus-visible{opacity:1;background:#fbe4df!important}
+.projectRemove:focus-visible{outline:2px solid #9c4538;outline-offset:2px}
+@media(hover:hover){.projectEntry:not(:hover):not(:focus-within) .projectRemove{opacity:.45}}
