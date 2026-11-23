@@ -33,6 +33,7 @@ from reader_engagement import map_chapters as map_reader_engagement, fragment_co
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorkshopError,
     preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
+from docwork_image_layout import thumbnail as docwork_image_thumbnail, IllustrationLayoutError
 from docwork_sessions import (
     SessionError as DocworkSessionError, initialize as init_docwork_drafts,
     create as create_docwork_draft, read as read_docwork_draft,
@@ -2508,6 +2509,28 @@ def document_workshop_get_draft_source(draft_id: str, request: Request):
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     })
+
+
+@api.get("/docwork/drafts/{draft_id}/images/{image_index}")
+def document_workshop_draft_image(draft_id: str, image_index: int, request: Request):
+    """Secure on-demand PNG thumbnail from the preserved DOCX original.
+
+    Images cannot be loaded through public img URLs because R3 requires the
+    draft capability header. The browser fetches the response with that header.
+    """
+    data, name = _docwork_session_call(
+        original_docwork_draft, draft_id, _docwork_token(request)
+    )
+    if not name.lower().endswith(".docx"):
+        raise HTTPException(422, "Оформление изображений пока доступно для DOCX")
+    try:
+        picture = docwork_image_thumbnail(data, image_index)
+    except (IllustrationLayoutError, ValueError, OSError, zipfile.BadZipFile) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(
+        content=picture, media_type="image/png",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    )
 
 
 @api.put("/docwork/drafts/{draft_id}")
