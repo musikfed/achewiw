@@ -3,6 +3,192 @@
 const $ = id => document.getElementById(id);
 let source = null, report = null, selected = null, previewUrl = null, rendered = 80, processing = false;
 const overrides = Object.create(null), replacements = Object.create(null);
+
+let draft = null, draftSaveTimer = null, draftSaveBusy = false, draftConflicted = false;
+const DRAFT_KEY = 'achewiw-docwork-r3-current';
+const SCRATCH_KEY = 'achewiw-docwork-r3-pending';
+const settingsIds = {
+  preset:'preset', output_name:'outputName', auto_headings:'autoHeadings',
+  clear_highlights:'clearHighlights', hide_proofing:'hideProofing', heading_bold:'headingBold',
+  body_font:'bodyFont', chapter_font:'chapterFont', subchapter_font:'subchapterFont',
+  body_size:'bodySize', chapter_size:'chapterSize', subchapter_size:'subchapterSize'
+};
+function rememberDraft() {
+  if (!draft) return;
+  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+function forgetDraft() {
+  try { sessionStorage.removeItem(DRAFT_KEY); sessionStorage.removeItem(SCRATCH_KEY); } catch {}
+}
+function captureDraftState() {
+  const settings = optionsForExport();
+  delete settings.overrides; delete settings.replacements;
+  return {
+    settings, overrides:{...overrides}, replacements:{...replacements},
+    editor:{selected, text: selected === null ? '' : $('paragraphText').value,
+            role: selected === null ? 'keep' : $('paragraphRole').value},
+    ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered}
+  };
+}
+function scratchDraft() {
+  if (!draft || !report) return;
+  try { sessionStorage.setItem(SCRATCH_KEY, JSON.stringify({
+    id:draft.id, revision:draft.revision, state:captureDraftState()
+  })); } catch { $('draftStatus').textContent = 'Локальная страховочная копия не поместилась в браузер. Нажмите «Сохранить правки сейчас».'; }
+}
+function draftControls() {
+  for (const id of ['saveDraft','reloadDraft','exportDraftState','closeDraft'])
+    $(id).disabled = !draft;
+  $('restoreDraftVersion').disabled = !draft || !$('draftHistory').value;
+  $('draftHistory').disabled = !draft;
+}
+function draftMessage(text, error=false) {
+  $('draftStatus').textContent = text;
+  $('draftStatus').classList.toggle('error',error);
+}
+function applyDraftState(state) {
+  if (!state || !report) return;
+  for (const obj of [overrides,replacements])
+    for (const key of Object.keys(obj)) delete obj[key];
+  Object.assign(overrides,state.overrides || {});
+  Object.assign(replacements,state.replacements || {});
+  for (const [key,id] of Object.entries(settingsIds)) {
+    if (!Object.prototype.hasOwnProperty.call(state.settings||{},key)) continue;
+    const element=$(id), value=state.settings[key];
+    if (element.type === 'checkbox') element.checked=!!value;
+    else element.value=value===null ? '' : value;
+  }
+  if (state.settings) {
+    $('pdfTextOnly').checked=state.settings.pdf_mode==='text_only';
+    $('pdfLossConfirmed').checked=state.settings.confirm_text_loss===true;
+  }
+  $('paragraphSearch').value=String(state.ui?.search || '');
+  $('paragraphFilter').value=state.ui?.filter==='all'?'all':'headings';
+  rendered=Math.max(80,Math.min(3000,Number(state.ui?.rendered)||80));
+  clearPdf();
+  $('changeCounter').textContent =
+    new Set(Object.keys(overrides).concat(Object.keys(replacements))).size+' ручных правок';
+  selected=null; $('editPane').hidden=true; drawRows();
+  if (Number.isInteger(state.editor?.selected)) {
+    editParagraph(state.editor.selected);
+    if (selected!==null) {
+      const row=report.paragraphs?.find(x=>x.index===selected);
+      if (row?.editable && typeof state.editor.text==='string')
+        $('paragraphText').value=state.editor.text;
+      if (['keep','heading1','heading2','body'].includes(state.editor.role))
+        $('paragraphRole').value=state.editor.role;
+    }
+  }
+}
+function markDraftDirty() {
+  if (!draft || !report) return;
+  scratchDraft();
+  if (draftConflicted) {
+    draftMessage('Конфликт: в другой вкладке уже сохранена новая редакция. Ваши локальные изменения пока не перезаписываются. Скачайте свои правки JSON.',true);
+    return;
+  }
+  draftMessage('Есть несохранённые изменения · сохранение запланировано…');
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer=setTimeout(()=>{void saveDraftNow();},900);
+}
+async function saveDraftNow() {
+  if (!draft || !report || draftConflicted) return;
+  clearTimeout(draftSaveTimer);
+  if (draftSaveBusy) return;
+  draftSaveBusy=true;
+  const id=draft.id, revision=draft.revision, state=captureDraftState();
+  const serial=JSON.stringify(state);
+  draftMessage('Сохраняем правки на сервере…');
+  try {
+    const response=await fetch('/api/docwork/drafts/'+id,{
+      method:'PUT',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-ACHEWIW-Docwork-Token':draft.token},
+      body:JSON.stringify({revision,state})
+    });
+    const result=await response.json();
+    if (response.status===409) {
+      draftConflicted=true;
+      scratchDraft();
+      throw new Error(result.detail||'Другая вкладка сохранила новую редакцию');
+    }
+    if (!response.ok) throw new Error(result.detail||'HTTP '+response.status);
+    if (!draft || draft.id!==id) return;
+    draft.revision=result.revision; rememberDraft();
+    scratchDraft();
+    if (JSON.stringify(captureDraftState()) !== serial) {
+      markDraftDirty();
+    } else {
+      draftMessage('Черновик сохранён · редакция №'+result.revision+' · '+result.updated_at);
+    }
+  } catch(e) {
+    draftMessage('Правки не сохранены: '+e.message+
+      '. Локальная копия в этой вкладке остаётся; можно повторить сохранение.',true);
+  } finally {
+    draftSaveBusy=false;
+    // Capture edits arriving while a network request was in flight.
+    if (draft && draft.id===id && !draftConflicted &&
+        JSON.stringify(captureDraftState())!==serial)
+      markDraftDirty();
+  }
+}
+async function draftFetch(path) {
+  const response=await fetch('/api/docwork/drafts/'+draft.id+path,{
+    cache:'no-store',headers:{'X-ACHEWIW-Docwork-Token':draft.token}
+  });
+  if (!response.ok) {
+    let detail='HTTP '+response.status;
+    try { detail=(await response.json()).detail||detail; } catch {}
+    throw new Error(detail);
+  }
+  return response;
+}
+async function refreshDraftHistory() {
+  if (!draft) return;
+  try {
+    const versions=await (await draftFetch('/history')).json();
+    const select=$('draftHistory'); select.replaceChildren();
+    const title=document.createElement('option'); title.value='';
+    title.textContent='Выбрать сохранённую редакцию'; select.append(title);
+    for (const item of versions) {
+      const option=document.createElement('option');option.value=String(item.revision);
+      option.textContent='№'+item.revision+' · '+item.saved_at;select.append(option);
+    }
+    draftControls();
+  } catch(e) { draftMessage('Не удалось прочитать историю: '+e.message,true); }
+}
+async function restoreDraft() {
+  let stored=null;
+  try { stored=JSON.parse(sessionStorage.getItem(DRAFT_KEY)||'null'); } catch {}
+  if (!stored?.id || !stored?.token) return;
+  draft=stored; draftControls();draftMessage('Восстанавливаем сохранённую редакцию после F5…');
+  try {
+    const meta=await (await draftFetch('')).json();
+    const blob=await (await draftFetch('/source')).blob();
+    source=new File([blob],meta.filename,{type:meta.filename.toLowerCase().endsWith('.pdf')?
+      'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    reset();
+    draft.revision=meta.revision; rememberDraft();
+    $('fileLabel').textContent=meta.filename+' · восстановлено с сервера';
+    await inspect(true);
+    if (!report) throw new Error('Не удалось заново прочитать структуру документа');
+    applyDraftState(meta.state);
+    let pending=null;
+    try { pending=JSON.parse(sessionStorage.getItem(SCRATCH_KEY)||'null'); } catch {}
+    if (pending?.id===draft.id && pending.revision===draft.revision) {
+      if (JSON.stringify(pending.state)!==JSON.stringify(meta.state)) {
+        applyDraftState(pending.state); markDraftDirty();
+        draftMessage('Восстановлены изменения перед F5 · синхронизация с сервером…');
+      }
+    } else if (pending?.id===draft.id && pending.revision < draft.revision) {
+      draftMessage('Сервер содержит более новую редакцию. При необходимости сохраните локальные правки JSON перед продолжением.',true);
+    }
+    await refreshDraftHistory();
+    if (!draftSaveTimer) draftMessage('Редактор восстановлен · редакция №'+draft.revision);
+  } catch(e) {
+    draftMessage('Восстановление не удалось: '+e.message+
+      '. Ключ черновика сохранён в этой вкладке, исходный файл не удалён.',true);
+  }
+}
 function tell(message, error=false) {
   const node = $('status'); node.textContent = message; node.classList.toggle('error', error);
   node.style.display = 'block'; clearTimeout(tell.timer);
@@ -41,6 +227,12 @@ function reset() {
   $('changeCounter').textContent = '0 правок'; busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
+  if (draft) {
+    $('sourceFile').value='';
+    tell('Сначала сохраните и закройте текущий черновик, чтобы не потерять ключ восстановления.',true);
+    return;
+  }
+  forgetDraft();
   source = $('sourceFile').files[0] || null; reset();
   $('fileLabel').textContent = source ? source.name + ' · ' + (source.size / 1048576).toFixed(2) + ' МиБ' : 'Файл не выбран';
   if (source) $('outputName').value = source.name.replace(/\.(docx|pdf)$/i, '') + ' — редакция';
@@ -108,6 +300,7 @@ function editParagraph(index) {
     'Текст изменится только в этом абзаце. Локальное форматирование внутри изменённой строки может упроститься; остальные элементы не меняются.' :
     'Сложный абзац: рисунки, поля или гиперссылки. Можно поменять роль заголовка, но нельзя переписать текст.';
   drawRows();
+  markDraftDirty();
 }
 $('saveParagraph').addEventListener('click', () => {
   const item = report && report.paragraphs && report.paragraphs.find(x => x.index === selected);
@@ -119,24 +312,34 @@ $('saveParagraph').addEventListener('click', () => {
     if (edited !== item.text) replacements[key] = edited;
     else delete replacements[key];
   }
-  changeCount(); drawRows(); tell('Правка подготовлена. Для создания новой редакции нажмите «Скачать».');
+  changeCount(); drawRows(); markDraftDirty();
+  tell('Правка подготовлена и будет сохранена. Для новой редакции документа нажмите «Скачать».');
 });
 $('resetParagraph').addEventListener('click', () => {
   if (selected === null) return;
   delete overrides[selected]; delete replacements[selected];
-  changeCount(); editParagraph(selected); tell('Локальная правка сброшена.');
+  changeCount(); editParagraph(selected); markDraftDirty(); tell('Локальная правка сброшена.');
 });
-async function inspect() {
+async function inspect(restoring=false) {
   if (!source) return;
   busy(true); $('warnings').textContent = 'Проверяем структуру файла…';
   try {
     const data = new FormData(); data.append('file', source, source.name);
-    const response = await fetch('/api/docwork/inspect', {method:'POST',body:data,cache:'no-store'});
+    const reusing=restoring||!!draft;
+    const response = await fetch(reusing?'/api/docwork/inspect':'/api/docwork/drafts',
+      {method:'POST',body:data,cache:'no-store'});
     const mime = response.headers.get('content-type') || '';
     if (!mime.includes('application/json'))
       throw new Error('Сервер вернул не JSON (HTTP '+response.status+'). Обновите страницу и повторите.');
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'HTTP '+response.status);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || 'HTTP '+response.status);
+    if (!reusing) {
+      draft={id:payload.id,token:payload.token,revision:payload.revision};
+      rememberDraft();draftConflicted=false; draftControls();
+      draftMessage('Исходный файл сохранён на сервере · редакция №1');
+      void refreshDraftHistory();
+    }
+    const result=reusing?payload:payload.preview;
     report = result; selected = null; rendered = 80; $('editPane').hidden = true;
     $('pdfModeControls').hidden = result.type !== 'pdf';
     clearPdf();
@@ -227,9 +430,9 @@ async function buildPdfPreview() {
     tell('Не удалось показать PDF: '+e.message,true);
   } finally {busy(false);}
 }
-$('paragraphSearch').addEventListener('input',()=>{rendered=80;drawRows();});
-$('paragraphFilter').addEventListener('change',()=>{rendered=80;drawRows();});
-$('loadMoreParagraphs').addEventListener('click',()=>{rendered+=80;drawRows();});
+$('paragraphSearch').addEventListener('input',()=>{rendered=80;drawRows();markDraftDirty();});
+$('paragraphFilter').addEventListener('change',()=>{rendered=80;drawRows();markDraftDirty();});
+$('loadMoreParagraphs').addEventListener('click',()=>{rendered+=80;drawRows();markDraftDirty();});
 $('showStructure').addEventListener('click',()=>{
   $('pdfPane').hidden=true;$('structurePane').hidden=false;
   $('showStructure').classList.add('selected');
@@ -242,11 +445,12 @@ for (const id of ['preset','bodyFont','chapterFont','subchapterFont','bodySize',
       clearPdf();
       $('workflowStatus').textContent = 'Настройки изменены. Постройте PDF-предпросмотр заново.';
     }
+    markDraftDirty();
   });
 }
 $('pdfTextOnly').addEventListener('change', () => {
   if (!$('pdfTextOnly').checked) $('pdfLossConfirmed').checked = false;
-  clearPdf();
+  clearPdf();markDraftDirty();
 });
 $('downloadDocx').addEventListener('click', () => download('docx'));
 $('downloadPdf').addEventListener('click', () => download('pdf'));
@@ -254,5 +458,74 @@ $('quickDownloadDocx').addEventListener('click', () => download('docx'));
 $('quickDownloadPdf').addEventListener('click', () => download('pdf'));
 $('previewPdf').addEventListener('click', buildPdfPreview);
 $('quickPreviewPdf').addEventListener('click', buildPdfPreview);
+$('outputName').addEventListener('input',markDraftDirty);
+$('pdfLossConfirmed').addEventListener('change',markDraftDirty);
+$('paragraphText').addEventListener('input',markDraftDirty);
+$('paragraphRole').addEventListener('change',markDraftDirty);
+$('saveDraft').addEventListener('click',async()=>{
+  await saveDraftNow();await refreshDraftHistory();
+});
+$('draftHistory').addEventListener('change',draftControls);
+$('restoreDraftVersion').addEventListener('click',async()=>{
+  const version=Number($('draftHistory').value);
+  if (!draft||!version||!confirm('Восстановить редакцию №'+version+
+      '? Будет создана новая редакция, сохранённые версии останутся без изменений.')) return;
+  try {
+    const data=await (await draftFetch('/history/'+version)).json();
+    applyDraftState(data.state);markDraftDirty();await saveDraftNow();
+    await refreshDraftHistory();
+  } catch(e){draftMessage('Не удалось восстановить редакцию: '+e.message,true);}
+});
+$('reloadDraft').addEventListener('click',async()=>{
+  if (!draft||!confirm('Перезагрузить последнюю версию с сервера? Сначала скачайте несохранённые правки JSON.')) return;
+  try {
+    const data=await (await draftFetch('')).json();
+    draft.revision=data.revision;draftConflicted=false;rememberDraft();
+    clearTimeout(draftSaveTimer);applyDraftState(data.state);scratchDraft();
+    draftMessage('Загружена серверная редакция №'+data.revision);
+    await refreshDraftHistory();
+  } catch(e) { draftMessage('Не удалось обновить редакцию: '+e.message,true); }
+});
+$('exportDraftState').addEventListener('click',()=>{
+  if (!draft) return;
+  const state=captureDraftState();
+  const file=new Blob([JSON.stringify({id:draft.id,revision:draft.revision,state},null,2)],
+    {type:'application/json'});
+  const url=URL.createObjectURL(file);
+  const link=document.createElement('a');link.href=url;link.download='ACHEWIW-docwork-my-edits.json';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+});
+$('closeDraft').addEventListener('click',async()=>{
+  if (!draft||!confirm('Удалить ТОЛЬКО этот временный черновик DocWork и его историю? Перед этим скачайте готовый документ. Книги в библиотеке ACHEWIW не затрагиваются.')) return;
+  try {
+    const response=await fetch('/api/docwork/drafts/'+draft.id,{
+      method:'DELETE',cache:'no-store',headers:{
+        'X-ACHEWIW-Docwork-Token':draft.token,
+        'X-ACHEWIW-Confirm-Close-Draft':'yes-delete-only-this-draft'
+      }});
+    if (!response.ok) throw new Error('HTTP '+response.status);
+    forgetDraft();draft=null;draftConflicted=false;source=null;
+    $('sourceFile').value='';reset();draftControls();
+    $('fileLabel').textContent='Файл не выбран';
+    draftMessage('Черновик закрыт по подтверждению пользователя. Можно загрузить новый файл.');
+  } catch(e) { draftMessage('Не удалось закрыть черновик: '+e.message,true); }
+});
+window.addEventListener('pagehide',()=>{
+  if (draft&&report) {
+    scratchDraft();
+    if (!draftSaveBusy&&!draftConflicted) {
+      // Best effort only. sessionStorage scratch protects unsent edits on F5.
+      const state=captureDraftState();
+      void fetch('/api/docwork/drafts/'+draft.id,{
+        method:'PUT',keepalive:true,
+        headers:{'Content-Type':'application/json','X-ACHEWIW-Docwork-Token':draft.token},
+        body:JSON.stringify({revision:draft.revision,state})
+      }).catch(()=>{});
+    }
+  }
+});
 window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);});
+draftControls();
+void restoreDraft();
 })();
