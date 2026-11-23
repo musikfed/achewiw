@@ -118,9 +118,14 @@ def test_docx_roundtrip_retains_figure_caption_table_hyperlink_math(preset):
 def test_docx_replacement_rejects_complex_paragraph(protected_tag):
     data, _ = _docx_with_complex_content()
     doc = Document(BytesIO(data))
+    exact_tag = qn({
+        "drawing": "w:drawing",
+        "hyperlink": "w:hyperlink",
+        "oMath": "m:oMath",
+    }[protected_tag])
     index = next(
         i for i, para in enumerate(doc.paragraphs)
-        if protected_tag in para._p.xml
+        if any(True for _ in para._p.iter(exact_tag))
     )
     with pytest.raises(workshop.DocumentWorkshopError, match="Нельзя менять текст абзаца"):
         workshop.transform_docx(
