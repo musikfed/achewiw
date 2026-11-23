@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=2">
-<script src="/static/docwork.js?v=4" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=3">
+<script src="/static/docwork.js?v=5" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -119,12 +119,23 @@
       <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: перенос поддерживаемого текста и встроенных изображений; сложная структура блокируется. Сканам нужен OCR. Перед выпуском визуально сверьте страницы.</p>
     </section>
     <section class="preview" aria-label="Предпросмотр и ручная редактура">
-      <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Абзацы и заголовки</h2></div><span id="changeCounter">0 правок</span></div>
+      <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Документ · текст и рисунки</h2></div><span id="changeCounter">0 правок</span></div>
       <div class="preview-switch">
-        <button type="button" id="showStructure" class="selected" aria-pressed="true">Структура и правки</button>
+        <button type="button" id="showStructure" class="selected" aria-pressed="true">Редактор документа</button>
         <button type="button" id="previewPdf" disabled>◉ Посмотреть страницы PDF</button>
       </div>
       <div id="structurePane">
+        <section id="documentEditor" class="documentEditor" aria-label="Единый редактор текста и иллюстраций" hidden>
+          <div class="editorBar">
+            <strong>Лист документа · редактирование по потоку текста</strong>
+            <span id="canvasStatus">Перетащи рисунок за рамку в место между абзацами. Текст исправляй прямо на листе.</span>
+          </div>
+          <div id="documentCanvas" class="documentCanvas"></div>
+          <button id="canvasMore" type="button" hidden>↓ Показать следующие абзацы документа</button>
+          <p class="hint">Это редактор порядка текста и рисунков. Точное расположение по страницам проверь кнопкой «Посмотреть страницы PDF»; оригинал DOCX не меняется.</p>
+        </section>
+        <details class="structureDetails">
+          <summary>Структура, поиск и расширенная редактура абзацев</summary>
         <div class="structure-filter">
           <label>Поиск по документу<input type="search" id="paragraphSearch" placeholder="Название главы или фрагмент текста"></label>
           <label>Показывать<select id="paragraphFilter"><option value="headings">Только заголовки</option><option value="all">Все абзацы</option></select></label>
@@ -149,6 +160,7 @@
         <p id="editWarning" class="hint">Изменение текста затронет только этот абзац. Его локальное форматирование внутри строки может упроститься; остальные элементы сохраняются.</p>
         <div class="actions"><button type="button" id="saveParagraph" class="primary">Применить правку</button><button type="button" id="resetParagraph">Сбросить правку</button></div>
       </div>
+        </details>
       </div>
       <div id="pdfPane" hidden>
         <p class="hint" id="pdfPreviewStatus">PDF-предпросмотр не построен.</p>
