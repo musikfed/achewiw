@@ -130,3 +130,11 @@
 #imageCornersNumber{max-width:100px!important;font-size:13px!important}
 #imageCornerHint{display:block;margin-top:5px;line-height:1.5}
 @media(max-width:540px){.fontCollections{grid-template-columns:1fr}.saveSummary{min-width:0}}
+
+/* Full-width reading/editing mode for books with many pictures. */
+.columns.editor-wide{grid-template-columns:minmax(0,1fr)}
+.columns.editor-wide>section.control{display:none!important}
+.columns.editor-wide>section.preview{min-width:0;grid-column:1}
+.columns.editor-wide .documentCanvas{max-width:950px}
+.previewHeadActions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+#toggleSidebar{font-size:12px;padding:7px 11px}
