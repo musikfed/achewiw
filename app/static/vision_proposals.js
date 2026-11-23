@@ -59,7 +59,7 @@
       w:candidate.w,h:candidate.h,color:'#176d47',stroke:3};
     if(candidate.type==='text'){
       result.text=candidate.text;
-      result.fontSize:26;
+      result.fontSize=26;
     }
     return result;
   }
