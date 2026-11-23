@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=1">
-<script src="/static/docwork.js?v=3" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=2">
+<script src="/static/docwork.js?v=4" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -71,7 +71,43 @@
         <label><input type="checkbox" id="hideProofing" checked> Скрыть красные волнистые подчёркивания Word</label>
       </div>
       <p class="hint">Красная волнистая линия — подсказка проверки орфографии Word, а не цвет шрифта. Скрытие не исправляет словарь или ошибки текста.</p>
-      <h2 id="exportSection">03 · Имя и формат</h2>
+      <h2 id="illustrationsSection">03 · Оформление иллюстраций</h2>
+      <p class="hint">Выбери встроенный рисунок DOCX. Можно выровнять его, изменить размер относительно <strong>текстовой области листа</strong> и плавно скруглить углы. Пропорции остаются исходными, изображение не обрезается. Оригинал не изменяется.</p>
+      <div id="imageListStatus" class="hint">После проверки DOCX здесь появятся рисунки с миниатюрами.</div>
+      <div id="imageList" class="imageList" aria-label="Иллюстрации исходного документа"></div>
+      <div id="imageControls" class="imageControls" hidden>
+        <h3 id="imageEditTitle">Оформление выбранного рисунка</h3>
+        <div class="imagePreviewStage">
+          <img id="imagePreview" alt="Предварительный вид выбранной иллюстрации">
+        </div>
+        <label>Ширина относительно текстовой области листа
+          <input type="range" id="imageWidth" min="25" max="100" step="5" value="70">
+          <span id="imageWidthLabel" class="imageValue">70% ширины текста</span>
+        </label>
+        <div class="imageStyleGrid">
+          <label>Выравнивание
+            <select id="imageAlign">
+              <option value="left">По левому краю</option>
+              <option value="center" selected>По центру</option>
+              <option value="right">По правому краю</option>
+            </select>
+          </label>
+          <label>Скругление углов
+            <select id="imageCorners">
+              <option value="0">Без скругления</option>
+              <option value="8">Мягкое · 8%</option>
+              <option value="16" selected>Среднее · 16%</option>
+              <option value="24">Выраженное · 24%</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="applyImageEdit" type="button" class="primary">Применить к новой копии</button>
+          <button id="resetImageEdit" type="button">Сбросить этот рисунок</button>
+        </div>
+        <p class="hint" id="imageEditHint">Изменение будет записано в черновик и применено при экспорте DOCX/PDF.</p>
+      </div>
+      <h2 id="exportSection">04 · Имя и формат</h2>
       <label>Имя нового файла (без расширения)<input type="text" id="outputName" maxlength="120" placeholder="Karate Linux — белый пояс — редакция 2"></label>
       <div class="actions buttons"><button type="button" id="downloadDocx" class="primary" disabled>↓ Скачать DOCX</button><button type="button" id="downloadPdf" disabled>↓ Скачать PDF</button></div>
       <div id="pdfModeControls" class="checklist" hidden>
