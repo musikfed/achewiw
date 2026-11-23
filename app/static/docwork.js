@@ -501,6 +501,13 @@ function moveFigureTo(index, beforeParagraph) {
       beforeParagraph<0 || beforeParagraph>report.paragraph_count) return;
   if (beforeParagraph!==report.paragraph_count &&
       (!target || !String(target.text||'').trim())) return;
+  const targetSection=beforeParagraph===report.paragraph_count ?
+    report.sections-1 : target?.section_index;
+  if (item.section_index!==targetSection){
+    $('canvasStatus').textContent='Нельзя переносить рисунок между разными разделами Word. '
+      +'Размещение внутри своего раздела разрешено; границы разделов и колонтитулы защищены.';
+    return;
+  }
   if (beforeParagraph===item.paragraph_index ||
       beforeParagraph===item.caption_index ||
       (report.images||[]).some(x=>x.paragraph_index===beforeParagraph)) return;
