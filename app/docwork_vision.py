@@ -12,7 +12,12 @@ MAX_SUGGESTIONS = 60
 
 
 def _number(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
 
 
 def parse_vision_reply(raw: str, *, width: int, height: int) -> list[dict]:
