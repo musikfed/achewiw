@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 let source = null, report = null, selected = null, previewUrl = null, rendered = 80, processing = false;
 const overrides = Object.create(null), replacements = Object.create(null);
 const imageEdits = Object.create(null);
+const imageAssets = Object.create(null);
 const imageMoves = Object.create(null);
 const paragraphAlignments = Object.create(null);
 let activeParagraph = null;
@@ -108,7 +109,7 @@ function undoSnapshot() {
   return JSON.stringify({
     overrides:{...overrides},replacements:{...replacements},
     paragraphAlignments:{...paragraphAlignments},
-    images:{...imageEdits},moves:{...imageMoves}
+    images:{...imageEdits},moves:{...imageMoves},artwork:{...imageAssets}
   });
 }
 function timelineStatus() {
@@ -148,7 +149,8 @@ function applyUndoSnapshot(data) {
   for(const [object,source] of [
     [overrides,state.overrides], [replacements,state.replacements],
     [paragraphAlignments,state.paragraphAlignments],
-    [imageEdits,state.images], [imageMoves,state.moves]
+    [imageEdits,state.images], [imageMoves,state.moves],
+    [imageAssets,state.artwork]
   ]) {
     for(const key of Object.keys(object))delete object[key];
     Object.assign(object,source||{});
@@ -156,7 +158,8 @@ function applyUndoSnapshot(data) {
   imageMoveCounter=Math.max(0,...Object.values(imageMoves)
     .map(item=>Number(item?.order)||0));
   const previous=activeParagraph;
-  changeCount();drawRows();renderDocumentCanvas();
+  changeCount();drawRows();renderDocumentCanvas();renderImageGallery();
+  window.ACHEWIWWorkbench?.refresh();
   activeParagraph=previous;
   updateEditToolbar();
   markDraftDirty();
@@ -211,10 +214,11 @@ function captureDraftState() {
   delete settings.overrides; delete settings.replacements;
   delete settings.image_edits;
   delete settings.image_moves;
+  delete settings.image_assets;
   return {
     settings, overrides:{...overrides}, replacements:{...replacements},
     images:{...imageEdits}, moves:{...imageMoves},
-    alignments:{...paragraphAlignments},
+    artwork:{...imageAssets},alignments:{...paragraphAlignments},
     editor:{selected, text: selected === null ? '' : $('paragraphText').value,
             role: selected === null ? 'keep' : $('paragraphRole').value},
     ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered,
@@ -251,12 +255,13 @@ function draftMessage(text, error=false) {
 function applyDraftState(state) {
   if (!state || !report) return;
   resetUndoTimeline();
-  for (const obj of [overrides,replacements,imageEdits,imageMoves,paragraphAlignments])
+  for (const obj of [overrides,replacements,imageEdits,imageMoves,imageAssets,paragraphAlignments])
     for (const key of Object.keys(obj)) delete obj[key];
   Object.assign(overrides,state.overrides || {});
   Object.assign(replacements,state.replacements || {});
   Object.assign(imageEdits,state.images || {});
   Object.assign(imageMoves,state.moves || {});
+  Object.assign(imageAssets,state.artwork || {});
   Object.assign(paragraphAlignments,state.alignments || {});
   imageMoveCounter=Math.max(0,...Object.values(imageMoves)
     .map(x=>Number(x?.order)||0));
@@ -278,12 +283,13 @@ function applyDraftState(state) {
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements),
        Object.keys(paragraphAlignments))).size
-    + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+    + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves),Object.keys(imageAssets))).size)
       +' ручных правок';
   selected=null; $('editPane').hidden=true; drawRows();
   renderImageGallery();
   renderDocumentCanvas();
   updateEditToolbar();
+  window.ACHEWIWWorkbench?.refresh();
   const imageIndex = state.ui?.selectedImage;
   if (Number.isInteger(imageIndex)) selectImage(imageIndex);
   if (Number.isInteger(state.editor?.selected)) {
@@ -759,14 +765,19 @@ function renderImageGallery() {
     const desc=document.createElement('small');
     desc.textContent=item.editable?
       item.width_px+'×'+item.height_px+
-      (imageEdits[String(item.index)]?' · оформлен':''):
+      (imageEdits[String(item.index)]?' · оформлен':'')+
+      (imageAssets[String(item.index)]?' · заменён':''):
       (item.reason || 'Сложный объект');
     button.append(thumb,title,desc);
     button.addEventListener('click',()=>selectImage(item.index));
     list.append(button);
     if (draft) {
       const currentDraft=draft.id;
-      void fetch('/api/docwork/drafts/'+currentDraft+'/images/'+item.index,{
+      const changedAsset=imageAssets[String(item.index)];
+      const imagePath=changedAsset?
+        '/api/docwork/drafts/'+currentDraft+'/assets/'+changedAsset:
+        '/api/docwork/drafts/'+currentDraft+'/images/'+item.index;
+      void fetch(imagePath,{
         cache:'no-store',
         headers:{'X-ACHEWIW-Docwork-Token':draft.token}
       }).then(response=>{
@@ -825,6 +836,7 @@ function selectImage(index) {
   if (url) $('imagePreview').src=url;
   else $('imagePreview').removeAttribute('src');
   updateImageLivePreview();
+  window.ACHEWIWWorkbench?.selectionChanged(index);
   for(const figure of $('documentCanvas').querySelectorAll('.canvasFigure')) {
     figure.classList.toggle('selected',
       Number(figure.dataset.imageIndex)===index);
@@ -865,6 +877,9 @@ function clearPdf() {
 }
 function switchToPdf() {
   $('structurePane').hidden = true; $('pdfPane').hidden = false;
+  $('imageWorkbench').hidden=true;
+  $('openImageWorkbench').classList.remove('selected');
+  $('openImageWorkbench').setAttribute('aria-pressed','false');
   $('showStructure').classList.remove('selected');
   $('showStructure').setAttribute('aria-pressed','false');
 }
@@ -888,7 +903,9 @@ function reset() {
   resetUndoTimeline();
   for (const key of Object.keys(imageEdits)) delete imageEdits[key];
   for (const key of Object.keys(imageMoves)) delete imageMoves[key];
+  for (const key of Object.keys(imageAssets)) delete imageAssets[key];
   for (const key of Object.keys(paragraphAlignments)) delete paragraphAlignments[key];
+  window.ACHEWIWWorkbench?.reset();
   revokeImageThumbnails();
   $('imageList').replaceChildren();
   $('imageControls').hidden=true;
@@ -914,7 +931,7 @@ function changeCount() {
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements),
        Object.keys(paragraphAlignments))).size
-     + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+     + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves),Object.keys(imageAssets))).size)
        + ' ручных правок';
 }
 function rowKind(row) {
@@ -1034,6 +1051,7 @@ async function inspect(restoring=false) {
     $('warnings').textContent = (result.warnings || []).join(' ');
     if (result.type === 'pdf') $('warnings').textContent += ' Отдельные абзацы станут редактируемыми после преобразования в DOCX.';
     drawRows();renderImageGallery();renderDocumentCanvas();
+    window.ACHEWIWWorkbench?.refresh();
     tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
     if (!reusing) markDraftDirty();
   } catch (e) {
@@ -1052,12 +1070,18 @@ function optionsForExport() {
     confirm_text_loss:$('pdfLossConfirmed').checked,
     overrides, replacements,
     paragraph_alignments:{...paragraphAlignments},
-    image_edits:{...imageEdits}, image_moves:{...imageMoves}};
+    image_edits:{...imageEdits}, image_moves:{...imageMoves},
+    image_assets:{...imageAssets}};
 }
 function requestForm(target, options) {
   const form = new FormData(); form.append('file', source, source.name);
   form.append('target', target); form.append('options', JSON.stringify(options));
+  if (draft) form.append('draft_id',draft.id);
   return form;
+}
+function authenticatedExportHeaders() {
+  return draft && Object.keys(imageAssets).length>0 ?
+    {'X-ACHEWIW-Docwork-Token':draft.token} : {};
 }
 
 async function download(target) {
@@ -1067,7 +1091,9 @@ async function download(target) {
     const options = optionsForExport();
     const form = requestForm(target,options);
     tell('Готовим новый файл…');
-    const response = await fetch('/api/docwork/export', {method:'POST',body:form,cache:'no-store'});
+    const response = await fetch('/api/docwork/export', {
+      method:'POST',body:form,cache:'no-store',headers:authenticatedExportHeaders()
+    });
     if (!response.ok) {
       let error = 'HTTP '+response.status;
       try {error = (await response.json()).detail || error;} catch {}
@@ -1094,7 +1120,8 @@ async function buildPdfPreview() {
     if (report.type === 'pdf') blob = source;
     else {
       const response = await fetch('/api/docwork/export', {
-        method:'POST',body:requestForm('pdf',optionsForExport()),cache:'no-store'
+        method:'POST',body:requestForm('pdf',optionsForExport()),cache:'no-store',
+        headers:authenticatedExportHeaders()
       });
       if (!response.ok) {
         let detail = 'HTTP '+response.status;
@@ -1122,6 +1149,9 @@ $('paragraphFilter').addEventListener('change',()=>{rendered=80;drawRows();markD
 $('loadMoreParagraphs').addEventListener('click',()=>{rendered+=80;drawRows();markDraftDirty();});
 $('showStructure').addEventListener('click',()=>{
   $('pdfPane').hidden=true;$('structurePane').hidden=false;
+  $('imageWorkbench').hidden=true;
+  $('openImageWorkbench').classList.remove('selected');
+  $('openImageWorkbench').setAttribute('aria-pressed','false');
   $('showStructure').classList.add('selected');
   $('showStructure').setAttribute('aria-pressed','true');
 });
@@ -1302,6 +1332,21 @@ window.addEventListener('pagehide',()=>{
   }
 });
 window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);});
+window.ACHEWIWWorkbench?.connect({
+  current:()=>({draft,report,selected:selectedImage}),
+  selectPicture:index=>selectImage(index),
+  assetFor:index=>imageAssets[String(index)]||null,
+  applyAsset:(index,id)=>{
+    editWithUndo('replace-artwork:'+index,()=>{imageAssets[String(index)]=id;});
+    renderDocumentCanvas();renderImageGallery();
+    window.ACHEWIWWorkbench?.refresh();
+  },
+  restoreAsset:index=>{
+    editWithUndo('restore-artwork:'+index,()=>{delete imageAssets[String(index)];});
+    renderDocumentCanvas();renderImageGallery();
+    window.ACHEWIWWorkbench?.refresh();
+  }
+});
 draftControls();
 draftMessage('Выбранный документ ещё не сохранён на сервере.');
 void restoreDraft();
