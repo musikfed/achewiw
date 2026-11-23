@@ -46,10 +46,12 @@
        candidate.x+candidate.w>scope.width||
        candidate.y+candidate.h>scope.height)
       throw Error('Предложение выходит за границы рисунка');
-    if(['rectangle','ellipse','line','arrow'].includes(candidate.type) &&
-       (Math.abs(candidate.w)<2||Math.abs(candidate.h)<2 &&
-         !['line','arrow'].includes(candidate.type)))
+    if(['rectangle','ellipse'].includes(candidate.type) &&
+       (candidate.w<2||candidate.h<2))
       throw Error('Слишком маленькая фигура');
+    if(['line','arrow'].includes(candidate.type) &&
+       Math.hypot(candidate.w,candidate.h)<2)
+      throw Error('Слишком короткая линия');
     if(candidate.type==='text'&&(!candidate.text||candidate.text.trim()===''))
       throw Error('Пустую подпись нельзя принять');
     if(!kinds.has(candidate.type))throw Error('Неизвестная фигура');
