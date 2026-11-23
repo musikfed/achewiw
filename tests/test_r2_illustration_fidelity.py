@@ -100,9 +100,13 @@ def test_r2_pdf_portrait_illustration_and_long_caption_fit_together(tmp_path):
     art = _art(tmp_path, portrait=True,
                caption="Рисунок 8 — " + "Проверка читаемости подписи и привязки. " * 11)
     raw = manuscript_pdf(_project(16), illustrations=[art])
-    images, captions = _pdf_image_and_caption_pages(raw, art["caption"])
+    # Search the stable caption prefix: PyMuPDF search_for() cannot match
+    # a full caption that wraps across several PDF lines.
+    images, captions = _pdf_image_and_caption_pages(raw, "Рисунок 8")
     assert len(images) == 1 and len(captions) == 1
     assert images[0][0] == captions[0][0]
+    with fitz.open(stream=raw, filetype="pdf") as pdf:
+        assert "Проверка читаемости подписи" in pdf[images[0][0]].get_text()
 
 
 @pytest.mark.parametrize("which", ["docx", "pdf", "fb2", "epub"])
