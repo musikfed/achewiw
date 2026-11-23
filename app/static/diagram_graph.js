@@ -73,5 +73,22 @@
     return {...audit,edges,confirmedRelations:confirmed,
       reviewSummary:{confirmed,rejected,pending:edges.length-confirmed-rejected}};
   }
-  return {inspect,applyReviews};
+  function applyLabelReviews(audit,assignments){
+    if(!audit||!Array.isArray(audit.nodes)||!Array.isArray(audit.labels)||
+        !assignments||typeof assignments!=='object'||Array.isArray(assignments))
+      throw Error('Неверные назначения подписей');
+    const nodes=new Set(audit.nodes.map(node=>node.id));
+    let assigned=0;
+    const labels=audit.labels.map(label=>{
+      const target=Object.prototype.hasOwnProperty.call(assignments,label.id)
+        ?assignments[label.id]:null;
+      const valid=typeof target==='string'&&nodes.has(target);
+      if(valid)assigned++;
+      return {...label,nodeId:valid?target:null,
+        assignment:valid?'manual-confirmed':'not-reviewed'};
+    });
+    return {...audit,labels,confirmedLabels:assigned,
+      labelReviewSummary:{assigned,pending:labels.length-assigned}};
+  }
+  return {inspect,applyReviews,applyLabelReviews};
 });

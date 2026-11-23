@@ -481,10 +481,47 @@ function saveLinkDecisions(decisions){
     return false;
   }
 }
+const LABEL_REVIEW_PREFIX='achewiw:docwork:r37d:labels:';
+function labelReviewKey(){
+  const key=annotationKey();
+  return key?LABEL_REVIEW_PREFIX+key:null;
+}
+function labelSignature(){
+  return JSON.stringify(structuredShapes().map(({id,type,x,y,w,h,text})=>
+    ({id,type,x,y,w,h,text:text||''})));
+}
+function readLabelAssignments(){
+  const key=labelReviewKey();
+  if(!key)return {};
+  try{
+    const saved=JSON.parse(localStorage.getItem(key)||'null');
+    if(saved?.version!==1||saved.signature!==labelSignature()||
+       !saved.assignments||typeof saved.assignments!=='object')return {};
+    return saved.assignments;
+  }catch{return {};}
+}
+function saveLabelAssignments(assignments){
+  const key=labelReviewKey();
+  if(!key){
+    status('Для сохранения подписей открой исходный рисунок DOCX.',true);
+    return false;
+  }
+  try{
+    localStorage.setItem(key,JSON.stringify({
+      version:1,signature:labelSignature(),assignments
+    }));
+    return true;
+  }catch{
+    status('Не удалось сохранить назначения подписей в браузере.',true);
+    return false;
+  }
+}
 function auditGraph(){
   const checker=window.ACHEWIWDiagramGraph;
   if(!checker)throw Error('Модуль проверки геометрии не загружен');
-  return checker.applyReviews(checker.inspect(structuredShapes()),readLinkDecisions());
+  return checker.applyLabelReviews(
+    checker.applyReviews(checker.inspect(structuredShapes()),readLinkDecisions()),
+    readLabelAssignments());
 }
 function showLinkAudit(){
   const panel=$('wbGraphAudit');
@@ -534,6 +571,40 @@ function showLinkAudit(){
       list.append(item);
     }
     panel.append(list);
+    const labelHeading=document.createElement('strong');
+    labelHeading.textContent='R3.7D · Назначение подписей узлам';
+    panel.append(labelHeading);
+    const labelsList=document.createElement('ul');
+    for(const label of audit.labels){
+      const item=document.createElement('li');
+      const caption=document.createElement('span');
+      caption.textContent=label.id+' · «'+label.text+'» → ';
+      const select=document.createElement('select');
+      select.setAttribute('aria-label','Узел для надписи '+label.id);
+      const empty=document.createElement('option');
+      empty.value='';empty.textContent='Не назначено';
+      select.append(empty);
+      for(const node of audit.nodes){
+        const option=document.createElement('option');
+        option.value=node.id;
+        option.textContent=node.id+' ('+node.type+')';
+        select.append(option);
+      }
+      select.value=label.nodeId||'';
+      select.addEventListener('change',()=>{
+        const decisions=readLabelAssignments();
+        if(select.value)decisions[label.id]=select.value;
+        else delete decisions[label.id];
+        if(saveLabelAssignments(decisions))showLinkAudit();
+      });
+      item.append(caption,select);
+      labelsList.append(item);
+    }
+    panel.append(labelsList);
+    const count=document.createElement('p');
+    count.textContent='Ручных назначений: '+audit.labelReviewSummary.assigned+
+      ' · без назначения: '+audit.labelReviewSummary.pending+'.';
+    panel.append(count);
     const note=document.createElement('p');
     note.textContent='Решения сохраняются только в этом браузере для текущего черновика и геометрии. Экспортируй JSON для переноса. Исходный DOCX не меняется.';
     panel.append(note);panel.hidden=false;

@@ -67,3 +67,24 @@ test('отклонённая связь остаётся неподтвержд�
  assert.equal(reviewed.reviewSummary.rejected,1);
  assert.equal(reviewed.edges[0].confirmed,false);
 });
+
+test('подпись закрепляется за узлом только по ручному назначению',()=>{
+ const {applyLabelReviews}=require('../app/static/diagram_graph.js');
+ const report=inspect([rect('n1',0,0),{id:'label',type:'text',x:15,y:10,w:0,h:0,text:'Контроллер'}]);
+ const result=applyLabelReviews(report,{label:'n1'});
+ assert.equal(result.confirmedLabels,1);
+ assert.equal(result.labels[0].nodeId,'n1');
+ assert.equal(report.labels[0].assignment,'not-reviewed');
+});
+test('несуществующий узел не подтверждает подпись',()=>{
+ const {applyLabelReviews}=require('../app/static/diagram_graph.js');
+ const report=inspect([rect('n1',0,0),{id:'label',type:'text',x:15,y:10,w:0,h:0,text:'Контроллер'}]);
+ const result=applyLabelReviews(report,{label:'missing'});
+ assert.equal(result.confirmedLabels,0);
+ assert.equal(result.labels[0].nodeId,null);
+});
+test('очистка ручного назначения возвращает подпись без связи',()=>{
+ const {applyLabelReviews}=require('../app/static/diagram_graph.js');
+ const report=inspect([rect('n1',0,0),{id:'label',type:'text',x:15,y:10,w:0,h:0,text:'Контроллер'}]);
+ assert.equal(applyLabelReviews(report,{}).labelReviewSummary.pending,1);
+});
