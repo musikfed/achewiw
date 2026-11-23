@@ -59,9 +59,9 @@ def initialize(conn: sqlite3.Connection):
 def _validate_state(state: object) -> str:
     if not isinstance(state, dict):
         raise SessionError(422, "Состояние редактора должно быть объектом")
-    if not set(state).issubset({"settings", "overrides", "replacements", "editor", "ui"}):
+    if not set(state).issubset({"settings", "overrides", "replacements", "images", "editor", "ui"}):
         raise SessionError(422, "Неизвестный параметр сохранения редактора")
-    for field in ("settings", "overrides", "replacements", "editor", "ui"):
+    for field in ("settings", "overrides", "replacements", "images", "editor", "ui"):
         if field in state and not isinstance(state[field], dict):
             raise SessionError(422, "Некорректный раздел состояния: " + field)
     try:
