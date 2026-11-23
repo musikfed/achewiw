@@ -35,7 +35,7 @@ def ok(name, condition):
 
 
 def request(method, path, payload=None, ctype=None, token=None, close=False):
-    headers = {"Host": "192.168.0.100:7080"}
+    headers = {"Host": "127.0.0.1:7080"}
     if ctype:
         headers["Content-Type"] = ctype
     if token:
