@@ -261,3 +261,57 @@ def apply_image_layout(doc, changes: dict):
             # blip. Shared image parts elsewhere remain untouched.
             new_rid, _ = doc.part.get_or_add_image(_rounded_image(original, radius))
             shape._inline.xpath(".//a:blip")[0].set(qn("r:embed"), new_rid)
+
+
+def apply_image_replacements(doc, replacement_data: dict):
+    """Replace only selected embedded picture blips on a fresh output DOCX.
+
+    Existing text, table structure, captions and source byte content are not
+    rewritten. The uploaded bitmap is placed as a distinct image relation.
+    Display dimensions retain their width and derive height from the *new*
+    image aspect ratio (never stretch a square into a wide scheme).
+    """
+    if not replacement_data:
+        return
+    if not isinstance(replacement_data, dict) or len(replacement_data)>MAX_IMAGES:
+        raise IllustrationLayoutError("Неверная карта замен изображений")
+    selections=[]
+    for raw_index, raw in replacement_data.items():
+        if not isinstance(raw_index,str) or not raw_index.isdecimal():
+            raise IllustrationLayoutError("Неверный индекс заменяемого изображения")
+        index=int(raw_index)
+        if index>=len(doc.inline_shapes):
+            raise IllustrationLayoutError("Изображение для замены не найдено")
+        shape=doc.inline_shapes[index]
+        record, old=_picture_entry(doc,index,shape)
+        if shape.type!=WD_INLINE_SHAPE.PICTURE or old is None:
+            raise IllustrationLayoutError(
+                "Сложная фигура или ссылка: замена без изменения вёрстки невозможна"
+            )
+        if not isinstance(raw,bytes) or len(raw)>12*1024*1024:
+            raise IllustrationLayoutError("Неверные байты нового изображения")
+        try:
+            with Image.open(BytesIO(raw)) as image:
+                image.load()
+                if image.format!="PNG" or image.width*image.height>MAX_IMAGE_PIXELS:
+                    raise IllustrationLayoutError("Для замены нужен безопасный PNG")
+                w,h=image.size
+        except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
+            raise IllustrationLayoutError("Новый рисунок повреждён") from exc
+        selections.append((shape,raw,w,h))
+    for shape,raw,w,h in selections:
+        # Keep the requested width (possibly set by R3.1) and avoid distortion.
+        current_width=shape.width
+        section=doc.sections[0]
+        max_height=int(section.page_height-section.top_margin-section.bottom_margin-900000)
+        new_height=int(current_width*h/w)
+        if 0<max_height<new_height:
+            current_width=max(1,int(max_height*w/h))
+            new_height=max_height
+        shape.width=current_width
+        shape.height=max(1,new_height)
+        rid,_=doc.part.get_or_add_image(BytesIO(raw))
+        blips=shape._inline.xpath(".//a:blip")
+        if len(blips)!=1:
+            raise IllustrationLayoutError("Рисунок содержит несколько графических связей")
+        blips[0].set(qn("r:embed"),rid)
