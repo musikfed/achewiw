@@ -301,6 +301,12 @@ $('wbExternal').addEventListener('change',async()=>{
 });
 $('wbAutoOutline').addEventListener('click',async()=>{
   if(selected<0||operationBusy)return;
+  if(external){
+    status('Трассировка R3.5 пока берёт исходную картинку DOCX. '
+      +'Чтобы не перепутать её с загруженным файлом, операция остановлена. '
+      +'Внешнюю схему можно править здесь вручную или подготовить SVG отдельно.',true);
+    return;
+  }
   operationBusy=true;
   status('Трассировка схемы локально через Potrace. Мелкий текст может исказиться.');
   try{
