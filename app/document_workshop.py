@@ -23,6 +23,7 @@ from docx.shared import Cm, Pt, RGBColor
 from docwork_image_layout import (
     inventory_docx, apply_image_layout, IllustrationLayoutError
 )
+from docwork_image_moves import apply_image_moves
 
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_UNPACKED = 180 * 1024 * 1024
@@ -125,7 +126,10 @@ def preview_docx(data: bytes) -> dict:
             f"Найдено встроенных иллюстраций: {len(images)}. "
             "Для отдельных рисунков можно изменить размер, выравнивание и скругление."
         )
+    first_section = doc.sections[0]
+    usable = first_section.page_width - first_section.left_margin - first_section.right_margin
     return {"type": "docx", "paragraph_count": len(doc.paragraphs),
+            "text_width_cm": round(usable / 360000, 2),
             "tables": len(doc.tables), "sections": len(doc.sections), "kinds": kinds,
             "images": images, "paragraphs": rows, "warnings": warnings}
 
@@ -341,6 +345,7 @@ def transform_docx(data: bytes, options: dict) -> bytes:
             paragraph.style = doc.styles["Normal"]
     try:
         apply_image_layout(doc, options.get("image_edits", {}))
+        apply_image_moves(doc, options.get("image_moves", {}))
     except IllustrationLayoutError as exc:
         raise DocumentWorkshopError(str(exc)) from exc
     out = BytesIO()

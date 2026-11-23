@@ -4,6 +4,9 @@ const $ = id => document.getElementById(id);
 let source = null, report = null, selected = null, previewUrl = null, rendered = 80, processing = false;
 const overrides = Object.create(null), replacements = Object.create(null);
 const imageEdits = Object.create(null);
+const imageMoves = Object.create(null);
+let imageMoveCounter = 0;
+let canvasLimit = 120;
 let selectedImage = null;
 const imageThumbUrls = new Map();
 
@@ -35,13 +38,14 @@ function captureDraftState() {
   const settings = optionsForExport();
   delete settings.overrides; delete settings.replacements;
   delete settings.image_edits;
+  delete settings.image_moves;
   return {
     settings, overrides:{...overrides}, replacements:{...replacements},
-    images:{...imageEdits},
+    images:{...imageEdits}, moves:{...imageMoves},
     editor:{selected, text: selected === null ? '' : $('paragraphText').value,
             role: selected === null ? 'keep' : $('paragraphRole').value},
     ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered,
-        selectedImage}
+        selectedImage, canvasLimit}
   };
 }
 function scratchDraft() {
@@ -62,11 +66,15 @@ function draftMessage(text, error=false) {
 }
 function applyDraftState(state) {
   if (!state || !report) return;
-  for (const obj of [overrides,replacements,imageEdits])
+  for (const obj of [overrides,replacements,imageEdits,imageMoves])
     for (const key of Object.keys(obj)) delete obj[key];
   Object.assign(overrides,state.overrides || {});
   Object.assign(replacements,state.replacements || {});
   Object.assign(imageEdits,state.images || {});
+  Object.assign(imageMoves,state.moves || {});
+  imageMoveCounter=Math.max(0,...Object.values(imageMoves)
+    .map(x=>Number(x?.order)||0));
+  canvasLimit=Math.max(120,Math.min(3000,Number(state.ui?.canvasLimit)||120));
   for (const [key,id] of Object.entries(settingsIds)) {
     if (!Object.prototype.hasOwnProperty.call(state.settings||{},key)) continue;
     const element=$(id), value=state.settings[key];
@@ -83,9 +91,11 @@ function applyDraftState(state) {
   clearPdf();
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
-    + Object.keys(imageEdits).length)+' ручных правок';
+    + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+      +' ручных правок';
   selected=null; $('editPane').hidden=true; drawRows();
   renderImageGallery();
+  renderDocumentCanvas();
   const imageIndex = state.ui?.selectedImage;
   if (Number.isInteger(imageIndex)) selectImage(imageIndex);
   if (Number.isInteger(state.editor?.selected)) {
@@ -227,6 +237,244 @@ function revokeImageThumbnails() {
   imageThumbUrls.clear();
   $('imagePreview').removeAttribute('src');
 }
+
+/* R3.2: integrated document text and movable figure blocks.
+   This canvas represents document flow, not final pagination or float wrapping. */
+function canvasImageStyle(item) {
+  const pct=report?.text_width_cm ?
+    Math.round(100 * item.inline_width_cm / report.text_width_cm) : 70;
+  const original={width_percent:Math.max(25,Math.min(100,pct)),
+                  align:'center',corner_percent:0};
+  return Object.assign(original,imageEdits[String(item.index)]||{});
+}
+function styleFigure(index, patch) {
+  const item=(report?.images||[]).find(x=>x.index===index);
+  if (!item?.editable) return;
+  const state={...canvasImageStyle(item),...patch};
+  state.width_percent=Math.max(25,Math.min(100,Math.round(state.width_percent)));
+  imageEdits[String(index)]=state;
+  selectedImage=index;
+  changeCount();markDraftDirty();
+  renderDocumentCanvas();
+  selectImage(index);
+}
+function moveFigureTo(index, beforeParagraph) {
+  const item=(report?.images||[]).find(x=>x.index===index);
+  const target=(report?.paragraphs||[]).find(x=>x.index===beforeParagraph);
+  if (!item?.editable || !Number.isInteger(beforeParagraph) ||
+      beforeParagraph<0 || beforeParagraph>report.paragraph_count) return;
+  if (beforeParagraph!==report.paragraph_count &&
+      (!target || !String(target.text||'').trim())) return;
+  if (beforeParagraph===item.paragraph_index ||
+      beforeParagraph===item.caption_index ||
+      (report.images||[]).some(x=>x.paragraph_index===beforeParagraph)) return;
+  const captionIndices=new Set((report.images||[])
+      .filter(x=>x.editable&&Number.isInteger(x.caption_index))
+      .map(x=>x.caption_index));
+  if (captionIndices.has(beforeParagraph)) return;
+  imageMoveCounter=Math.min(1000000,imageMoveCounter+1);
+  imageMoves[String(index)]={
+    before_paragraph:beforeParagraph, order:imageMoveCounter
+  };
+  selectedImage=index;
+  changeCount();markDraftDirty();
+  renderDocumentCanvas();selectImage(index);
+  $('canvasStatus').textContent='Рисунок №'+(index+1)+
+    ' перенесён. Положение сохранится в DOCX/PDF после экспорта.';
+}
+function canvasDropZone(before) {
+  const zone=document.createElement('button');
+  zone.type='button';zone.className='canvasDrop';
+  zone.dataset.beforeParagraph=String(before);
+  zone.title='Поставить выбранный рисунок перед абзацем №'+(before+1);
+  zone.setAttribute('aria-label',zone.title);
+  zone.addEventListener('dragover',event=>{
+    const formats=Array.from(event.dataTransfer?.types||[]);
+    if (!formats.includes('application/x-achewiw-image')) return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    zone.classList.add('dragOver');
+  });
+  zone.addEventListener('dragleave',()=>zone.classList.remove('dragOver'));
+  zone.addEventListener('drop',event=>{
+    event.preventDefault();zone.classList.remove('dragOver');
+    const raw=event.dataTransfer?.getData('application/x-achewiw-image');
+    if (!/^\d+$/.test(raw||'')) return;
+    moveFigureTo(Number(raw),before);
+  });
+  zone.addEventListener('click',()=>{
+    if(selectedImage!==null) moveFigureTo(selectedImage,before);
+  });
+  zone.addEventListener('focus',()=>zone.classList.add('keyboardDrop'));
+  zone.addEventListener('blur',()=>zone.classList.remove('keyboardDrop'));
+  return zone;
+}
+function canvasFigure(item) {
+  const key=String(item.index), style=canvasImageStyle(item);
+  const fig=document.createElement('figure');
+  fig.className='canvasFigure';
+  fig.dataset.imageIndex=key;fig.draggable=true;
+  if(selectedImage===item.index) fig.classList.add('selected');
+  fig.title='Перетаскивай рисунок между абзацами вместе с подписью';
+  fig.addEventListener('dragstart',event=>{
+    event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('application/x-achewiw-image',key);
+    selectedImage=item.index;
+  });
+  fig.addEventListener('click',event=>{
+    if(event.target.closest('button'))return;
+    selectImage(item.index);
+  });
+  const tools=document.createElement('div');tools.className='figureTools';
+  const title=document.createElement('span');title.textContent='⠿ Рисунок №'+(item.index+1)+' · перетащи за рамку';
+  tools.append(title);
+  const actions=[
+    ['◀','Выровнять слева',()=>styleFigure(item.index,{align:'left'})],
+    ['↔','По центру',()=>styleFigure(item.index,{align:'center'})],
+    ['▶','Выровнять справа',()=>styleFigure(item.index,{align:'right'})],
+    ['−','Уменьшить',()=>styleFigure(item.index,{
+      width_percent:Math.max(25,style.width_percent-10)})],
+    ['+','Увеличить',()=>styleFigure(item.index,{
+      width_percent:Math.min(100,style.width_percent+10)})],
+    ['◔','Скруглить',()=>styleFigure(item.index,{
+      corner_percent:style.corner_percent===0?16:0})]
+  ];
+  for(const [label,titleText,handler] of actions) {
+    const button=document.createElement('button');
+    button.type='button';button.textContent=label;button.title=titleText;
+    button.setAttribute('aria-label',titleText);
+    button.addEventListener('click',handler);
+    tools.append(button);
+  }
+  if(imageMoves[key]) {
+    const revert=document.createElement('button');
+    revert.type='button';revert.textContent='Вернуть место';
+    revert.addEventListener('click',()=>{
+      delete imageMoves[key];changeCount();markDraftDirty();
+      renderDocumentCanvas();
+      $('canvasStatus').textContent='Рисунок вернулся на исходное место.';
+    });
+    tools.append(revert);
+  }
+  fig.append(tools);
+  const line=document.createElement('div');line.className='canvasImageLine';
+  line.style.justifyContent=
+    style.align==='left'?'flex-start':style.align==='right'?'flex-end':'center';
+  const img=document.createElement('img');
+  img.className='canvasFigurePhoto';img.dataset.imageIndex=key;
+  img.alt='Рисунок №'+(item.index+1);
+  img.style.width=style.width_percent+'%';
+  img.style.borderRadius=style.corner_percent+'%';
+  const thumbnail=imageThumbUrls.get(item.index);
+  if(thumbnail)img.src=thumbnail;
+  line.append(img);fig.append(line);
+  if (Number.isInteger(item.caption_index)) {
+    const caption=report.paragraphs?.find(x=>x.index===item.caption_index);
+    if(caption) {
+      const label=document.createElement('figcaption');
+      if (caption.editable) {
+        const captionInput=document.createElement('textarea');
+        captionInput.className='canvasCaptionText';
+        captionInput.setAttribute('aria-label','Подпись к рисунку №'+(item.index+1));
+        captionInput.rows=2;
+        captionInput.spellcheck=false;
+        captionInput.value=replacements[String(caption.index)]??caption.text;
+        captionInput.addEventListener('input',()=>{
+          if(captionInput.value.length>5000)captionInput.value=captionInput.value.slice(0,5000);
+          if(captionInput.value===caption.text)delete replacements[String(caption.index)];
+          else replacements[String(caption.index)]=captionInput.value;
+          changeCount();markDraftDirty();
+        });
+        captionInput.addEventListener('dragstart',event=>event.stopPropagation());
+        label.append(captionInput);
+      } else {
+        label.textContent=replacements[String(caption.index)]??caption.text;
+      }
+      fig.append(label);
+    }
+  }
+  return fig;
+}
+function canvasText(row) {
+  const content=replacements[String(row.index)]??row.text;
+  if(!row.editable) {
+    const p=document.createElement('p');
+    p.className='canvasText';p.textContent=content;
+    p.title='Сложный абзац: редактирование ограничено для защиты рисунков и полей';
+    return p;
+  }
+  const area=document.createElement('textarea');
+  area.className='canvasText';
+  const kind=rowKind(row);
+  if(kind==='heading1')area.classList.add('canvasHeading');
+  if(kind==='heading2')area.classList.add('canvasSubheading');
+  area.dataset.paragraphIndex=String(row.index);
+  area.spellcheck=false;area.value=content;area.rows=Math.max(2,Math.min(8,
+    Math.ceil(content.length/110)+content.split('\n').length));
+  area.setAttribute('aria-label','Абзац №'+(row.index+1)+' — редактирование на листе');
+  area.addEventListener('input',()=>{
+    if(area.value.length>5000) {
+      area.value=area.value.slice(0,5000);
+      tell('Размер редактируемого абзаца ограничен 5000 символами',true);
+    }
+    if(area.value===row.text) delete replacements[String(row.index)];
+    else replacements[String(row.index)]=area.value;
+    if(selected===row.index)$('paragraphText').value=area.value;
+    changeCount();markDraftDirty();
+  });
+  return area;
+}
+function renderDocumentCanvas() {
+  const canvas=$('documentCanvas');canvas.replaceChildren();
+  $('documentEditor').hidden=report?.type!=='docx';
+  if(report?.type!=='docx')return;
+  const captions=new Set((report.images||[])
+    .filter(item=>item.editable&&Number.isInteger(item.caption_index))
+    .map(item=>item.caption_index));
+  const rows=(report.paragraphs||[])
+    .filter(row=>!captions.has(row.index)&&String(row.text||'').trim())
+    .sort((a,b)=>a.index-b.index);
+  const images=(report.images||[])
+    .filter(item=>item.editable&&Number.isInteger(item.paragraph_index));
+  const anchors=new Map();
+  for(const image of images){
+    const move=imageMoves[String(image.index)];
+    const next=rows.find(row=>row.index>image.paragraph_index);
+    const anchor=move?.before_paragraph??(next?.index??report.paragraph_count);
+    if(!anchors.has(anchor))anchors.set(anchor,[]);
+    anchors.get(anchor).push(image);
+  }
+  for(const items of anchors.values()){
+    items.sort((a,b)=>{
+      const left=imageMoves[String(a.index)],right=imageMoves[String(b.index)];
+      if(!!left!==!!right)return left?1:-1;
+      return (left?.order??a.paragraph_index)-(right?.order??b.paragraph_index);
+    });
+  }
+  const limit=Math.min(rows.length,canvasLimit);
+  function appendBefore(position) {
+    canvas.append(canvasDropZone(position));
+    for(const item of anchors.get(position)||[])canvas.append(canvasFigure(item));
+  }
+  for(let i=0;i<limit;i++){
+    const row=rows[i];
+    appendBefore(row.index);
+    canvas.append(canvasText(row));
+  }
+  const lastAnchor=limit<rows.length?rows[limit].index:report.paragraph_count;
+  appendBefore(lastAnchor);
+  const hiddenCount=Math.max(0,rows.length-limit);
+  $('canvasMore').hidden=hiddenCount===0;
+  $('canvasMore').textContent=hiddenCount?
+    '↓ Показать ещё абзацы · '+hiddenCount+' скрыто':'';
+  $('canvasStatus').textContent='Редактируй текст прямо на листе. Рисунки перетаскивай '
+    +'между абзацами (или выбери рисунок и нажми на полоску вставки). '
+    +'Показано абзацев: '+limit+' из '+rows.length+'.';
+}
+$('canvasMore').addEventListener('click',()=>{
+  canvasLimit=Math.min(3000,canvasLimit+120);
+  renderDocumentCanvas();markDraftDirty();
+});
+
 function renderImageGallery() {
   revokeImageThumbnails();
   const list=$('imageList');
@@ -278,6 +526,8 @@ function renderImageGallery() {
         imageThumbUrls.set(item.index,url);
         thumb.src=url;
         if (selectedImage===item.index) $('imagePreview').src=url;
+        for(const pic of $('documentCanvas').querySelectorAll(
+            '.canvasFigurePhoto[data-image-index="'+item.index+'"]')) pic.src=url;
       }).catch(()=>{
         desc.textContent='Миниатюра недоступна';
       });
@@ -306,6 +556,10 @@ function selectImage(index) {
   if (url) $('imagePreview').src=url;
   else $('imagePreview').removeAttribute('src');
   updateImageLivePreview();
+  for(const figure of $('documentCanvas').querySelectorAll('.canvasFigure')) {
+    figure.classList.toggle('selected',
+      Number(figure.dataset.imageIndex)===index);
+  }
 }
 function updateImageLivePreview() {
   if (selectedImage===null) return;
@@ -354,12 +608,15 @@ function reset() {
   $('pdfModeControls').hidden = true;
   $('pdfTextOnly').checked = false;
   $('pdfLossConfirmed').checked = false;
-  selectedImage=null;
+  selectedImage=null;canvasLimit=120;imageMoveCounter=0;
   for (const key of Object.keys(imageEdits)) delete imageEdits[key];
+  for (const key of Object.keys(imageMoves)) delete imageMoves[key];
   revokeImageThumbnails();
   $('imageList').replaceChildren();
   $('imageControls').hidden=true;
   $('imageListStatus').textContent='После проверки DOCX здесь появятся рисунки.';
+  $('documentCanvas').replaceChildren();
+  $('documentEditor').hidden=true;
   $('changeCounter').textContent = '0 правок'; busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
@@ -377,7 +634,8 @@ function changeCount() {
   clearPdf();
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
-     + Object.keys(imageEdits).length) + ' ручных правок';
+     + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+       + ' ручных правок';
 }
 function rowKind(row) {
   return overrides[row.index] && overrides[row.index] !== 'keep' ? overrides[row.index] : row.kind;
@@ -489,7 +747,7 @@ async function inspect(restoring=false) {
       result.pages+' стр. · символов: '+result.characters;
     $('warnings').textContent = (result.warnings || []).join(' ');
     if (result.type === 'pdf') $('warnings').textContent += ' Отдельные абзацы станут редактируемыми после преобразования в DOCX.';
-    drawRows();renderImageGallery();
+    drawRows();renderImageGallery();renderDocumentCanvas();
     tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
     if (!reusing) markDraftDirty();
   } catch (e) {
@@ -506,7 +764,8 @@ function optionsForExport() {
     chapter_size:$('chapterSize').value, subchapter_size:$('subchapterSize').value,
     pdf_mode:$('pdfTextOnly').checked ? 'text_only' : 'preserve',
     confirm_text_loss:$('pdfLossConfirmed').checked,
-    overrides, replacements, image_edits:{...imageEdits}};
+    overrides, replacements, image_edits:{...imageEdits},
+    image_moves:{...imageMoves}};
 }
 function requestForm(target, options) {
   const form = new FormData(); form.append('file', source, source.name);
@@ -610,7 +869,7 @@ $('applyImageEdit').addEventListener('click',()=>{
     align:$('imageAlign').value,
     corner_percent:Number($('imageCorners').value)
   };
-  changeCount();markDraftDirty();
+  changeCount();markDraftDirty();renderDocumentCanvas();
   const item=$('imageList').querySelector('[data-image-index="'+selectedImage+'"] small');
   if (item) item.textContent='Оформлен · '+$('imageWidth').value+'% · '+$('imageAlign').value;
   tell('Рисунок №'+(selectedImage+1)+' будет оформлен в новой копии документа.');
@@ -620,7 +879,7 @@ $('resetImageEdit').addEventListener('click',()=>{
   delete imageEdits[String(selectedImage)];
   const index=selectedImage;
   selectImage(index);
-  changeCount();markDraftDirty();
+  changeCount();markDraftDirty();renderDocumentCanvas();
   tell('Оформление рисунка сброшено к исходному.');
 });
 $('outputName').addEventListener('input',markDraftDirty);

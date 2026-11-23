@@ -75,8 +75,25 @@ def _picture_entry(doc, index: int, shape):
         and not "".join(paragraph.itertext()).strip()
         and picture_count == 1
     )
+    top_paragraphs = doc.paragraphs
+    paragraph_index = next(
+        (i for i, p in enumerate(top_paragraphs) if p._p == paragraph), None
+    ) if paragraph is not None else None
+    caption_index = None
+    if editable and paragraph_index is not None:
+        following = paragraph.getnext()
+        if following is not None and following.tag == qn("w:p"):
+            for i, p in enumerate(top_paragraphs):
+                if p._p == following:
+                    if (p.style and p.style.name.lower() in ("caption", "подпись")) or (
+                        p.text.strip().lower().startswith(("рисунок ", "рис. ", "figure ", "fig. "))
+                    ):
+                        caption_index = i
+                    break
     return {
         "index": index, "editable": editable,
+        "paragraph_index": paragraph_index,
+        "caption_index": caption_index,
         "reason": "" if editable else
                   "Текст, несколько объектов, таблица или сложная фигура: оставлено без изменений",
         "width_px": width, "height_px": height,

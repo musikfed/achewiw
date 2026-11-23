@@ -39,3 +39,47 @@
 @media(max-width:520px){.imageStyleGrid{grid-template-columns:1fr}.imageList{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .control .imageControls input[type=range]{appearance:auto;padding:0;border:0;background:transparent;box-shadow:none;min-height:26px}
+
+/* R3.2: one document surface contains editable text and draggable inline figures. */
+.documentEditor[hidden]{display:none!important}
+.documentEditor{margin:10px 0 22px}
+.editorBar{display:flex;flex-direction:column;gap:5px;margin:6px 0 12px;color:#335843}
+.editorBar strong{font:600 14px Georgia,serif}.editorBar span{font-size:12px;color:#648273}
+.documentCanvas{background:#fff;max-width:760px;margin:0 auto;border:1px solid #dee6dd;
+ border-radius:9px;padding:clamp(16px,4vw,40px);box-shadow:0 15px 34px #172d2215;
+ min-height:240px;font:15px/1.65 "Liberation Serif",Georgia,serif}
+.canvasText{width:100%;margin:5px 0;padding:5px 7px;border:1px solid transparent;border-radius:5px;
+ background:transparent;color:#26372d;resize:vertical;min-height:45px;font:inherit;overflow-wrap:anywhere}
+.canvasText:focus{outline:2px solid #94bba0;background:#f4faf5;border-color:#438a5d}
+.canvasText[disabled]{opacity:.8;cursor:not-allowed;background:#fafbf9}
+.canvasText.canvasHeading{font:bold 23px/1.45 Georgia,serif;margin-top:22px}
+.canvasText.canvasSubheading{font:bold 17px/1.45 Georgia,serif;margin-top:14px}
+.canvasFigure{border:1px solid #d8e6d9;border-radius:10px;margin:12px 0;padding:10px;
+ background:#f9fcf9;cursor:grab;position:relative}
+.canvasFigure[draggable=true]:active{cursor:grabbing}
+.canvasFigure.selected{border-color:#24734b;box-shadow:0 0 0 2px #bde1c7}
+.canvasFigure img{display:block;max-width:100%;height:auto;margin:0;user-select:none;pointer-events:none}
+.canvasFigure figcaption{font:12px/1.5 Georgia,serif;color:#617a66;text-align:center;margin-top:7px}
+.canvasFigure .figureTools{font:12px system-ui,sans-serif;display:flex;justify-content:space-between;
+ flex-wrap:wrap;gap:7px;margin-bottom:8px;align-items:center}
+.canvasFigure .figureTools button{font-size:11px;padding:5px 9px}
+.canvasFigure .figureTools span{font-weight:650;color:#356a47}
+.canvasImageLine{display:flex;width:100%;min-height:36px}
+.canvasImageLine img{align-self:flex-start}
+.canvasDrop{display:flex;width:100%;min-height:13px;height:13px;border:1px dashed transparent;
+ border-radius:6px;transition:background .15s,border-color .15s;align-items:center;justify-content:center;
+ font:11px system-ui,sans-serif;color:transparent;cursor:copy}
+.canvasDrop.dragOver,.canvasDrop:focus-visible{min-height:28px;height:28px;border-color:#2b8459;background:#dcf5e5;color:#1a6840;outline:none}
+.canvasDrop::before{content:"Перенести рисунок сюда";opacity:0}
+.canvasDrop.dragOver::before,.canvasDrop:focus-visible::before{opacity:1}
+.canvasDrop.keyboardDrop{color:#1a6840;background:#f1faf4;border-color:#80b696;height:25px}
+.canvasDrop.keyboardDrop::before{opacity:1}
+#canvasMore{width:100%;margin:12px 0;border-style:dashed}
+.structureDetails{margin:18px 0;border-top:1px solid #e1e8df;padding:14px 0}
+.structureDetails>summary{cursor:pointer;font:650 13px system-ui,sans-serif;color:#315942;margin-bottom:15px}
+@media(max-width:600px){.documentCanvas{padding:12px}.canvasFigure{padding:7px}.canvasText{font-size:14px}}
+
+.canvasFigure .canvasCaptionText{font:12px/1.5 Georgia,serif;color:#526d5a;
+ text-align:center;margin:2px auto 0;padding:5px 8px;width:100%;min-height:38px;
+ border:1px solid transparent;border-radius:6px;resize:vertical;background:transparent}
+.canvasFigure .canvasCaptionText:focus{outline:2px solid #8fbe9b;border-color:#4b8f60;background:#fff}
