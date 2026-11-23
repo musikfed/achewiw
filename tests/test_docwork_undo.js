@@ -32,6 +32,8 @@ function changeCount(){}
 function markDraftDirty(){}
 function drawRows(){}
 function renderDocumentCanvas(){}
+function renderImageGallery(){}
+const window={ACHEWIWWorkbench:null};
 `;
 const checks=`
   editWithUndo('type:1',()=>{replacements['1']='Пр';},true);
