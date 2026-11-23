@@ -378,7 +378,7 @@ async function inspect(restoring=false) {
     report = null; $('warnings').textContent = 'Ошибка проверки: '+e.message; tell(e.message, true);
   } finally {busy(false);}
 }
-$('inspect').addEventListener('click', inspect);
+$('inspect').addEventListener('click', () => { void inspect(false); });
 function optionsForExport() {
   return {preset:$('preset').value,output_name:$('outputName').value,
     auto_headings:$('autoHeadings').checked, clear_highlights:$('clearHighlights').checked,
