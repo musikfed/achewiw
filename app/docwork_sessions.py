@@ -59,9 +59,9 @@ def initialize(conn: sqlite3.Connection):
 def _validate_state(state: object) -> str:
     if not isinstance(state, dict):
         raise SessionError(422, "Состояние редактора должно быть объектом")
-    if not set(state).issubset({"settings", "overrides", "replacements", "alignments", "images", "moves", "editor", "ui"}):
+    if not set(state).issubset({"settings", "overrides", "replacements", "alignments", "images", "moves", "artwork", "editor", "ui"}):
         raise SessionError(422, "Неизвестный параметр сохранения редактора")
-    for field in ("settings", "overrides", "replacements", "alignments", "images", "moves", "editor", "ui"):
+    for field in ("settings", "overrides", "replacements", "alignments", "images", "moves", "artwork", "editor", "ui"):
         if field in state and not isinstance(state[field], dict):
             raise SessionError(422, "Некорректный раздел состояния: " + field)
     try:
@@ -198,4 +198,7 @@ def remove(conn, session_id: str, token: str, confirmed: bool):
         conn.execute("BEGIN IMMEDIATE")
         _require(conn, session_id, token)
         conn.execute("DELETE FROM docwork_draft_revisions WHERE draft_id=?", (session_id,))
+        # Immutable replacement artworks are deleted only with confirmed draft closure.
+        from docwork_assets import remove_for_draft
+        remove_for_draft(conn, session_id)
         conn.execute("DELETE FROM docwork_drafts WHERE id=?", (session_id,))
