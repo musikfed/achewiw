@@ -209,9 +209,11 @@ async function createProject(kind){
 }
 function clearDeletedProjectBrowserState(id){
  clearTimeout(draftSaveTimer);draftSaveTimer=null;
- const explicit=['achewiw.activeProjectId',uiKey('manuscriptDraft',id),uiKey('tab',id),uiKey('scroll',id)];
+ const explicit=[uiKey('manuscriptDraft',id),uiKey('tab',id),uiKey('scroll',id)];
  for(const store of [sessionStorage,localStorage]){
    for(const key of explicit)try{store.removeItem(key)}catch{}
+   if(safeGet(store,'achewiw.activeProjectId')===id)
+     try{store.removeItem('achewiw.activeProjectId')}catch{}
    // Only project-scoped keys. Do not touch other books or ComfyUI state.
    const scoped=[];
    try{
