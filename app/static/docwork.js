@@ -4,6 +4,9 @@ const $ = id => document.getElementById(id);
 let source = null, report = null, selected = null, previewUrl = null, rendered = 80, processing = false;
 const overrides = Object.create(null), replacements = Object.create(null);
 const imageEdits = Object.create(null);
+const imageMoves = Object.create(null);
+let imageMoveCounter = 0;
+let canvasLimit = 120;
 let selectedImage = null;
 const imageThumbUrls = new Map();
 
@@ -35,13 +38,14 @@ function captureDraftState() {
   const settings = optionsForExport();
   delete settings.overrides; delete settings.replacements;
   delete settings.image_edits;
+  delete settings.image_moves;
   return {
     settings, overrides:{...overrides}, replacements:{...replacements},
-    images:{...imageEdits},
+    images:{...imageEdits}, moves:{...imageMoves},
     editor:{selected, text: selected === null ? '' : $('paragraphText').value,
             role: selected === null ? 'keep' : $('paragraphRole').value},
     ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered,
-        selectedImage}
+        selectedImage, canvasLimit}
   };
 }
 function scratchDraft() {
@@ -62,11 +66,15 @@ function draftMessage(text, error=false) {
 }
 function applyDraftState(state) {
   if (!state || !report) return;
-  for (const obj of [overrides,replacements,imageEdits])
+  for (const obj of [overrides,replacements,imageEdits,imageMoves])
     for (const key of Object.keys(obj)) delete obj[key];
   Object.assign(overrides,state.overrides || {});
   Object.assign(replacements,state.replacements || {});
   Object.assign(imageEdits,state.images || {});
+  Object.assign(imageMoves,state.moves || {});
+  imageMoveCounter=Math.max(0,...Object.values(imageMoves)
+    .map(x=>Number(x?.order)||0));
+  canvasLimit=Math.max(120,Math.min(3000,Number(state.ui?.canvasLimit)||120));
   for (const [key,id] of Object.entries(settingsIds)) {
     if (!Object.prototype.hasOwnProperty.call(state.settings||{},key)) continue;
     const element=$(id), value=state.settings[key];
@@ -83,9 +91,11 @@ function applyDraftState(state) {
   clearPdf();
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
-    + Object.keys(imageEdits).length)+' ручных правок';
+    + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+      +' ручных правок';
   selected=null; $('editPane').hidden=true; drawRows();
   renderImageGallery();
+  renderDocumentCanvas();
   const imageIndex = state.ui?.selectedImage;
   if (Number.isInteger(imageIndex)) selectImage(imageIndex);
   if (Number.isInteger(state.editor?.selected)) {
@@ -354,12 +364,15 @@ function reset() {
   $('pdfModeControls').hidden = true;
   $('pdfTextOnly').checked = false;
   $('pdfLossConfirmed').checked = false;
-  selectedImage=null;
+  selectedImage=null;canvasLimit=120;imageMoveCounter=0;
   for (const key of Object.keys(imageEdits)) delete imageEdits[key];
+  for (const key of Object.keys(imageMoves)) delete imageMoves[key];
   revokeImageThumbnails();
   $('imageList').replaceChildren();
   $('imageControls').hidden=true;
   $('imageListStatus').textContent='После проверки DOCX здесь появятся рисунки.';
+  $('documentCanvas').replaceChildren();
+  $('documentEditor').hidden=true;
   $('changeCounter').textContent = '0 правок'; busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
@@ -377,7 +390,8 @@ function changeCount() {
   clearPdf();
   $('changeCounter').textContent =
     (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
-     + Object.keys(imageEdits).length) + ' ручных правок';
+     + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
+       + ' ручных правок';
 }
 function rowKind(row) {
   return overrides[row.index] && overrides[row.index] !== 'keep' ? overrides[row.index] : row.kind;
@@ -489,7 +503,7 @@ async function inspect(restoring=false) {
       result.pages+' стр. · символов: '+result.characters;
     $('warnings').textContent = (result.warnings || []).join(' ');
     if (result.type === 'pdf') $('warnings').textContent += ' Отдельные абзацы станут редактируемыми после преобразования в DOCX.';
-    drawRows();renderImageGallery();
+    drawRows();renderImageGallery();renderDocumentCanvas();
     tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
     if (!reusing) markDraftDirty();
   } catch (e) {
@@ -506,7 +520,8 @@ function optionsForExport() {
     chapter_size:$('chapterSize').value, subchapter_size:$('subchapterSize').value,
     pdf_mode:$('pdfTextOnly').checked ? 'text_only' : 'preserve',
     confirm_text_loss:$('pdfLossConfirmed').checked,
-    overrides, replacements, image_edits:{...imageEdits}};
+    overrides, replacements, image_edits:{...imageEdits},
+    image_moves:{...imageMoves}};
 }
 function requestForm(target, options) {
   const form = new FormData(); form.append('file', source, source.name);
@@ -610,7 +625,7 @@ $('applyImageEdit').addEventListener('click',()=>{
     align:$('imageAlign').value,
     corner_percent:Number($('imageCorners').value)
   };
-  changeCount();markDraftDirty();
+  changeCount();markDraftDirty();renderDocumentCanvas();
   const item=$('imageList').querySelector('[data-image-index="'+selectedImage+'"] small');
   if (item) item.textContent='Оформлен · '+$('imageWidth').value+'% · '+$('imageAlign').value;
   tell('Рисунок №'+(selectedImage+1)+' будет оформлен в новой копии документа.');
@@ -620,7 +635,7 @@ $('resetImageEdit').addEventListener('click',()=>{
   delete imageEdits[String(selectedImage)];
   const index=selectedImage;
   selectImage(index);
-  changeCount();markDraftDirty();
+  changeCount();markDraftDirty();renderDocumentCanvas();
   tell('Оформление рисунка сброшено к исходному.');
 });
 $('outputName').addEventListener('input',markDraftDirty);
