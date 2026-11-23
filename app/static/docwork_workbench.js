@@ -33,6 +33,8 @@ function changeButtons(){
   $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbImportGraph').disabled=!exportScope()||operationBusy;
   $('wbVisionFile').disabled=!exportScope()||operationBusy;
+  $('wbVisionPreflight').disabled=!exportScope()||operationBusy;
+  $('wbVisionAnalyze').disabled=!exportScope()||exportScope()?.baseAsset!=='original'||operationBusy||!$('wbVisionModel').value;
   $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
@@ -647,6 +649,68 @@ $('wbExportGraph').addEventListener('click',()=>{
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
 });
 
+$('wbVisionPreflight').addEventListener('click',async()=>{
+  const scope=exportScope();
+  if(!scope)return status('Сначала выбери исходный рисунок DOCX.',true);
+  const draft=host.current().draft;
+  const button=$('wbVisionPreflight'),modelSelect=$('wbVisionModel');
+  button.disabled=true;
+  modelSelect.replaceChildren(new Option('Проверяем Ollama…',''));
+  modelSelect.disabled=true;
+  status('Проверяем установленные модели и аренду GPU; загрузки модели пока нет.');
+  try{
+    const response=await fetch('/api/docwork/drafts/'+encodeURIComponent(draft.id)+
+      '/vision/preflight',{
+        headers:{'X-ACHEWIW-Docwork-Token':draft.token},cache:'no-store'
+      });
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const result=await response.json();
+    if(JSON.stringify(exportScope())!==JSON.stringify(scope))return;
+    modelSelect.replaceChildren(new Option('Выбери модель',''));
+    if(Array.isArray(result.models))for(const name of result.models){
+      if(typeof name!=='string')continue;
+      modelSelect.add(new Option(name,name));
+    }
+    modelSelect.disabled=!result.ready;
+    status('Ollama Vision: '+result.reason+'. Доступные модели: '+
+      (result.models?.join(', ')||'нет')+
+      '. Запуск — отдельной кнопкой по твоему выбору.');
+  }catch(error){
+    modelSelect.replaceChildren(new Option('Проверка недоступна',''));
+    status('Проверка Ollama Vision: '+error.message,true);
+  }finally{changeButtons();}
+});
+$('wbVisionModel').addEventListener('change',changeButtons);
+$('wbVisionAnalyze').addEventListener('click',async()=>{
+  const scope=exportScope(),draft=host?.current()?.draft;
+  const model=$('wbVisionModel').value;
+  if(!scope||!draft||!model||operationBusy)return;
+  if(!confirm('Отправить текущий ОРИГИНАЛЬНЫЙ рисунок DOCX локальной модели '+
+     model+'? Может использовать GPU RTX 3060. Оригинал книги не изменится.'))return;
+  operationBusy=true;changeButtons();
+  status('Распознаём один рисунок локальной Ollama. Кандидаты потребуют ручного принятия.');
+  try{
+    const response=await fetch('/api/docwork/drafts/'+encodeURIComponent(draft.id)+
+      '/vision/analyze',{
+        method:'POST',cache:'no-store',
+        headers:{'Content-Type':'application/json','X-ACHEWIW-Docwork-Token':draft.token},
+        body:JSON.stringify({image_index:scope.pictureIndex,model,
+          width:scope.width,height:scope.height,base_asset:'original',consent:true})
+      });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(result.detail||('HTTP '+response.status));
+    if(JSON.stringify(exportScope())!==JSON.stringify(scope))
+      throw Error('За время распознавания выбран другой рисунок. Результат отброшен.');
+    const parser=window.ACHEWIWVisionProposals;
+    const verified=parser.validate(result,scope);
+    clearVisionReview();
+    visionReview={proposals:verified.proposals,scopeKey:JSON.stringify(scope),
+      decisions:Object.create(null)};
+    showVisionReview();
+    status('Получено '+verified.count+' НЕПРОВЕРЕННЫХ предложений. Принять можно по одному.');
+  }catch(error){status('Vision: '+error.message,true);}
+  finally{operationBusy=false;changeButtons();}
+});
 // Vision suggestions are never a drawing layer until individually accepted.
 let visionReview=null;
 function clearVisionReview(){

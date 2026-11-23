@@ -1,0 +1,42 @@
+name: ACHEWIW DOCWORK R3.8 checks
+on:
+  pull_request:
+    paths:
+      - "app/docwork_vision.py"
+      - "app/main.py"
+      - "app/static/docwork_workbench.js"
+      - "app/static/vision_proposals.js"
+      - "tests/diagram-graph.test.cjs"
+      - "tests/diagram-import.test.cjs"
+      - "tests/vision-proposals.test.cjs"
+      - "tests/test_docwork_vision.py"
+      - ".github/workflows/docwork-r38-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax validation
+        run: |
+          python -m py_compile app/main.py app/docwork_vision.py
+          node --check app/static/docwork_workbench.js
+          node --check app/static/vision_proposals.js
+      - name: R3.7 geometry and Vision candidate tests
+        run: |
+          node --test tests/diagram-graph.test.cjs tests/diagram-import.test.cjs tests/vision-proposals.test.cjs
+      - name: R3.8 offline vision parser tests
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p test_docwork_vision.py -v

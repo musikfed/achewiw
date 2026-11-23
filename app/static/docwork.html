@@ -243,6 +243,9 @@
           <button id="wbExportSvg" type="button" disabled>↓ SVG: редактируемые фигуры</button>
           <button id="wbExportGraph" type="button" disabled>↓ JSON: структура схемы</button>
           <label>Восстановить ручную схему из JSON <input id="wbImportGraph" type="file" accept=".json,application/json" disabled></label>
+          <button id="wbVisionPreflight" type="button" disabled>Проверить готовность Ollama Vision</button>
+          <label>Модель Vision<select id="wbVisionModel" disabled><option value="">Сначала проверь Ollama</option></select></label>
+          <button id="wbVisionAnalyze" type="button" disabled>Распознать рисунок · локальная Ollama</button>
           <label>Просмотреть предложения vision JSON <input id="wbVisionFile" type="file" accept=".json,application/json" disabled></label>
           <button id="wbAuditGraph" type="button" disabled>Проверить связи схемы</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>

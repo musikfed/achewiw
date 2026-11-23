@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from gpu_scheduling import init_gpu_leases, image_operation_active, reserve_gpu, release_gpu
+from docwork_vision import parse_vision_reply, vision_prompt
 from conveyor_core import initialize as init_production_conveyor
 from conveyor_api import install as install_production_conveyor
 from monitoring_core import load_snapshot, summarize_ollama_running
@@ -2579,6 +2580,156 @@ async def document_workshop_vectorize_picture(
         "Content-Security-Policy": "sandbox",
         "X-Content-Type-Options": "nosniff"
     })
+
+
+@api.get("/docwork/drafts/{draft_id}/vision/preflight")
+async def document_workshop_vision_preflight(draft_id: str, request: Request):
+    """Read-only readiness check. Never load a model or reserve GPU here."""
+    _docwork_session_call(
+        read_docwork_draft, draft_id, _docwork_token(request)
+    )
+    with db() as connection:
+        busy = bool(active_job(connection) or image_operation_active(connection))
+    if busy:
+        return {
+            "ready": False, "reason": "ACHEWIW выполняет GPU-задачу",
+            "models": [], "model_loaded": False, "inference_enabled": False,
+        }
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(4.0, connect=2.0), trust_env=False
+        ) as client:
+            tags = await client.get(OLLAMA_BASE_URL + "/api/tags")
+            tags.raise_for_status()
+            ps = await client.get(OLLAMA_BASE_URL + "/api/ps")
+            ps.raise_for_status()
+        available = [
+            item.get("name", "") for item in tags.json().get("models", [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        ]
+        loaded = [
+            item.get("name", "") for item in ps.json().get("models", [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        ]
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return {
+            "ready": False, "reason": "Не удалось прочитать Ollama",
+            "models": [], "model_loaded": False, "inference_enabled": False,
+        }
+    # A preference, NOT a guarantee of useful diagram OCR.
+    vision = sorted({name for name in available if any(
+        word in name.lower() for word in ("vision", "llava", "vl", "granite3.2-vision")
+    )})
+    return {
+        "ready": bool(vision), "reason": (
+            "Установлены возможные vision-модели; точность ещё не проверялась"
+            if vision else "Vision-модели не обнаружены в списке Ollama"
+        ), "models": vision, "loaded_models": sorted(set(vision) & set(loaded)),
+        "model_loaded": bool(set(vision) & set(loaded)),
+        "inference_enabled": False,
+    }
+
+
+class DocworkVisionAnalyzeRequest(BaseModel):
+    image_index: int = Field(ge=0, le=9999)
+    model: str = Field(min_length=1, max_length=150)
+    width: int = Field(ge=1, le=4096)
+    height: int = Field(ge=1, le=4096)
+    base_asset: Literal["original"] = "original"
+    consent: Literal[True]
+
+
+@api.post("/docwork/drafts/{draft_id}/vision/analyze")
+async def document_workshop_vision_analyze(
+    draft_id: str, body: DocworkVisionAnalyzeRequest, request: Request
+):
+    """One explicit local inference; return UNVERIFIED candidates only."""
+    # Never accept image bytes or an Ollama URL from the browser.
+    source, filename = _docwork_session_call(
+        original_docwork_draft, draft_id, _docwork_token(request)
+    )
+    if not filename.lower().endswith(".docx"):
+        raise HTTPException(422, "Распознавание поддерживает только рисунки DOCX")
+    token = uuid.uuid4().hex
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if active_job(connection) or not reserve_gpu(connection, token, "docwork_vision"):
+            raise HTTPException(409, "GPU ACHEWIW занята; повтори позже")
+    try:
+        # The same extraction path as the original PNG endpoint. No file writes.
+        try:
+            raw = docwork_original_picture(source, body.image_index)
+            png, actual_width, actual_height = normalize_docwork_asset(raw)
+        except (DocworkSessionError, ValueError, OSError, zipfile.BadZipFile) as exc:
+            raise HTTPException(422, "Нельзя прочитать исходный рисунок") from exc
+        if (actual_width, actual_height) != (body.width, body.height):
+            raise HTTPException(409, "Размер рисунка изменился — обнови страницу")
+        if len(png) > 3 * 1024 * 1024 or max(actual_width, actual_height) > 2048:
+            raise HTTPException(413, "Рисунок слишком большой для безопасного запуска Vision")
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=3, read=105, write=15, pool=4),
+                trust_env=False,
+            ) as client:
+                tags = await client.get(OLLAMA_BASE_URL + "/api/tags")
+                tags.raise_for_status()
+                available = {
+                    model.get("name") for model in tags.json().get("models", [])
+                    if isinstance(model, dict) and isinstance(model.get("name"), str)
+                }
+                if body.model not in available:
+                    raise HTTPException(422, "Модель не установлена в локальной Ollama")
+                if not any(part in body.model.lower() for part in
+                           ("vision", "llava", "vl")):
+                    raise HTTPException(422, "Выбери установленную vision-модель")
+                loaded = await client.get(OLLAMA_BASE_URL + "/api/ps")
+                loaded.raise_for_status()
+                occupied = [
+                    m.get("name") for m in loaded.json().get("models", [])
+                    if isinstance(m, dict) and isinstance(m.get("name"), str)
+                ]
+                if any(name != body.model for name in occupied):
+                    raise HTTPException(
+                        409, "В общей Ollama загружена другая модель. "
+                             "Не выгружаем чужую модель автоматически."
+                    )
+                # No model pulling, no unloading another model or changing host services.
+                import base64
+                result = await client.post(OLLAMA_BASE_URL + "/api/chat", json={
+                    "model": body.model, "stream": False, "keep_alive": "30s",
+                    "options": {"temperature": 0.0, "num_predict": 1400},
+                    "messages": [{"role": "user",
+                                  "content": vision_prompt(actual_width, actual_height),
+                                  "images": [base64.b64encode(png).decode("ascii")]}],
+                })
+                result.raise_for_status()
+                answer = result.json()
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            raise HTTPException(503, "Локальная Ollama Vision не ответила корректно") from None
+        try:
+            content = answer["message"]["content"]
+            proposals = parse_vision_reply(
+                content, width=actual_width, height=actual_height
+            )
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(
+                422, "Модель не вернула проверяемую структуру схемы"
+            ) from None
+        return {
+            "format": "achewiw-vision-proposal",
+            "version": 1, "status": "unverified", "autoApply": False,
+            "documentScope": {
+                "draftId": draft_id, "pictureIndex": body.image_index,
+                "baseAsset": "original",
+            },
+            "canvas": {"width": actual_width, "height": actual_height},
+            "proposals": proposals,
+            "model": body.model, "source": "local-ollama",
+            "notice": "Ни один объект не проверен человеком и не применён к DOCX",
+        }
+    finally:
+        with db() as connection:
+            release_gpu(connection, token)
 
 
 @api.get("/docwork/drafts/{draft_id}/images/{image_index}/original")
