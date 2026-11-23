@@ -78,6 +78,16 @@ function cornerPixelRadius(img,percent){
   const displayedHeight=width * item.height_px/item.width_px;
   img.style.borderRadius=(Math.min(width,displayedHeight)*controlledRadius(item,percent)/100).toFixed(2)+'px';
 }
+function toggleSidebar(){
+  const root=$('workshopColumns'),button=$('toggleSidebar');
+  const wide=!root.classList.contains('editor-wide');
+  root.classList.toggle('editor-wide',wide);
+  button.textContent=wide?'Показать настройки →':'Скрыть настройки ←';
+  button.setAttribute('aria-expanded',String(!wide));
+  try{sessionStorage.setItem('achewiw-docwork-sidebar-hidden',wide?'1':'0');}catch{}
+}
+$('toggleSidebar').addEventListener('click',toggleSidebar);
+try{if(sessionStorage.getItem('achewiw-docwork-sidebar-hidden')==='1')toggleSidebar();}catch{}
 const settingsIds = {
   preset:'preset', output_name:'outputName', auto_headings:'autoHeadings',
   clear_highlights:'clearHighlights', hide_proofing:'hideProofing', heading_bold:'headingBold',
