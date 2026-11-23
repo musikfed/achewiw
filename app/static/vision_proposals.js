@@ -36,5 +36,30 @@
     });
     return {proposals:clean,count:clean.length};
   }
-  return {validate};
+  function toManualShape(candidate,scope){
+    if(!candidate||!scope||!Number.isInteger(scope.width)||!Number.isInteger(scope.height))
+      throw Error('Недостаточно данных для ручного принятия');
+    const geometry=[candidate.x,candidate.y,candidate.w,candidate.h];
+    if(!geometry.every(v=>typeof v==='number'&&Number.isFinite(v)))
+      throw Error('Некорректная геометрия');
+    if(candidate.x<0||candidate.y<0||
+       candidate.x+candidate.w>scope.width||
+       candidate.y+candidate.h>scope.height)
+      throw Error('Предложение выходит за границы рисунка');
+    if(['rectangle','ellipse','line','arrow'].includes(candidate.type) &&
+       (Math.abs(candidate.w)<2||Math.abs(candidate.h)<2 &&
+         !['line','arrow'].includes(candidate.type)))
+      throw Error('Слишком маленькая фигура');
+    if(candidate.type==='text'&&(!candidate.text||candidate.text.trim()===''))
+      throw Error('Пустую подпись нельзя принять');
+    if(!kinds.has(candidate.type))throw Error('Неизвестная фигура');
+    const result={type:candidate.type,x:candidate.x,y:candidate.y,
+      w:candidate.w,h:candidate.h,color:'#176d47',stroke:3};
+    if(candidate.type==='text'){
+      result.text=candidate.text;
+      result.fontSize:26;
+    }
+    return result;
+  }
+  return {validate,toManualShape};
 });
