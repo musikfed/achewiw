@@ -369,7 +369,24 @@ function canvasFigure(item) {
     const caption=report.paragraphs?.find(x=>x.index===item.caption_index);
     if(caption) {
       const label=document.createElement('figcaption');
-      label.textContent=replacements[String(caption.index)]??caption.text;
+      if (caption.editable) {
+        const captionInput=document.createElement('textarea');
+        captionInput.className='canvasCaptionText';
+        captionInput.setAttribute('aria-label','Подпись к рисунку №'+(item.index+1));
+        captionInput.rows=2;
+        captionInput.spellcheck=false;
+        captionInput.value=replacements[String(caption.index)]??caption.text;
+        captionInput.addEventListener('input',()=>{
+          if(captionInput.value.length>5000)captionInput.value=captionInput.value.slice(0,5000);
+          if(captionInput.value===caption.text)delete replacements[String(caption.index)];
+          else replacements[String(caption.index)]=captionInput.value;
+          changeCount();markDraftDirty();
+        });
+        captionInput.addEventListener('dragstart',event=>event.stopPropagation());
+        label.append(captionInput);
+      } else {
+        label.textContent=replacements[String(caption.index)]??caption.text;
+      }
       fig.append(label);
     }
   }
