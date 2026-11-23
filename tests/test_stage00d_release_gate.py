@@ -26,10 +26,12 @@ def test_current_gate_is_explicitly_blocked():
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
     assert report["result"] == "BLOCKED"
-    assert any("D04" in x for x in report["blockers"])
-    assert any("D05" in x for x in report["blockers"])
+    # R1 closes two *scoped* synthetic criteria, but publication remains blocked.
+    assert not any("D04" in x or "D05" in x for x in report["blockers"])
+    assert any("D06" in x for x in report["blockers"])
+    assert any("D07" in x for x in report["blockers"])
     assert any("MANUAL" in x for x in report["blockers"])
-    assert report["statuses"]["known_fail"] >= 2
+    assert report["statuses"]["pass"] >= 7
 
 
 def test_release_mode_fails_closed_with_current_issues():
