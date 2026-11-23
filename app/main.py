@@ -35,6 +35,12 @@ from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorks
     preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
 from docwork_image_layout import thumbnail as docwork_image_thumbnail, IllustrationLayoutError
 from docwork_vector import convert_picture as docwork_vectorize_picture, VectorExperimentError
+from docwork_vector import source_image as docwork_original_picture
+from docwork_assets import (
+    initialize as init_docwork_assets, add as add_docwork_asset,
+    get as get_docwork_asset, replacements as get_docwork_asset_replacements,
+    normalize_image as normalize_docwork_asset,
+)
 from docwork_sessions import (
     SessionError as DocworkSessionError, initialize as init_docwork_drafts,
     create as create_docwork_draft, read as read_docwork_draft,
@@ -145,6 +151,7 @@ def init_db() -> None:
         init_illustrations(connection)
         init_visual_puzzles(connection)
         init_docwork_drafts(connection)
+        init_docwork_assets(connection)
         mark_interrupted(connection)
     # Derived search/work databases are additive, the existing manuscript stays put.
     # Optional caches must not block reading old approved manuscripts.
@@ -2574,6 +2581,48 @@ async def document_workshop_vectorize_picture(
     })
 
 
+@api.get("/docwork/drafts/{draft_id}/images/{image_index}/original")
+def document_workshop_original_picture(draft_id: str, image_index: int, request: Request):
+    """Authorized full-quality PNG for image workbench, not just tiny thumbnail."""
+    data,filename=_docwork_session_call(
+        original_docwork_draft,draft_id,_docwork_token(request)
+    )
+    if not filename.lower().endswith(".docx"):
+        raise HTTPException(422,"Мастерская работает с рисунками DOCX")
+    try:
+        raw=docwork_original_picture(data,image_index)
+        png,_,_=normalize_docwork_asset(raw)
+    except DocworkSessionError as exc:
+        raise HTTPException(exc.status,str(exc)) from exc
+    except (ValueError,OSError,zipfile.BadZipFile) as exc:
+        raise HTTPException(422,str(exc)) from exc
+    return Response(content=png,media_type="image/png",headers={
+        "Cache-Control":"no-store","X-Content-Type-Options":"nosniff"
+    })
+
+
+@api.post("/docwork/drafts/{draft_id}/assets",status_code=201)
+async def document_workshop_upload_artwork(
+    draft_id: str, request: Request, file: UploadFile = File(...)
+):
+    """Store independent image revision, never rewrite uploaded manuscript."""
+    data=await file.read(10*1024*1024+1)
+    return _docwork_session_call(
+        add_docwork_asset,draft_id,_docwork_token(request),
+        file.filename or "artwork.png",data
+    )
+
+
+@api.get("/docwork/drafts/{draft_id}/assets/{asset_id}")
+def document_workshop_artwork(draft_id: str, asset_id: str, request: Request):
+    png=_docwork_session_call(
+        get_docwork_asset,draft_id,_docwork_token(request),asset_id
+    )
+    return Response(content=png,media_type="image/png",headers={
+        "Cache-Control":"no-store","X-Content-Type-Options":"nosniff"
+    })
+
+
 @api.put("/docwork/drafts/{draft_id}")
 async def document_workshop_save_draft(draft_id: str, request: Request):
     body = await request.body()
@@ -2625,9 +2674,11 @@ async def document_workshop_inspect(file: UploadFile = File(...)):
 
 @api.post("/docwork/export")
 async def document_workshop_export(
+    request: Request,
     file: UploadFile = File(...),
     options: str = Form("{}"),
     target: Literal["docx", "pdf"] = Form("docx"),
+    draft_id: str = Form(""),
 ):
     """Create an independent DOCX/PDF export, no background book edits."""
     if len(options) > 150000:
@@ -2637,9 +2688,25 @@ async def document_workshop_export(
         if not isinstance(values, dict):
             raise DocumentWorkshopError("Некорректные настройки")
         data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
+        selected_artwork=values.pop("image_assets", {})
+        if selected_artwork:
+            if not draft_id or not (file.filename or "").lower().endswith(".docx"):
+                raise DocworkSessionError(422,"Замена рисунков требует сохранённый DOCX-черновик")
+            original,_ = _docwork_session_call(
+                original_docwork_draft,draft_id,_docwork_token(request)
+            )
+            if data!=original:
+                raise DocworkSessionError(409,
+                    "Исходник отличается от сохранённого черновика — экспорт остановлен")
+            with db() as connection:
+                values["_replacement_blobs"]=get_docwork_asset_replacements(
+                    connection,draft_id,_docwork_token(request),selected_artwork
+                )
         result, filename, mime = await asyncio.to_thread(
             docwork_export, data, file.filename or "", values, target
         )
+    except DocworkSessionError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
     except (DocumentWorkshopError, ValueError, OSError, zipfile.BadZipFile, json.JSONDecodeError) as exc:
         raise HTTPException(422, str(exc)) from exc
     return Response(content=result, media_type=mime, headers={

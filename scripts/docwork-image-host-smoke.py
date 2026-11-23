@@ -157,6 +157,47 @@ def main():
                          "application/json",token=token)
         ok("R3.5 SVG-to-PNG is returned as genuine raster",
            code==200 and png[:4]==bytes([137,80,78,71]))
+        # R3.6: upload a new external image; only this draft may retrieve it.
+        replacement_image=Image.new("RGB",(400,240),(32,130,210))
+        buffer=BytesIO();replacement_image.save(buffer,"PNG")
+        upload,mtype=multipart(buffer.getvalue(),name="external-diagram.png")
+        code,asset_json=request("POST",base+"/assets",upload,mtype,token)
+        ok("R3.6 external artwork upload HTTP 201",code==201)
+        aid=json.loads(asset_json)["id"]
+        code,_=request("GET",base+"/assets/"+aid)
+        ok("R3.6 artwork denied without secret token",code==404)
+        code,asset_png=request("GET",base+"/assets/"+aid,token=token)
+        ok("R3.6 private replacement PNG fetched",
+           code==200 and asset_png.startswith(bytes([137,80,78,71])))
+        artwork_state={"artwork":{"0":aid}}
+        code,after=request("PUT",base,
+            json.dumps({"revision":2,"state":artwork_state}).encode(),
+            "application/json",token)
+        ok("R3.6 immutable artwork selection saved in SQLite",code==200)
+        code,saved=request("GET",base,token=token)
+        ok("R3.6 artwork selection survives reload",
+           code==200 and json.loads(saved).get("state",{}).get("artwork")=={"0":aid})
+        changed_options={
+            "preset":"preserve",
+            "image_assets":{"0":aid},
+            "image_edits":{"0":{"width_percent":65,"align":"center","corner_percent":8}}
+        }
+        changed_body,changed_type=multipart(original,fields={
+            "options":json.dumps(changed_options),
+            "target":"docx",
+            "draft_id":sid,
+        })
+        code,new_doc=request("POST","/api/docwork/export",
+                             changed_body,changed_type,token)
+        ok("R3.6 new DOCX actually exports accepted artwork",
+           code==200 and new_doc.startswith(b"PK"))
+        changed_doc=Document(BytesIO(new_doc))
+        shape=changed_doc.inline_shapes[0]
+        rid=shape._inline.xpath(".//a:blip")[0].get(qn("r:embed"))
+        with Image.open(BytesIO(changed_doc.part.related_parts[rid].blob)) as image:
+            ok("R3.6 new image remains proportional and rounded",
+               image.size==(400,240) and image.getpixel((0,0))[3]==0
+               and image.getpixel((200,120))[:3]==(32,130,210))
         code,source=request("GET",base+"/source",token=token)
         ok("R3.1 source still byte-identical",
            code==200 and sha256(source).digest()==sha256(original).digest())

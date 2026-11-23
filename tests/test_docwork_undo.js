@@ -21,6 +21,7 @@ const overrides=Object.create(null);
 const replacements=Object.create(null);
 const paragraphAlignments=Object.create(null);
 const imageEdits=Object.create(null);
+const imageAssets=Object.create(null);
 const imageMoves=Object.create(null);
 let activeParagraph=null,imageMoveCounter=0;
 const undoStack=[],redoStack=[];
@@ -31,6 +32,8 @@ function changeCount(){}
 function markDraftDirty(){}
 function drawRows(){}
 function renderDocumentCanvas(){}
+function renderImageGallery(){}
+const window={ACHEWIWWorkbench:null};
 `;
 const checks=`
   editWithUndo('type:1',()=>{replacements['1']='Пр';},true);

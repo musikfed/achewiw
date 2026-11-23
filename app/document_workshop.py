@@ -21,7 +21,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 from docwork_image_layout import (
-    inventory_docx, apply_image_layout, IllustrationLayoutError
+    inventory_docx, apply_image_layout, apply_image_replacements, IllustrationLayoutError
 )
 from docwork_image_moves import apply_image_moves, paragraph_section_indices
 
@@ -378,6 +378,9 @@ def transform_docx(data: bytes, options: dict) -> bytes:
         elif kind == "body":
             paragraph.style = doc.styles["Normal"]
     try:
+        # First bind replacement pixels, then style the NEW picture so corner
+        # rounding and aspect-safe sizing are not lost on replaced images.
+        apply_image_replacements(doc, options.get("_replacement_blobs", {}))
         apply_image_layout(doc, options.get("image_edits", {}))
         apply_image_moves(doc, options.get("image_moves", {}))
     except IllustrationLayoutError as exc:

@@ -1,0 +1,26 @@
+/* R3.6 — isolated editorial graphics workbench; no global editor overrides. */
+.workbench[hidden]{display:none!important}
+.workbench{border:1px solid #d8e5d8;border-radius:16px;padding:clamp(12px,2vw,22px);
+ background:#fbfdfb;margin:12px 0 24px}
+.workbenchHeading h2{font:500 25px Georgia,serif;margin:0 0 8px}
+.workbenchHeading p{color:#58715e;font-size:13px;line-height:1.6}
+.workbenchToolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:14px 0}
+.workbenchToolbar label{display:flex;flex:1 1 155px;max-width:280px;flex-direction:column;
+ gap:6px;font:600 12px system-ui,sans-serif}
+.workbenchToolbar input,.workbenchToolbar select{width:100%;max-width:100%;padding:8px;
+ border:1px solid #cbdaca;background:#fff;color:#233c2c;border-radius:7px}
+.workbenchToolbar input[type=color]{height:42px}
+.workbenchToolbar button{font-size:12px;padding:9px 12px;white-space:normal}
+.workbenchStage{background:repeating-conic-gradient(#e6eee6 0 25%,#fff 0 50%) 0 0/24px 24px;
+ border:1px dashed #b0cdb1;border-radius:10px;min-height:180px;max-height:900px;
+ overflow:auto;display:flex;justify-content:center;align-items:flex-start}
+#wbCanvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crosshair;
+ box-shadow:0 4px 18px #10220c20}
+.workbenchCompare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.workbenchCompare figure{margin:0;display:flex;flex-direction:column;justify-content:start;
+ background:#f1f7f1;border:1px solid #d6e4d7;padding:10px;border-radius:10px;min-height:80px}
+.workbenchCompare figcaption{font:650 12px system-ui,sans-serif;color:#477052;margin-bottom:8px}
+.workbenchCompare img{display:block;max-width:100%;max-height:200px;object-fit:contain;margin:0 auto}
+.workbenchCompare img[hidden]{display:none!important}
+.workbench .hint{font-size:12px;color:#56705c;line-height:1.5}
+@media(max-width:700px){.workbenchCompare{grid-template-columns:1fr}.workbenchToolbar label{max-width:none}}
