@@ -32,6 +32,7 @@ function changeButtons(){
   $('wbExportSvg').disabled=selected<0||!baseImage||!figures.length;
   $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbImportGraph').disabled=!exportScope()||operationBusy;
+  $('wbVisionFile').disabled=!exportScope()||operationBusy;
   $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
@@ -93,6 +94,7 @@ function restoreHistory(redo=false){
   changeButtons();saveAnnotations();
 }
 function clearDrawing(){
+  $('wbVisionReview').hidden=true;
   $('wbGraphAudit').hidden=true;
   figures=[];history=[];futures=[];dirty=false;
   down=null;moving=-1;changeButtons();
@@ -645,6 +647,41 @@ $('wbExportGraph').addEventListener('click',()=>{
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
 });
 
+$('wbVisionFile').addEventListener('change',async()=>{
+  const input=$('wbVisionFile'),file=input.files?.[0],panel=$('wbVisionReview');
+  input.value='';
+  if(!file)return;
+  panel.replaceChildren();panel.hidden=true;
+  try{
+    const scope=exportScope();
+    if(!scope)throw Error('Доступен только исходный рисунок текущего DOCX');
+    if(file.size>256*1024)throw Error('Файл JSON превышает 256 КиБ');
+    const parser=window.ACHEWIWVisionProposals;
+    if(!parser)throw Error('Модуль проверки не загружен');
+    const review=parser.validate(JSON.parse(await file.text()),scope);
+    const title=document.createElement('strong');
+    title.textContent='R3.7F · Непроверенные предложения, '+review.count;
+    panel.append(title);
+    const warning=document.createElement('p');
+    warning.textContent='Результат не принимается и не добавляется на холст. Даже высокая уверенность модели не является доказательством.';
+    panel.append(warning);
+    const list=document.createElement('ol');
+    for(const proposal of review.proposals){
+      const item=document.createElement('li');
+      item.textContent=proposal.id+' · '+proposal.type+
+        ' · оценка '+Math.round(proposal.confidence*100)+'%'+
+        (proposal.type==='text'?' · «'+proposal.text+'»':'')+
+        ' · ('+[proposal.x,proposal.y,proposal.w,proposal.h].join(', ')+')'+
+        ' · НЕ ПРОВЕРЕНО';
+      list.append(item);
+    }
+    panel.append(list);panel.hidden=false;
+    status('JSON с предложениями проверен. Изображение, разметка и книга не изменены.');
+  }catch(error){
+    panel.textContent='Предложения отклонены: '+error.message;
+    panel.hidden=false;status('Импорт предложений отклонён.',true);
+  }
+});
 $('wbImportGraph').addEventListener('change',async()=>{
   const input=$('wbImportGraph'),file=input.files?.[0];
   input.value='';
