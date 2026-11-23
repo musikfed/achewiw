@@ -305,6 +305,10 @@ function applyDraftState(state) {
 }
 function markDraftDirty() {
   if (!draft || !report) return;
+  if (lastNormativeReport) {
+    resetNormativeReport();
+    $('normativeStatus').textContent='Документ изменён после проверки; прежний отчёт недействителен. Нажми «Проверить DOCX» снова.';
+  }
   scratchDraft();
   if (canonicalState(captureDraftState())===lastSavedState && !draftConflicted) {
     draftMessage('Черновик уже сохранён · редакция №'+draft.revision);
@@ -683,6 +687,7 @@ function canvasText(row) {
 function renderDocumentCanvas() {
   const canvas=$('documentCanvas');canvas.replaceChildren();
   $('documentEditor').hidden=report?.type!=='docx';
+  $('runNormative').disabled=!draft||report?.type!=='docx';
   if(report?.type!=='docx')return;
   const captions=new Set((report.images||[])
     .filter(item=>item.editable&&Number.isInteger(item.caption_index))
@@ -884,6 +889,8 @@ function switchToPdf() {
   $('showStructure').setAttribute('aria-pressed','false');
 }
 function reset() {
+  resetNormativeReport();
+  $('runNormative').disabled=true;
   clearPdf(); rendered = 80;
   $('paragraphSearch').value = '';
   $('paragraphFilter').value = 'headings';
@@ -1332,6 +1339,124 @@ window.addEventListener('pagehide',()=>{
   }
 });
 window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);});
+/* R4.0 — audit a fresh exported DOCX without changing the manuscript. */
+let lastNormativeReport=null;
+function resetNormativeReport(){
+  lastNormativeReport=null;
+  $('downloadNormative').disabled=true;
+  $('normativeReport').replaceChildren();
+  $('normativeStatus').textContent='Проверка не выполнена. Выберите профиль и нажмите «Проверить DOCX».';
+}
+function addNormativeRow(root,label,value){
+  const line=document.createElement('div');
+  line.className='normativeRow';
+  const left=document.createElement('strong');
+  left.textContent=label;
+  const right=document.createElement('span');
+  right.textContent=String(value);
+  line.append(left,right);root.append(line);
+}
+function displayNormativeReport(data){
+  const root=$('normativeReport');
+  root.replaceChildren();
+  const title=document.createElement('h3');
+  title.textContent='Диагностика · '+data.profile_title;
+  root.append(title);
+  const note=document.createElement('p');
+  note.className='hint';note.textContent=data.scope_note;root.append(note);
+  const table=document.createElement('div');
+  table.className='normativeRows';
+  const items=[
+    ['Абзацы',data.metrics.paragraphs],['Разделы',data.metrics.sections],
+    ['Таблицы',data.metrics.tables],['Рисунки',data.metrics.pictures],
+    ['Подписи (возможные)',data.metrics.captions_candidates],
+    ['Сноски',data.metrics.footnotes],['Концевые примечания',data.metrics.endnotes],
+    ['Поля оглавления',data.metrics.toc_field_commands],
+    ['Перекрёстные ссылки',data.metrics.cross_reference_field_commands],
+    ['Список литературы',data.metrics.bibliography_heading_found?'Заголовок найден':'Не обнаружен'],
+    ['Позиции библиографии (примерно)',data.metrics.bibliography_entry_candidates]
+  ];
+  for(const [name,value] of items)addNormativeRow(table,name,value);
+  root.append(table);
+  const scopes=document.createElement('p');scopes.className='hint';
+  scopes.textContent=data.standards.length?
+    'Справочные стандарты: '+data.standards.map(item=>item.number).join(', '):
+    'Нормативный профиль не выбран';
+  root.append(scopes);
+  for(const item of data.page_geometry.slice(0,25)){
+    const p=document.createElement('p');p.className='hint';
+    p.textContent='Раздел '+item.section+': '+item.width_cm+'×'+item.height_cm+
+      ' см; поля В/Н/Л/П: '+item.top_cm+'/'+item.bottom_cm+'/'+
+      item.left_cm+'/'+item.right_cm+' см';
+    root.append(p);
+  }
+  for(const item of data.observations){
+    const row=document.createElement('p');row.className='normativeObservation';
+    row.textContent=(item.level==='review'?'Проверить · ':'Сведения · ')+item.message;
+    root.append(row);
+  }
+  const footer=document.createElement('p');footer.className='hint';
+  footer.textContent='Отчёт по отдельной DOCX-копии SHA-256: '+data.source_sha256+
+    '. Это не сертификат ГОСТ и не разрешение публиковать книгу.';
+  root.append(footer);
+}
+async function runNormativeAudit(){
+  if(!source||!draft||report?.type!=='docx')return;
+  $('runNormative').disabled=true;
+  resetNormativeReport();
+  $('normativeStatus').textContent='Готовим текущую DOCX-редакцию для проверки…';
+  const atStart=JSON.stringify(optionsForExport());
+  try{
+    const exportedResponse=await fetch('/api/docwork/export',{
+      method:'POST',body:requestForm('docx',optionsForExport()),
+      headers:authenticatedExportHeaders(),cache:'no-store'
+    });
+    if(!exportedResponse.ok){
+      let msg='HTTP '+exportedResponse.status;
+      try{msg=(await exportedResponse.json()).detail||msg;}catch{}
+      throw new Error('Сборка DOCX: '+msg);
+    }
+    const copy=await exportedResponse.blob();
+    const form=new FormData();
+    form.append('file',copy,'ACHEWIW-current-edition.docx');
+    form.append('profile',$('normativeProfile').value);
+    const response=await fetch('/api/docwork/preflight',{
+      method:'POST',body:form,cache:'no-store'
+    });
+    if(!response.ok){
+      let msg='HTTP '+response.status;
+      try{msg=(await response.json()).detail||msg;}catch{}
+      throw new Error(msg);
+    }
+    const result=await response.json();
+    if(atStart!==JSON.stringify(optionsForExport())){
+      $('normativeStatus').textContent='Настройки изменились во время проверки. Запустите её ещё раз.';
+      return;
+    }
+    lastNormativeReport=result;
+    $('downloadNormative').disabled=false;
+    displayNormativeReport(result);
+    $('normativeStatus').textContent='Отчёт готов. Нужна ручная полиграфическая и нормативная проверка.';
+  }catch(error){
+    $('normativeStatus').textContent='Проверка не выполнена: '+error.message;
+  }finally{
+    $('runNormative').disabled=!draft||report?.type!=='docx';
+  }
+}
+$('runNormative').addEventListener('click',()=>{void runNormativeAudit();});
+$('normativeProfile').addEventListener('change',resetNormativeReport);
+$('downloadNormative').addEventListener('click',()=>{
+  if(!lastNormativeReport)return;
+  const blob=new Blob([JSON.stringify(lastNormativeReport,null,2)],{
+    type:'application/json;charset=utf-8'
+  });
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='ACHEWIW-R4-preflight-'+lastNormativeReport.profile+'.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+});
+
 window.ACHEWIWWorkbench?.connect({
   current:()=>({draft,report,selected:selectedImage}),
   selectPicture:index=>selectImage(index),

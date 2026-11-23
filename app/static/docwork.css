@@ -149,3 +149,18 @@
 .columns.editor-wide .documentCanvas{max-width:950px}
 .previewHeadActions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 #toggleSidebar{font-size:12px;padding:7px 11px}
+
+/* R4: isolated read-only normative preflight; never blocks document editing. */
+.normativePreflight{border:1px solid #cfdfd1;border-radius:12px;padding:13px 16px;
+ background:#f5f9f5;margin:16px 0 10px}
+.normativePreflight>summary{font:650 14px system-ui,sans-serif;cursor:pointer;color:#26573a}
+.normativeControls{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:12px 0}
+.normativeControls label{display:flex;flex:1 1 240px;flex-direction:column;gap:6px}
+.normativeControls button{font-size:12px;padding:10px 14px}
+.normativeRows{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:12px 0}
+.normativeRow{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;
+ border-bottom:1px solid #dbe7dd;font:13px system-ui,sans-serif}
+.normativeRow>span{text-align:right;font-variant-numeric:tabular-nums}
+.normativeObservation{background:#fff;border-left:3px solid #a7bba9;padding:10px;
+ font:12px/1.6 system-ui,sans-serif;margin:6px 0}
+#normativeReport>h3{font-size:16px;margin:14px 0 6px}
