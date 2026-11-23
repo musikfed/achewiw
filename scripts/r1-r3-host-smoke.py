@@ -13,7 +13,7 @@ from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, ProxyHandler
 from urllib.error import HTTPError
 from zipfile import ZipFile
 import json
@@ -28,6 +28,8 @@ from manuscript_core import manuscript_epub
 from publishing_exports import manuscript_pdf, manuscript_docx
 
 BASE = "http://127.0.0.1:7080"
+# The host may have an outbound HTTP_PROXY/VPN; localhost must be direct.
+OPENER = build_opener(ProxyHandler({}))
 STATS = []
 
 
@@ -48,7 +50,7 @@ def call(method, path, data=None, content_type=None, token=None, confirm=False):
         headers["X-ACHEWIW-Confirm-Close-Draft"] = "yes-delete-only-this-draft"
     req = Request(BASE + path, data=data, headers=headers, method=method)
     try:
-        with urlopen(req, timeout=30) as response:
+        with OPENER.open(req, timeout=30) as response:
             return response.status, response.read()
     except HTTPError as err:
         return err.code, err.read()
