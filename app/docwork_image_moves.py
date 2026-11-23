@@ -37,10 +37,12 @@ def apply_image_moves(doc, moves):
     index (0..count), not a mutable live Word index. count = end-of-document.
     Multiple moves to the same anchor use an explicit increasing order value.
     """
-    if not moves:
+    if moves is None:
         return
     if not isinstance(moves, dict) or len(moves) > MAX_IMAGES:
         raise IllustrationLayoutError("Некорректная карта перемещений иллюстраций")
+    if not moves:
+        return
     if len(doc.sections) != 1:
         raise IllustrationLayoutError(
             "Перемещение изображений между разделами Word пока не поддерживается"
