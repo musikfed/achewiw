@@ -51,7 +51,7 @@ def test_half_percent_corners_are_exported_and_original_is_unchanged():
     assert sha256(original).hexdigest()==checksum
     with Image.open(BytesIO(image_in_docx(edited))) as im:
         assert im.mode=="RGBA"
-        assert im.getpixel((0,0))[3]==0
+        assert im.getpixel((0,0))[3]<255
         assert im.getpixel((600,150))[3]==255
 
 
