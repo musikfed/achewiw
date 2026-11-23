@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 
 KINDS = {"rectangle", "ellipse", "line", "arrow", "text"}
 MAX_SUGGESTIONS = 60
@@ -21,8 +20,8 @@ def parse_vision_reply(raw: str, *, width: int, height: int) -> list[dict]:
         raise ValueError("Vision вернула пустой или чрезмерно длинный ответ")
     raw = raw.strip()
     if raw.startswith("```"):
-        raw = re.sub(r"^\`\`\`(?:json)?\\s*", "", raw, count=1, flags=re.I)
-        raw = re.sub(r"\\s*\`\`\`$", "", raw, count=1)
+        raw = raw.removeprefix("```json").removeprefix("```").strip()
+        raw = raw.removesuffix("```").strip()
     try:
         payload = json.loads(raw)
     except (ValueError, TypeError) as exc:
