@@ -361,9 +361,8 @@ function styleFigure(index, patch) {
   if (!item?.editable) return;
   const state={...canvasImageStyle(item),...patch};
   state.width_percent=Math.max(25,Math.min(100,Math.round(state.width_percent)));
-  imageEdits[String(index)]=state;
+  editWithUndo('picture-style:'+index,()=>{imageEdits[String(index)]=state;});
   selectedImage=index;
-  changeCount();markDraftDirty();
   renderDocumentCanvas();
   selectImage(index);
 }
@@ -381,12 +380,13 @@ function moveFigureTo(index, beforeParagraph) {
       .filter(x=>x.editable&&Number.isInteger(x.caption_index))
       .map(x=>x.caption_index));
   if (captionIndices.has(beforeParagraph)) return;
-  imageMoveCounter=Math.min(1000000,imageMoveCounter+1);
-  imageMoves[String(index)]={
-    before_paragraph:beforeParagraph, order:imageMoveCounter
-  };
+  editWithUndo('picture-move:'+index,()=>{
+    imageMoveCounter=Math.min(1000000,imageMoveCounter+1);
+    imageMoves[String(index)]={
+      before_paragraph:beforeParagraph,order:imageMoveCounter
+    };
+  });
   selectedImage=index;
-  changeCount();markDraftDirty();
   renderDocumentCanvas();selectImage(index);
   $('canvasStatus').textContent='Рисунок №'+(index+1)+
     ' перенесён. Положение сохранится в DOCX/PDF после экспорта.';
@@ -458,7 +458,7 @@ function canvasFigure(item) {
     const revert=document.createElement('button');
     revert.type='button';revert.textContent='Вернуть место';
     revert.addEventListener('click',()=>{
-      delete imageMoves[key];changeCount();markDraftDirty();
+      editWithUndo('picture-restore:'+key,()=>{delete imageMoves[key];});
       renderDocumentCanvas();
       $('canvasStatus').textContent='Рисунок вернулся на исходное место.';
     });
@@ -487,11 +487,13 @@ function canvasFigure(item) {
         captionInput.rows=2;
         captionInput.spellcheck=false;
         captionInput.value=replacements[String(caption.index)]??caption.text;
+        captionInput.addEventListener('focus',()=>selectTextParagraph(caption.index));
         captionInput.addEventListener('input',()=>{
           if(captionInput.value.length>5000)captionInput.value=captionInput.value.slice(0,5000);
-          if(captionInput.value===caption.text)delete replacements[String(caption.index)];
-          else replacements[String(caption.index)]=captionInput.value;
-          changeCount();markDraftDirty();
+          editWithUndo('type-caption:'+caption.index,()=>{
+            if(captionInput.value===caption.text)delete replacements[String(caption.index)];
+            else replacements[String(caption.index)]=captionInput.value;
+          },true);
         });
         captionInput.addEventListener('dragstart',event=>event.stopPropagation());
         label.append(captionInput);
@@ -517,18 +519,23 @@ function canvasText(row) {
   if(kind==='heading1')area.classList.add('canvasHeading');
   if(kind==='heading2')area.classList.add('canvasSubheading');
   area.dataset.paragraphIndex=String(row.index);
-  area.spellcheck=false;area.value=content;area.rows=Math.max(2,Math.min(8,
+  area.spellcheck=false;area.value=content;
+  area.title='Нажми здесь и печатай — текст этого абзаца изменится в новой копии DOCX';
+  area.dataset.align=paragraphAlignments[String(row.index)]||row.alignment||'inherit';
+  area.rows=Math.max(2,Math.min(8,
     Math.ceil(content.length/110)+content.split('\n').length));
   area.setAttribute('aria-label','Абзац №'+(row.index+1)+' — редактирование на листе');
+  area.addEventListener('focus',()=>selectTextParagraph(row.index));
   area.addEventListener('input',()=>{
     if(area.value.length>5000) {
       area.value=area.value.slice(0,5000);
       tell('Размер редактируемого абзаца ограничен 5000 символами',true);
     }
-    if(area.value===row.text) delete replacements[String(row.index)];
-    else replacements[String(row.index)]=area.value;
-    if(selected===row.index)$('paragraphText').value=area.value;
-    changeCount();markDraftDirty();
+    editWithUndo('type-text:'+row.index,()=>{
+      if(area.value===row.text) delete replacements[String(row.index)];
+      else replacements[String(row.index)]=area.value;
+      if(selected===row.index)$('paragraphText').value=area.value;
+    },true);
   });
   return area;
 }
@@ -575,7 +582,8 @@ function renderDocumentCanvas() {
   $('canvasMore').hidden=hiddenCount===0;
   $('canvasMore').textContent=hiddenCount?
     '↓ Показать ещё абзацы · '+hiddenCount+' скрыто':'';
-  $('canvasStatus').textContent='Редактируй текст прямо на листе. Рисунки перетаскивай '
+  updateEditToolbar();
+  $('canvasStatus').textContent='Щёлкни абзац и печатай. Выравнивание и отмена действий — в верхней панели. Рисунки перетаскивай '
     +'между абзацами (или выбери рисунок и нажми на полоску вставки). '
     +'Показано абзацев: '+limit+' из '+rows.length+'.';
 }
@@ -815,19 +823,25 @@ $('saveParagraph').addEventListener('click', () => {
   const item = report && report.paragraphs && report.paragraphs.find(x => x.index === selected);
   if (!item) return;
   const key = String(item.index), role = $('paragraphRole').value;
-  if (role === 'keep') delete overrides[key]; else overrides[key] = role;
-  if (item.editable) {
-    const edited = $('paragraphText').value;
-    if (edited !== item.text) replacements[key] = edited;
-    else delete replacements[key];
-  }
-  changeCount(); drawRows(); markDraftDirty();
+  editWithUndo('advanced-paragraph:'+item.index,()=>{
+    if (role === 'keep') delete overrides[key]; else overrides[key] = role;
+    if (item.editable) {
+      const edited = $('paragraphText').value;
+      if (edited !== item.text) replacements[key] = edited;
+      else delete replacements[key];
+    }
+  });
+  drawRows();renderDocumentCanvas();
   tell('Правка подготовлена и будет сохранена. Для новой редакции документа нажмите «Скачать».');
 });
 $('resetParagraph').addEventListener('click', () => {
   if (selected === null) return;
-  delete overrides[selected]; delete replacements[selected];
-  changeCount(); editParagraph(selected); markDraftDirty(); tell('Локальная правка сброшена.');
+  editWithUndo('reset-paragraph:'+selected,()=>{
+    delete overrides[selected]; delete replacements[selected];
+    delete paragraphAlignments[selected];
+  });
+  editParagraph(selected); renderDocumentCanvas();
+  tell('Локальная правка сброшена.');
 });
 async function inspect(restoring=false) {
   if (!source) return;
@@ -978,22 +992,24 @@ for (const id of ['imageWidth','imageAlign','imageCorners']) {
 }
 $('applyImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
-  imageEdits[String(selectedImage)]={
-    width_percent:Number($('imageWidth').value),
-    align:$('imageAlign').value,
-    corner_percent:Number($('imageCorners').value)
-  };
-  changeCount();markDraftDirty();renderDocumentCanvas();
+  editWithUndo('picture-style:'+selectedImage,()=>{
+    imageEdits[String(selectedImage)]={
+      width_percent:Number($('imageWidth').value),
+      align:$('imageAlign').value,
+      corner_percent:Number($('imageCorners').value)
+    };
+  });
+  renderDocumentCanvas();
   const item=$('imageList').querySelector('[data-image-index="'+selectedImage+'"] small');
   if (item) item.textContent='Оформлен · '+$('imageWidth').value+'% · '+$('imageAlign').value;
   tell('Рисунок №'+(selectedImage+1)+' будет оформлен в новой копии документа.');
 });
 $('resetImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
-  delete imageEdits[String(selectedImage)];
   const index=selectedImage;
+  editWithUndo('picture-reset:'+index,()=>{delete imageEdits[String(index)];});
   selectImage(index);
-  changeCount();markDraftDirty();renderDocumentCanvas();
+  renderDocumentCanvas();
   tell('Оформление рисунка сброшено к исходному.');
 });
 $('outputName').addEventListener('input',markDraftDirty);
