@@ -64,8 +64,11 @@ def _validate_state(state: object) -> str:
     for field in ("settings", "overrides", "replacements", "editor", "ui"):
         if field in state and not isinstance(state[field], dict):
             raise SessionError(422, "Некорректный раздел состояния: " + field)
-    raw = json.dumps(state, ensure_ascii=False, sort_keys=True,
-                     separators=(",", ":"), allow_nan=False)
+    try:
+        raw = json.dumps(state, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise SessionError(422, "Некорректные значения в черновике") from exc
     if len(raw.encode("utf-8")) > MAX_STATE_BYTES:
         raise SessionError(413, "Черновик слишком велик: сократите объём правок")
     return raw
