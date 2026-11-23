@@ -237,10 +237,13 @@
           <button id="wbAutoOutline" type="button">Упростить схему (контуры R3.5)</button>
           <label>Цветов для контуров<select id="wbTraceColors"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option></select></label>
           <button id="wbDownload" type="button">↓ Скачать PNG для Photoshop</button>
+          <button id="wbExportSvg" type="button" disabled>↓ SVG: редактируемые фигуры</button>
+          <button id="wbExportGraph" type="button" disabled>↓ JSON: структура схемы</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
           <button id="wbRestore" type="button">↶ Снять замену</button>
           <button id="wbBack" type="button">← Вернуться к документу</button>
         </div>
+        <p class="hint"><strong>R3.7 · структурная схема:</strong> выгрузка SVG и JSON содержит только вручную созданные линии, стрелки, фигуры и подписи. Исходное изображение не встраивается; надписи и связи из растра автоматически не распознаются. Это отдельный редактируемый слой для проверки человеком.</p>
         <p class="hint">Схемы можно реконструировать локально по контурам; это не восстановление редактируемых слов. Подключение LLM/VLM для распознавания и проверки геометрии — отдельный этап, только после согласования точности.</p>
       </section>
       <div id="structurePane">

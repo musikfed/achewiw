@@ -29,6 +29,8 @@ function changeButtons(){
   $('wbRedo').disabled=!futures.length;
   $('wbApply').disabled=selected<0||!baseImage||operationBusy;
   $('wbDownload').disabled=selected<0||!baseImage;
+  $('wbExportSvg').disabled=selected<0||!baseImage||!figures.length;
+  $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
 function annotationKey(){
@@ -386,6 +388,81 @@ function downloadBlob(blob,name){
   a.href=url;a.download=name;document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+// R3.7 stage A: a verifiable, editable vector annotation layer.
+// No OCR/VLM inference: source raster is deliberately absent from exports.
+function xmlText(value){
+  return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function round(value){
+  return Math.round(value*100)/100;
+}
+function structuredShapes(){
+  return figures.filter(validAnnotation).map((obj,index)=>({
+    id:'shape-'+(index+1),type:obj.type,
+    x:round(obj.x),y:round(obj.y),w:round(obj.w),h:round(obj.h),
+    color:obj.color||'#176d47',
+    stroke:Math.max(1,Math.min(30,Number(obj.stroke)||3)),
+    ...(obj.type==='text'?{text:obj.text||'',fontSize:Math.max(10,Math.min(100,Number(obj.fontSize)||26))}:{})
+  }));
+}
+function svgFromShapes(shapes){
+  const parts=[
+    '<svg xmlns="http://www.w3.org/2000/svg" width="'+canvas.width+'" height="'+canvas.height+
+      '" viewBox="0 0 '+canvas.width+' '+canvas.height+'">',
+    '<title>ACHEWIW R3.7 — только проверенная ручная разметка</title>',
+    '<desc>Исходное изображение не встроено; автоматического распознавания текста или связей нет.</desc>'
+  ];
+  for(const obj of shapes){
+    const attrs=' id="'+obj.id+'" stroke="'+xmlText(obj.color)+'" stroke-width="'+obj.stroke+
+      '" stroke-linecap="round" stroke-linejoin="round"';
+    if(obj.type==='text'){
+      parts.push('<text id="'+obj.id+'" x="'+obj.x+'" y="'+obj.y+
+        '" fill="'+xmlText(obj.color)+'" font-size="'+obj.fontSize+
+        '" font-family="Arial, sans-serif" font-weight="600" dominant-baseline="text-before-edge">'+
+        xmlText(obj.text)+'</text>');
+    }else if(obj.type==='rectangle'){
+      parts.push('<rect'+attrs+' fill="none" x="'+obj.x+'" y="'+obj.y+
+        '" width="'+Math.abs(obj.w)+'" height="'+Math.abs(obj.h)+'"/>');
+    }else if(obj.type==='cover'){
+      parts.push('<rect id="'+obj.id+'" fill="#ffffff" x="'+obj.x+'" y="'+obj.y+
+        '" width="'+Math.abs(obj.w)+'" height="'+Math.abs(obj.h)+'"/>');
+    }else if(obj.type==='ellipse'){
+      parts.push('<ellipse'+attrs+' fill="none" cx="'+(obj.x+obj.w/2)+'" cy="'+
+        (obj.y+obj.h/2)+'" rx="'+Math.max(1,Math.abs(obj.w/2))+'" ry="'+
+        Math.max(1,Math.abs(obj.h/2))+'"/>');
+    }else if(obj.type==='line'||obj.type==='arrow'){
+      const x2=obj.x+obj.w,y2=obj.y+obj.h;
+      parts.push('<line'+attrs+' x1="'+obj.x+'" y1="'+obj.y+'" x2="'+x2+'" y2="'+y2+'"/>');
+      if(obj.type==='arrow'){
+        const angle=Math.atan2(obj.h,obj.w),size=Math.max(10,obj.stroke*3);
+        const p1x=x2-size*Math.cos(angle-0.46),p1y=y2-size*Math.sin(angle-0.46);
+        const p2x=x2-size*Math.cos(angle+0.46),p2y=y2-size*Math.sin(angle+0.46);
+        parts.push('<path id="'+obj.id+'-head" fill="'+xmlText(obj.color)+'" d="M '+
+          x2+' '+y2+' L '+p1x+' '+p1y+' L '+p2x+' '+p2y+' Z"/>');
+      }
+    }
+  }
+  return parts.join('\n')+'\n</svg>\n';
+}
+$('wbExportSvg').addEventListener('click',()=>{
+  if(!baseImage||!figures.length)return;
+  const shapes=structuredShapes();
+  downloadBlob(new Blob([svgFromShapes(shapes)],{type:'image/svg+xml;charset=utf-8'}),
+    'ACHEWIW-diagram-'+(selected+1)+'-editable-overlay.svg');
+  status('Экспортирован редактируемый SVG только с ручными фигурами. Фоновое изображение не входит в SVG.');
+});
+$('wbExportGraph').addEventListener('click',()=>{
+  if(!baseImage||!figures.length)return;
+  const schema={format:'achewiw-verified-diagram-layer',version:1,
+    canvas:{width:canvas.width,height:canvas.height},
+    origin:'manual',recognition:'not-performed',sourceRasterEmbedded:false,
+    shapes:structuredShapes()};
+  downloadBlob(new Blob([JSON.stringify(schema,null,2)+'\n'],{type:'application/json'}),
+    'ACHEWIW-diagram-'+(selected+1)+'-structure.json');
+  status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
+});
+
 $('wbDownload').addEventListener('click',async()=>{
   if(!baseImage)return;
   try{downloadBlob(await canvasPng(),
