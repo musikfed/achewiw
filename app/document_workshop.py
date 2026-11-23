@@ -28,7 +28,16 @@ from docwork_image_moves import apply_image_moves
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_UNPACKED = 180 * 1024 * 1024
 MAX_PARAGRAPHS = 20000
-FONT_NAMES = {"Liberation Serif", "DejaVu Serif", "Times New Roman", "Arial", "Calibri"}
+# GOST is a document-formatting requirement, not a universal font family.
+# These are permitted choices; standards-specific profiles are introduced in R4.
+# The Docker image installs the open families below. Microsoft families are
+# retained for DOCX compatibility and may be substituted by LibreOffice on Linux.
+FONT_NAMES = {
+    "Liberation Serif", "Liberation Sans", "Liberation Mono",
+    "DejaVu Serif", "DejaVu Sans", "DejaVu Sans Mono",
+    "Carlito", "Caladea", "FreeSerif", "FreeSans", "FreeMono",
+    "Times New Roman", "Arial", "Calibri",
+}
 PRESETS = {
     "preserve": {"name": "Сохранить исходное", "body": None, "head": None, "size": None},
     "book": {"name": "Книжная классика", "body": "Liberation Serif", "head": "Liberation Serif", "size": 11},
