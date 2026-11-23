@@ -124,9 +124,34 @@ exec > >(tee -a "$LOG") 2>&1
   echo "Переключен только исходный код ACHEWIW, локальные data/ не тронуты."
 
   STAGE="build-studio"
-  # Existing lifecycle script verifies labels, Compose project, workspace and
-  # ownership before recreating ONLY achewiw-studio. No docker compose down.
-  bash scripts/achewiw-control.sh rebuild
+  # The existing lifecycle tool intentionally refuses "rebuild" when stopped.
+  # Choose only its owner-verified ACHEWIW operations, never docker compose down.
+  active_studio="$(docker ps --filter 'label=com.docker.compose.project=achewiw' \
+    --filter 'label=com.docker.compose.service=studio' --format '{{.ID}}')"
+  if [[ -z "$active_studio" ]]; then
+    echo "ACHEWIW Studio не работает; штатный безопасный путь: start --build"
+    bash scripts/achewiw-control.sh start
+  else
+    echo "ACHEWIW Studio работает; штатный безопасный путь: rebuild"
+    bash scripts/achewiw-control.sh rebuild
+  fi
+
+  STAGE="await-studio-health"
+  ready=false
+  for attempt in $(seq 1 60); do
+    if curl --noproxy '*' --silent --show-error --fail --max-time 3 \
+      -H 'Host: 192.168.0.100:7080' \
+      http://127.0.0.1:7080/api/health >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$ready" != true ]]; then
+    echo "ACHEWIW: HTTP /api/health не отвечает после запуска собственного контейнера"
+    echo "Проверить: docker compose ps studio; docker logs --tail 80 achewiw-studio"
+    exit 3
+  fi
 
   STAGE="smoke"
   echo "Проверяем R1 + R2 + R3 в работающем контейнере."
