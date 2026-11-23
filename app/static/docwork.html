@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=5">
-<script src="/static/docwork.js?v=7" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=6">
+<script src="/static/docwork.js?v=8" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -24,6 +24,7 @@
     <button type="button" id="quickPreviewPdf" disabled>◉ Показать страницы PDF</button>
     <button type="button" id="quickDownloadDocx" class="primary" disabled>↓ Новый DOCX</button>
     <button type="button" id="quickDownloadPdf" disabled>↓ Новый PDF</button>
+    <button type="button" id="toggleActionBar" aria-expanded="true" title="Скрыть мешающую верхнюю панель">Скрыть панель ↑</button>
   </div>
   <section id="draftControls" class="control" aria-label="Защищённый черновик DocWork">
     <h2>Черновик и история редакций</h2>
@@ -140,13 +141,10 @@
               <option value="right">По правому краю</option>
             </select>
           </label>
-          <label>Скругление углов
-            <select id="imageCorners">
-              <option value="0" selected>Без скругления</option>
-              <option value="8">Мягкое · 8%</option>
-              <option value="16">Среднее · 16%</option>
-              <option value="24">Выраженное · 24%</option>
-            </select>
+          <label>Скругление углов · шаг 0,5%
+            <input id="imageCorners" type="range" min="0" max="24" step="0.5" value="0">
+            <input id="imageCornersNumber" type="number" min="0" max="24" step="0.5" value="0" aria-label="Скругление в процентах">
+            <span id="imageCornerHint" class="hint">0% · без скругления. Ограничение зависит от пропорций рисунка.</span>
           </label>
         </div>
         <div class="actions">
@@ -179,6 +177,9 @@
             <span id="canvasStatus">Перетащи рисунок за рамку в место между абзацами. Текст исправляй прямо на листе.</span>
           </div>
           <div id="editToolbar" class="editToolbar" role="toolbar" aria-label="Редактирование текста и история действий">
+            <div class="toolbarGroup toolbarToggleGroup">
+              <button id="toggleEditToolbar" type="button" aria-expanded="true" title="Свернуть инструменты, чтобы не закрывали документ">Скрыть инструменты ↑</button>
+            </div>
             <div class="toolbarGroup">
               <button id="saveCanvasNow" type="button" class="primary" disabled>💾 Сохранить</button>
               <span id="canvasSaveState" class="toolbarHint">Нет открытого черновика</span>
