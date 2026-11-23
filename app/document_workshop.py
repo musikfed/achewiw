@@ -378,8 +378,10 @@ def transform_docx(data: bytes, options: dict) -> bytes:
         elif kind == "body":
             paragraph.style = doc.styles["Normal"]
     try:
-        apply_image_layout(doc, options.get("image_edits", {}))
+        # First bind replacement pixels, then style the NEW picture so corner
+        # rounding and aspect-safe sizing are not lost on replaced images.
         apply_image_replacements(doc, options.get("_replacement_blobs", {}))
+        apply_image_layout(doc, options.get("image_edits", {}))
         apply_image_moves(doc, options.get("image_moves", {}))
     except IllustrationLayoutError as exc:
         raise DocumentWorkshopError(str(exc)) from exc
