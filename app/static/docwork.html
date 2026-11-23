@@ -4,6 +4,7 @@
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
 <link rel="stylesheet" href="/static/docwork.css?v=9">
 <link rel="stylesheet" href="/static/docwork_workbench.css?v=1">
+<script src="/static/diagram_graph.js?v=1" defer></script>
 <script src="/static/docwork_workbench.js?v=1" defer></script>
 <script src="/static/docwork.js?v=11" defer></script>
 </head><body>
@@ -239,10 +240,12 @@
           <button id="wbDownload" type="button">↓ Скачать PNG для Photoshop</button>
           <button id="wbExportSvg" type="button" disabled>↓ SVG: редактируемые фигуры</button>
           <button id="wbExportGraph" type="button" disabled>↓ JSON: структура схемы</button>
+          <button id="wbAuditGraph" type="button" disabled>Проверить связи схемы</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
           <button id="wbRestore" type="button">↶ Снять замену</button>
           <button id="wbBack" type="button">← Вернуться к документу</button>
         </div>
+        <div id="wbGraphAudit" class="workbenchAudit" role="status" aria-live="polite" hidden></div>
         <p class="hint"><strong>R3.7 · структурная схема:</strong> выгрузка SVG и JSON содержит только вручную созданные линии, стрелки, фигуры и подписи. Исходное изображение не встраивается; надписи и связи из растра автоматически не распознаются. Это отдельный редактируемый слой для проверки человеком.</p>
         <p class="hint">Схемы можно реконструировать локально по контурам; это не восстановление редактируемых слов. Подключение LLM/VLM для распознавания и проверки геометрии — отдельный этап, только после согласования точности.</p>
       </section>
