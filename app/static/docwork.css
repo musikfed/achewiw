@@ -130,3 +130,14 @@
 #imageCornersNumber{max-width:100px!important;font-size:13px!important}
 #imageCornerHint{display:block;margin-top:5px;line-height:1.5}
 @media(max-width:540px){.fontCollections{grid-template-columns:1fr}.saveSummary{min-width:0}}
+
+/* R3.5 experimental true vector trace: no automatic edits of source DOCX. */
+.vectorExperiment{border:1px solid #d9e4d9;border-radius:10px;background:#f6faf6;
+ padding:11px 13px;margin-top:14px}
+.vectorExperiment>summary{font:600 13px system-ui,sans-serif;cursor:pointer;color:#285b40}
+.vectorExperiment .hint{line-height:1.65}
+.vectorExperiment label{max-width:300px;font-size:12px}
+.vectorExperiment .actions button{padding:9px 12px;font-size:12px}
+#vectorPreview{display:block;margin:12px auto;max-width:100%;max-height:270px;
+ object-fit:contain;background:#fff;border:1px solid #d7e4d9;border-radius:6px}
+#vectorPreview[hidden]{display:none}

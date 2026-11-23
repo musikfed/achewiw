@@ -15,6 +15,7 @@ let imageMoveCounter = 0;
 let canvasLimit = 120;
 let selectedImage = null;
 const imageThumbUrls = new Map();
+let vectorPreviewUrl = null, vectorBusy = false;
 
 let draft = null, draftSaveTimer = null, draftSaveBusy = false, draftConflicted = false;
 let lastSavedState = '{}';
@@ -409,6 +410,55 @@ async function restoreDraft() {
   }
 }
 
+function clearVectorPreview(){
+  if(vectorPreviewUrl){URL.revokeObjectURL(vectorPreviewUrl);vectorPreviewUrl=null;}
+  $('vectorPreview').hidden=true;
+  $('vectorPreview').removeAttribute('src');
+}
+async function exportTracedPicture(output){
+  if(!draft||!report||selectedImage===null||vectorBusy)return;
+  const index=selectedImage, id=draft.id;
+  const colors=Number($('vectorColors').value);
+  vectorBusy=true;
+  $('downloadVectorSvg').disabled=true;
+  $('downloadVectorPng').disabled=true;
+  $('vectorStatus').textContent='Трассируем схему локально на сервере (без GPU)…';
+  try{
+    const response=await fetch('/api/docwork/drafts/'+id+'/images/'+index+'/vectorize',{
+      method:'POST',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-ACHEWIW-Docwork-Token':draft.token},
+      body:JSON.stringify({colors,output,scale:2})
+    });
+    if(!response.ok){
+      let message='HTTP '+response.status;
+      try{message=(await response.json()).detail||message;}catch{}
+      throw new Error(message);
+    }
+    const blob=await response.blob();
+    if(draft?.id!==id || selectedImage!==index)return;
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='ACHEWIW-diagram-'+(index+1)+'-trace.'+output;
+    document.body.append(a);a.click();a.remove();
+    if(output==='svg'){
+      clearVectorPreview();vectorPreviewUrl=url;
+      $('vectorPreview').src=url;$('vectorPreview').hidden=false;
+    } else {setTimeout(()=>URL.revokeObjectURL(url),2000);}
+    $('vectorStatus').textContent='Подготовлен '+output.toUpperCase()+
+      ' только для сравнения. Исходная картинка и DOCX не изменены. '
+      +'Проверь текст, стрелки, границы и цвета перед использованием.';
+  }catch(error){
+    $('vectorStatus').textContent='Трассировка не завершена: '+error.message+
+      '. Оригинал не изменён.';
+  }finally{
+    vectorBusy=false;
+    $('downloadVectorSvg').disabled=false;
+    $('downloadVectorPng').disabled=false;
+  }
+}
+$('downloadVectorSvg').addEventListener('click',()=>{void exportTracedPicture('svg');});
+$('downloadVectorPng').addEventListener('click',()=>{void exportTracedPicture('png');});
+
 function revokeImageThumbnails() {
   for (const url of imageThumbUrls.values()) URL.revokeObjectURL(url);
   imageThumbUrls.clear();
@@ -727,6 +777,10 @@ function selectImage(index) {
   if (!report || !report.images) return;
   const item=report.images.find(x=>x.index===index);
   if (!item?.editable) return;
+  if(selectedImage!==index){
+    clearVectorPreview();
+    $('vectorStatus').textContent='Экспериментальная трассировка не меняет оригинал.';
+  }
   selectedImage=index;
   const saved=imageEdits[String(index)] || {
     width_percent:70, align:'center',corner_percent:0
@@ -808,6 +862,8 @@ function reset() {
   $('pdfTextOnly').checked = false;
   $('pdfLossConfirmed').checked = false;
   selectedImage=null;canvasLimit=120;imageMoveCounter=0;
+  clearVectorPreview();
+  $('vectorStatus').textContent='Выбери рисунок для экспериментальной трассировки.';
   resetUndoTimeline();
   for (const key of Object.keys(imageEdits)) delete imageEdits[key];
   for (const key of Object.keys(imageMoves)) delete imageMoves[key];

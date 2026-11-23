@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea fonts-freefont-ttf libreoffice-writer \
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea fonts-freefont-ttf potrace libreoffice-writer \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY app/requirements.txt /app/requirements.txt

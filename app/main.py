@@ -34,6 +34,7 @@ from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorkshopError,
     preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
 from docwork_image_layout import thumbnail as docwork_image_thumbnail, IllustrationLayoutError
+from docwork_vector import convert_picture as docwork_vectorize_picture, VectorExperimentError
 from docwork_sessions import (
     SessionError as DocworkSessionError, initialize as init_docwork_drafts,
     create as create_docwork_draft, read as read_docwork_draft,
@@ -2531,6 +2532,46 @@ def document_workshop_draft_image(draft_id: str, image_index: int, request: Requ
         content=picture, media_type="image/png",
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
     )
+
+
+@api.post("/docwork/drafts/{draft_id}/images/{image_index}/vectorize")
+async def document_workshop_vectorize_picture(
+    draft_id: str, image_index: int, request: Request
+):
+    """Opt-in local diagram trace; NEVER overwrites the document or library."""
+    data, name = _docwork_session_call(
+        original_docwork_draft, draft_id, _docwork_token(request)
+    )
+    if not name.lower().endswith(".docx"):
+        raise HTTPException(422, "SVG-трассировка сейчас доступна только для DOCX")
+    body = await request.body()
+    if len(body) > 256:
+        raise HTTPException(413, "Слишком много параметров для трассировки")
+    try:
+        args = json.loads(body)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(422, "Неверные параметры преобразования") from exc
+    if not isinstance(args, dict) or set(args) != {"colors", "output", "scale"}:
+        raise HTTPException(422, "Параметры: colors, output, scale")
+    try:
+        result = docwork_vectorize_picture(
+            data, image_index, colors=args["colors"],
+            output=args["output"], scale=args["scale"]
+        )
+    except VectorExperimentError as exc:
+        code = 429 if "Уже идёт трассировка" in str(exc) else 422
+        raise HTTPException(code, str(exc)) from exc
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise HTTPException(422, "Невозможно прочитать исходную иллюстрацию") from exc
+    kind = args["output"]
+    media = "image/svg+xml" if kind == "svg" else "image/png"
+    filename = f"ACHEWIW-diagram-{image_index + 1:03d}-trace.{kind}"
+    return Response(content=result, media_type=media, headers={
+        "Content-Disposition": 'attachment; filename="' + filename + '"',
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": "sandbox",
+        "X-Content-Type-Options": "nosniff"
+    })
 
 
 @api.put("/docwork/drafts/{draft_id}")
