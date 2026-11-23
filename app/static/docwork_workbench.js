@@ -94,7 +94,7 @@ function restoreHistory(redo=false){
   changeButtons();saveAnnotations();
 }
 function clearDrawing(){
-  $('wbVisionReview').hidden=true;
+  clearVisionReview();
   $('wbGraphAudit').hidden=true;
   figures=[];history=[];futures=[];dirty=false;
   down=null;moving=-1;changeButtons();
@@ -647,39 +647,89 @@ $('wbExportGraph').addEventListener('click',()=>{
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
 });
 
+// Vision suggestions are never a drawing layer until individually accepted.
+let visionReview=null;
+function clearVisionReview(){
+  visionReview=null;
+  $('wbVisionReview').replaceChildren();
+  $('wbVisionReview').hidden=true;
+}
+function showVisionReview(){
+  const panel=$('wbVisionReview');
+  panel.replaceChildren();
+  if(!visionReview){panel.hidden=true;return;}
+  const scope=exportScope();
+  if(!scope||JSON.stringify(scope)!==visionReview.scopeKey){
+    clearVisionReview();return;
+  }
+  const heading=document.createElement('strong');
+  heading.textContent='R3.7G · Предложения Vision ('+visionReview.proposals.length+')';
+  panel.append(heading);
+  const info=document.createElement('p');
+  info.textContent='Каждую фигуру проверяй отдельно. Принятие добавляет только ручной объект на холст, не изменяя исходный DOCX.';
+  panel.append(info);
+  const list=document.createElement('ol');
+  for(const proposal of visionReview.proposals){
+    const item=document.createElement('li');
+    const state=visionReview.decisions[proposal.id]||'pending';
+    const title=document.createElement('span');
+    title.textContent=proposal.id+' · '+proposal.type+' · уверенность '+
+      Math.round(proposal.confidence*100)+'% · '+
+      (proposal.type==='text'?'«'+proposal.text+'» · ':'')+
+      [proposal.x,proposal.y,proposal.w,proposal.h].join(', ')+
+      ' · '+(state==='accepted'?'добавлено':state==='rejected'?'отклонено':'требует проверки');
+    item.append(title);
+    if(state==='pending'){
+      const accept=document.createElement('button');
+      accept.type='button';accept.textContent='✓ Принять фигуру';
+      accept.addEventListener('click',()=>{
+        if(!visionReview||JSON.stringify(exportScope())!==visionReview.scopeKey)return clearVisionReview();
+        if(visionReview.decisions[proposal.id])return;
+        if(figures.length>=MAX_OPS)return status('Достигнут лимит 100 фигур',true);
+        let shape;
+        try{shape=window.ACHEWIWVisionProposals.toManualShape(proposal,exportScope());}
+        catch(e){status('Фигура отклонена: '+e.message,true);return;}
+        if(!confirm('Добавить проверенную фигуру '+proposal.id+' на ручной холст?\n'
+          +'Это НЕ применяет замену в DOCX.'))return;
+        record();figures.push(shape);
+        visionReview.decisions[proposal.id]='accepted';
+        render();changeButtons();saveAnnotations();showVisionReview();
+      });
+      const reject=document.createElement('button');
+      reject.type='button';reject.textContent='✕ Отклонить';
+      reject.addEventListener('click',()=>{
+        if(!visionReview||JSON.stringify(exportScope())!==visionReview.scopeKey)return clearVisionReview();
+        visionReview.decisions[proposal.id]='rejected';showVisionReview();
+      });
+      item.append(' ',accept,' ',reject);
+    }
+    list.append(item);
+  }
+  panel.append(list);
+  const warning=document.createElement('p');
+  warning.textContent='Отклонение и список предложений живут только до смены рисунка/F5. Принятые фигуры сохраняются как обычная ручная разметка (R3.6.1), доступен Undo. SVG/JSON экспортируются отдельно.';
+  panel.append(warning);panel.hidden=false;
+}
 $('wbVisionFile').addEventListener('change',async()=>{
-  const input=$('wbVisionFile'),file=input.files?.[0],panel=$('wbVisionReview');
+  const input=$('wbVisionFile'),file=input.files?.[0];
   input.value='';
   if(!file)return;
-  panel.replaceChildren();panel.hidden=true;
+  clearVisionReview();
   try{
     const scope=exportScope();
     if(!scope)throw Error('Доступен только исходный рисунок текущего DOCX');
-    if(file.size>256*1024)throw Error('Файл JSON превышает 256 КиБ');
+    if(file.size>256*1024)throw Error('JSON превышает 256 КиБ');
     const parser=window.ACHEWIWVisionProposals;
     if(!parser)throw Error('Модуль проверки не загружен');
     const review=parser.validate(JSON.parse(await file.text()),scope);
-    const title=document.createElement('strong');
-    title.textContent='R3.7F · Непроверенные предложения, '+review.count;
-    panel.append(title);
-    const warning=document.createElement('p');
-    warning.textContent='Результат не принимается и не добавляется на холст. Даже высокая уверенность модели не является доказательством.';
-    panel.append(warning);
-    const list=document.createElement('ol');
-    for(const proposal of review.proposals){
-      const item=document.createElement('li');
-      item.textContent=proposal.id+' · '+proposal.type+
-        ' · оценка '+Math.round(proposal.confidence*100)+'%'+
-        (proposal.type==='text'?' · «'+proposal.text+'»':'')+
-        ' · ('+[proposal.x,proposal.y,proposal.w,proposal.h].join(', ')+')'+
-        ' · НЕ ПРОВЕРЕНО';
-      list.append(item);
-    }
-    panel.append(list);panel.hidden=false;
-    status('JSON с предложениями проверен. Изображение, разметка и книга не изменены.');
-  }catch(error){
-    panel.textContent='Предложения отклонены: '+error.message;
-    panel.hidden=false;status('Импорт предложений отклонён.',true);
+    if(JSON.stringify(exportScope())!==JSON.stringify(scope))
+      throw Error('Рисунок изменился во время чтения файла');
+    visionReview={proposals:review.proposals,scopeKey:JSON.stringify(scope),
+      decisions:Object.create(null)};
+    showVisionReview();
+    status('Предложения доступны для поштучной проверки, автоматически ничего не применено.');
+  }catch(e){
+    clearVisionReview();status('Предложения отклонены: '+e.message,true);
   }
 });
 $('wbImportGraph').addEventListener('change',async()=>{

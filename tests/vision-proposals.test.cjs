@@ -29,3 +29,30 @@ test('отклоняются некорректная уверенность и 
  const x=payload();x.proposals[0].confidence=NaN;assert.throws(()=>validate(x,scope));
  const y=payload();y.proposals[0].text='Ж'.repeat(181);assert.throws(()=>validate(y,scope));
 });
+
+test('отдельно принятая фигура становится ручной, не изменяя предложение',()=>{
+ const {toManualShape}=require('../app/static/vision_proposals.js');
+ const original=payload().proposals[0];
+ const applied=toManualShape(original,scope);
+ assert.equal(applied.type,'text');
+ assert.equal(applied.text,'Узел А');
+ assert.equal(applied.color,'#176d47');
+ assert.equal(original.color,undefined);
+});
+test('нельзя принять фигуру вне холста',()=>{
+ const {toManualShape}=require('../app/static/vision_proposals.js');
+ assert.throws(()=>toManualShape({...payload().proposals[0],x:790,w:100},scope));
+ assert.throws(()=>toManualShape({...payload().proposals[0],x:-1},scope));
+});
+test('допускаются вертикальные и горизонтальные стрелки',()=>{
+ const {toManualShape}=require('../app/static/vision_proposals.js');
+ const p=payload().proposals[0];
+ assert.equal(toManualShape({...p,type:'arrow',x:20,y:20,w:0,h:100},scope).type,'arrow');
+ assert.equal(toManualShape({...p,type:'line',x:20,y:20,w:100,h:0},scope).type,'line');
+});
+test('неприемлемые пустые надписи и точки не переводятся в ручные фигуры',()=>{
+ const {toManualShape}=require('../app/static/vision_proposals.js');
+ const p=payload().proposals[0];
+ assert.throws(()=>toManualShape({...p,text:'  '},scope));
+ assert.throws(()=>toManualShape({...p,type:'arrow',w:0,h:0},scope));
+});
