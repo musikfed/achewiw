@@ -2,6 +2,52 @@
 from __future__ import annotations
 import re
 from datetime import datetime
+from pathlib import Path
+
+MAX_EXPORT_IMAGE_BYTES = 50 * 1024 * 1024
+MAX_EXPORT_IMAGE_PIXELS = 24_000_000
+
+
+def verified_illustrations(illustrations):
+    """Fail closed before exporting any format; never silently omit an image.
+
+    Does not mutate the catalogue or author's files. The same validation is
+    used by EPUB, FB2, PDF and DOCX, including direct Python export callers.
+    """
+    # Manuscript/Markdown unit tests run before optional graphics dependencies
+    # are installed; import Pillow only when actual artwork is being checked.
+    if not illustrations:
+        return []
+    from PIL import Image, UnidentifiedImageError
+    result = list(illustrations)
+    seen = set()
+    for art in result:
+        if not isinstance(art, dict):
+            raise ValueError("Некорректная запись иллюстрации — выпуск отменён")
+        asset_id = str(art.get("id") or "")
+        if not re.fullmatch(r"[0-9a-f]{32}", asset_id):
+            raise ValueError("Неверный идентификатор иллюстрации — выпуск отменён")
+        if asset_id in seen:
+            raise ValueError("Повтор идентификатора иллюстрации " + asset_id)
+        seen.add(asset_id)
+        raw_path = art.get("path")
+        if not isinstance(raw_path, (str, Path)) or not raw_path:
+            raise ValueError("Иллюстрация " + asset_id + ": нет пути к файлу — выпуск отменён")
+        path = Path(raw_path)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Иллюстрация " + asset_id + ": файл отсутствует или небезопасен — выпуск отменён")
+        try:
+            size = path.stat().st_size
+            if size == 0 or size > MAX_EXPORT_IMAGE_BYTES:
+                raise ValueError("Иллюстрация " + asset_id + ": размер файла недопустим — выпуск отменён")
+            with Image.open(path) as image:
+                if image.format != "PNG" or image.width * image.height > MAX_EXPORT_IMAGE_PIXELS:
+                    raise ValueError("Иллюстрация " + asset_id + ": ожидается корректный PNG — выпуск отменён")
+                image.verify()
+        except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
+            raise ValueError("Иллюстрация " + asset_id + ": повреждённый PNG — выпуск отменён") from exc
+    return result
+
 
 APP_VERSION = "0.6.0"
 APP_NAME = "ACHEWIW StoryEngine"

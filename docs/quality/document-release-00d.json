@@ -70,21 +70,27 @@
     {
       "id": "D06",
       "priority": "P0",
-      "status": "not_tested",
-      "criterion": "Картинка + подпись в книжном PDF/DOCX остаются связаны при переходе страницы; разрывы без явного сигнала недопустимы.",
+      "status": "pass",
+      "criterion": "R2 (синтетика): картинка + подпись в A5 PDF на одной странице у проверенных границ пагинации; DOCX имеет keep_with_next/keep_together и ограничение высоты. Постраничная сверка в реальном MS Word/LibreOffice остаётся отдельной ручной проверкой D14.",
       "evidence": [
-        "app/publishing_exports.py::manuscript_docx",
-        "app/publishing_exports.py::manuscript_pdf"
+        "tests/test_r2_illustration_fidelity.py::test_r2_pdf_picture_and_caption_remain_on_same_page_near_breaks",
+        "tests/test_r2_illustration_fidelity.py::test_r2_pdf_portrait_illustration_and_long_caption_fit_together",
+        "tests/test_r2_illustration_fidelity.py::test_r2_docx_picture_caption_keep_next_and_portrait_fits_page",
+        "app/publishing_exports.py::manuscript_pdf",
+        "app/publishing_exports.py::manuscript_docx"
       ]
     },
     {
       "id": "D07",
       "priority": "P0",
-      "status": "not_tested",
-      "criterion": "Отсутствующий файл иллюстрации в принятом произведении запрещает выпуск или явно фиксируется и утверждается; не пропускается молча.",
+      "status": "pass",
+      "criterion": "R2 (синтетика): отсутствующий/повреждённый/небезопасный PNG или повтор ID блокирует экспорт DOCX/PDF/EPUB/FB2 и сообщает ID в HTTP 409; запись об иллюстрации не удаляется.",
       "evidence": [
-        "app/illustrations_core.py",
-        "app/publishing_exports.py"
+        "tests/test_r2_illustration_fidelity.py::test_r2_missing_illustration_never_disappears_from_export",
+        "tests/test_r2_illustration_fidelity.py::test_r2_api_missing_file_blocks_all_book_formats",
+        "tests/test_r2_illustration_fidelity.py::test_r2_corrupt_and_symlinked_illustrations_fail_before_export",
+        "app/book_layout_core.py::verified_illustrations",
+        "app/illustrations_core.py::asset_for_export"
       ]
     },
     {
@@ -173,5 +179,12 @@
     "skipped": 1,
     "known_fail": 0,
     "scope": "synthetic simple PDF fidelity; no LibreOffice visual proof or production deployment"
+  },
+  "r2_ci": {
+    "commit": "54910967daa9ac23df0175f1e1d5d7bb2d785cea",
+    "url": "https://github.com/musikfed/achewiw/actions/runs/45195471619",
+    "passed_in_publishing_step": 24,
+    "known_fail": 0,
+    "scope": "Synthetic A5 PDF co-location, DOCX keep flags, invalid asset refusal; real Word layout and production remain untested"
   }
 }

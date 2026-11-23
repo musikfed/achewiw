@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 
 from PIL import Image, ImageOps, UnidentifiedImageError
-from book_layout_core import COVER_SCENE_ID
+from book_layout_core import COVER_SCENE_ID, verified_illustrations
 
 ID = re.compile(r"^[0-9a-f]{32}$")
 MAX_UPLOAD = 12 * 1024 * 1024
@@ -136,9 +136,7 @@ def asset_for_export(data_dir: Path, conn: sqlite3.Connection, project_id: str) 
     result = []
     for record in listing(conn, project_id):
         path = checked_path(data_dir, project_id, record["id"])
-        if path.is_symlink() or not path.is_file():
-            continue
-        if path.stat().st_size > 50 * 1024 * 1024:
-            continue
+        # Every artwork row is mandatory: missing/corrupt files MUST block
+        # publication, never disappear from an otherwise successful export.
         result.append({**record, "path": path})
-    return result
+    return verified_illustrations(result)

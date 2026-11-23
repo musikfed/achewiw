@@ -1235,9 +1235,9 @@ def download_manuscript_epub(project_id: str):
     try:
         body = manuscript_epub(project, illustrations=illustrations_for_book(project_id))
     except ValueError as exc:
-        raise HTTPException(
-            409, "Для EPUB сначала сохрани текст хотя бы одной сцены в редакторе."
-        ) from exc
+        # Preserve the precise missing/corrupt illustration ID in the response;
+        # never disguise asset loss as "no authored chapters".
+        raise HTTPException(409, str(exc)) from exc
     return Response(
         content=body, media_type="application/epub+zip",
         headers={"Content-Disposition": 'attachment; filename="achewiw-book.epub"',
