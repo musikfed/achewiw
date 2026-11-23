@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DocWork R3.1 image styling smoke test against a running ACHEWIW Studio.
+"""DocWork R3.2 integrated editing smoke test against a running ACHEWIW Studio.
 
 Only synthetic DOCX bytes and a test draft with an unguessable ID are used.
 On successful test draft creation it explicitly deletes ONLY that test draft.
@@ -74,6 +74,7 @@ def test_docx():
     out=BytesIO();image.save(out,"PNG");out.seek(0)
     doc.add_paragraph().add_run().add_picture(out)
     doc.add_paragraph("Рисунок 1 — Проверка скругления",style="Caption")
+    doc.add_paragraph("Текст после иллюстрации для проверки переноса.")
     out=BytesIO();doc.save(out)
     return out.getvalue()
 
@@ -97,21 +98,34 @@ def main():
         code,_=request("GET",base+"/images/0")
         ok("R3.1 thumbnail requires token",code==404)
         styles={"0":{"width_percent":65,"align":"center","corner_percent":16}}
-        state={"images":styles,"settings":{"preset":"book"}}
+        positions={"0":{"before_paragraph":0,"order":1}}
+        edits={"3":"Отредактированный текст после иллюстрации."}
+        state={"images":styles,"moves":positions,"replacements":edits,
+               "settings":{"preset":"book"}}
         code,resp=request("PUT",base,json.dumps({"revision":1,"state":state}).encode(),
                           "application/json",token)
         ok("R3.1 image styling saved",code==200)
         code,resp=request("GET",base,token=token)
         ok("R3.1 image style survives reload",
            code==200 and json.loads(resp).get("state",{}).get("images")==styles)
+        ok("R3.2 picture position survives reload",
+           code==200 and json.loads(resp).get("state",{}).get("moves")==positions)
 
         body,mime=multipart(original,fields={
-            "options":json.dumps({"preset":"book","image_edits":styles}),
+            "options":json.dumps({"preset":"book","image_edits":styles,
+                                  "image_moves":positions,"replacements":edits}),
             "target":"docx"
         })
         code,resp=request("POST","/api/docwork/export",body,mime)
         ok("R3.1 styled DOCX exported",code==200 and resp.startswith(b"PK"))
         revised=Document(BytesIO(resp))
+        ok("R3.2 picture actually moved before chapter heading",
+           "w:drawing" in revised.paragraphs[0]._p.xml
+           and revised.paragraphs[2].text=="Тестовая глава")
+        ok("R3.2 caption moved together with picture",
+           revised.paragraphs[1].text.startswith("Рисунок 1"))
+        ok("R3.2 text edited on document canvas is exported",
+           revised.paragraphs[3].text=="Отредактированный текст после иллюстрации.")
         shape=revised.inline_shapes[0]
         rid=shape._inline.xpath(".//a:blip")[0].get(qn("r:embed"))
         blob=revised.part.related_parts[rid].blob
@@ -123,7 +137,7 @@ def main():
         text_width=section.page_width-section.left_margin-section.right_margin
         ok("R3.1 relative width and center alignment",
            abs(shape.width/text_width-0.65)<0.02
-           and revised.paragraphs[1].alignment==WD_ALIGN_PARAGRAPH.CENTER)
+           and revised.paragraphs[0].alignment==WD_ALIGN_PARAGRAPH.CENTER)
         code,source=request("GET",base+"/source",token=token)
         ok("R3.1 source still byte-identical",
            code==200 and sha256(source).digest()==sha256(original).digest())
