@@ -143,8 +143,25 @@ function toast(message){const t=$('#toast');t.textContent=message;t.style.displa
 function setBusy(value){isBusy=value;document.querySelectorAll('button').forEach(b=>{if(['generateScene','buildOutline','buildOutline2','runAudit','unloadModel'].includes(b.id))b.disabled=value});$('#status').textContent=value?'Идёт генерация StoryEngine · сохраняется на сервере':'Студия готова'}
 function renderProjects(){
  const items=projects.filter(p=>activeKind==='all'||(p.work_type||'fiction')===activeKind);
- $('#projects').innerHTML=items.map(p=>'<button class="projectItem '+(project?.id===p.id?'selected':'')+'" data-id="'+escaped(p.id)+'"><strong>'+escaped(p.title)+'</strong><small>'+escaped(workModes[p.work_type||'fiction']?.name||'Проза')+'</small></button>').join('');
- document.querySelectorAll('.projectItem').forEach(b=>b.onclick=()=>loadProject(b.dataset.id))
+ const root=$('#projects');
+ root.replaceChildren();
+ for(const item of items){
+   const row=document.createElement('div');
+   row.className='projectEntry'+(project?.id===item.id?' selected':'');
+   const open=document.createElement('button');
+   open.type='button';open.className='projectItem';
+   open.dataset.id=item.id;
+   const title=document.createElement('strong');title.textContent=item.title;
+   const kind=document.createElement('small');kind.textContent=workModes[item.work_type||'fiction']?.name||'Проза';
+   open.append(title,kind);
+   open.addEventListener('click',()=>loadProject(item.id));
+   const remove=document.createElement('button');
+   remove.type='button';remove.className='projectRemove';
+   remove.textContent='✕';remove.title='Удалить книгу «'+item.title+'»';
+   remove.setAttribute('aria-label','Удалить книгу «'+item.title+'»');
+   remove.addEventListener('click',()=>deleteProjectById(item.id));
+   row.append(open,remove);root.append(row);
+ }
 }
 async function refreshProjects(){projects=await api('/projects');renderProjects()}
 function render(){
@@ -190,18 +207,45 @@ async function createProject(kind){
  pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;
  await refreshProjects();render();showTab('brief');
 }
-async function deleteCurrentProject(){
- if(!project || isBusy)return;
- const current=project;
- if(!confirm('Удалить только «'+current.title+'» из библиотеки? Перед удалением SQLite сохранится в data/backups/. Другие работы не затрагиваются.'))return;
- const phrase=prompt('Для подтверждения точно введи название работы:', '');
- if(phrase!==current.title){toast('Удаление отменено');return;}
+function clearDeletedProjectBrowserState(id){
+ clearTimeout(draftSaveTimer);draftSaveTimer=null;
+ const explicit=['achewiw.activeProjectId',uiKey('manuscriptDraft',id),uiKey('tab',id),uiKey('scroll',id)];
+ for(const store of [sessionStorage,localStorage]){
+   for(const key of explicit)try{store.removeItem(key)}catch{}
+   // Only project-scoped keys. Do not touch other books or ComfyUI state.
+   const scoped=[];
+   try{
+     for(let i=0;i<store.length;i++){
+       const key=store.key(i);
+       if(key&&(key.startsWith('achewiw.v8.')&&key.endsWith('.'+id)))scoped.push(key);
+     }
+     scoped.forEach(key=>store.removeItem(key));
+   }catch{}
+ }
+}
+async function deleteProjectById(id){
+ if(!id)return;
+ const current=projects.find(p=>p.id===id);
+ if(!current)return toast('Книга уже отсутствует в библиотеке');
+ if(!confirm('Удалить книгу «'+current.title+'» и её записи из рабочей библиотеки?\n'
+     +'Действующая база SQLite будет предварительно сохранена в data/backups/.\n'
+     +'Это НЕ удаляет исторические резервные копии.'))return;
+ const phrase=prompt('Для подтверждения введи ТОЧНОЕ название книги:', '');
+ if(phrase!==current.title){toast('Удаление отменено: название не совпадает');return;}
  try{
-  await api('/projects/'+current.id,{method:'DELETE'});
-  project=null;pending=null;activeGenerationJobId=null;
-  await refreshProjects();render();
-  toast('Работа удалена. Резервная копия SQLite сохранена.');
+   await api('/projects/'+encodeURIComponent(id),{method:'DELETE'});
+   clearDeletedProjectBrowserState(id);
+   if(project?.id===id){
+     project=null;pending=null;activeGenerationJobId=null;bookJobId=null;
+     bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;
+     $('#aiPanel').hidden=true;
+   }
+   await refreshProjects();render();
+   toast('Книга «'+current.title+'» удалена из рабочей базы. SQLite-архив сохранён.');
  }catch(e){toast('Удаление не выполнено: '+e.message)}
+}
+async function deleteCurrentProject(){
+ if(project)await deleteProjectById(project.id);
 }
 function showTab(name){document.querySelectorAll('.tabpane').forEach(n=>n.hidden=n.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===name));if(project)safeSet(localStorage,uiKey('tab'),name);if(name==='audit'){renderStats();renderAuditHistory();refreshBookVersions()}if(name==='book'){renderBook();if(bookJobId)refreshFullBook();}document.dispatchEvent(new CustomEvent('achewiw:tab-shown',{detail:{name}}))}
 async function renderAuditHistory(){
