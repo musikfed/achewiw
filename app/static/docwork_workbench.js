@@ -335,7 +335,7 @@ function downloadBlob(blob,name){
 }
 $('wbDownload').addEventListener('click',async()=>{
   if(!baseImage)return;
-  try{downloadBlob(figures.length?await canvasPng():baseBlob,
+  try{downloadBlob(await canvasPng(),
     'ACHEWIW-illustration-'+(selected+1)+'-for-Photoshop.png');}
   catch(e){status(e.message,true);}
 });
@@ -387,7 +387,9 @@ $('wbBack').addEventListener('click',()=>{
 $('wbPicture').addEventListener('change',()=>{
   const index=Number($('wbPicture').value);
   if(Number.isInteger(index)&&index>=0){
-    host.selectPicture(index);void choose(index,host.assetFor(index)?'applied':'original');
+    const wasSelected=host.current().selected===index;
+    host.selectPicture(index);
+    if(wasSelected)void choose(index,host.assetFor(index)?'applied':'original');
   }
 });
 $('openImageWorkbench').addEventListener('click',()=>{
