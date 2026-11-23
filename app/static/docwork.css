@@ -141,3 +141,11 @@
 #vectorPreview{display:block;margin:12px auto;max-width:100%;max-height:270px;
  object-fit:contain;background:#fff;border:1px solid #d7e4d9;border-radius:6px}
 #vectorPreview[hidden]{display:none}
+
+/* Full-width reading/editing mode for books with many pictures. */
+.columns.editor-wide{grid-template-columns:minmax(0,1fr)}
+.columns.editor-wide>section.control{display:none!important}
+.columns.editor-wide>section.preview{min-width:0;grid-column:1}
+.columns.editor-wide .documentCanvas{max-width:950px}
+.previewHeadActions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+#toggleSidebar{font-size:12px;padding:7px 11px}
