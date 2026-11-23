@@ -179,20 +179,12 @@ def test_pdf_image_is_present_in_synthetic_source():
     assert "Figure 1" in text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="P0 known defect: app/document_workshop.py pdf_to_docx exports text only, drops PDF images",
-)
 def test_pdf_to_docx_must_preserve_images():
     original = _pdf_with_two_columns_and_png()
     converted, _, _ = workshop.export(original, "source.pdf", {}, "docx")
     assert _media(converted), "PDF figure was silently discarded in editable DOCX"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="P1 known defect: sort by (y,x) interleaves two-column PDF reading order",
-)
 def test_pdf_to_docx_must_preserve_two_column_reading_order():
     original = _pdf_with_two_columns_and_png()
     converted, _, _ = workshop.export(original, "source.pdf", {}, "docx")

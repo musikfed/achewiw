@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
 <link rel="stylesheet" href="/static/docwork.css?v=1">
-<script src="/static/docwork.js?v=1" defer></script>
+<script src="/static/docwork.js?v=2" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -57,7 +57,13 @@
       <h2 id="exportSection">03 · Имя и формат</h2>
       <label>Имя нового файла (без расширения)<input type="text" id="outputName" maxlength="120" placeholder="Karate Linux — белый пояс — редакция 2"></label>
       <div class="actions buttons"><button type="button" id="downloadDocx" class="primary" disabled>↓ Скачать DOCX</button><button type="button" id="downloadPdf" disabled>↓ Скачать PDF</button></div>
-      <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: извлечение текста без гарантии сохранения колонок, рисунков и точной вёрстки. Сканам нужен OCR.</p>
+      <div id="pdfModeControls" class="checklist" hidden>
+        <strong>Режим PDF → DOCX</strong>
+        <p class="hint">По умолчанию сохраняем рисунки и порядок колонок, если структура PDF поддерживается. Сложный документ не будет выдан как успешно восстановленный.</p>
+        <label><input type="checkbox" id="pdfTextOnly"> Только текст — сознательно отказаться от изображений, ссылок и исходной вёрстки</label>
+        <label><input type="checkbox" id="pdfLossConfirmed"> Я понимаю, что в режиме «Только текст» теряются изображения, таблицы и расположение элементов</label>
+      </div>
+      <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: перенос поддерживаемого текста и встроенных изображений; сложная структура блокируется. Сканам нужен OCR. Перед выпуском визуально сверьте страницы.</p>
     </section>
     <section class="preview" aria-label="Предпросмотр и ручная редактура">
       <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Абзацы и заголовки</h2></div><span id="changeCounter">0 правок</span></div>

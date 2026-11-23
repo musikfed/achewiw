@@ -135,10 +135,26 @@ def preview_pdf(data: bytes) -> dict:
             chars += len(text)
             if i < 8:
                 snippets.append({"page": i+1, "text": text[:1100]})
-        warnings = ["PDF → DOCX восстанавливает доступный текст; изображения, колонки и точная вёрстка могут быть утрачены."]
+        # Inspection is not a promise of perfect PDF layout reconstruction.
+        images = sum(
+            sum(1 for b in page.get_text("dict", sort=False)["blocks"] if b.get("type") == 1)
+            for page in pdf
+        )
+        vector_pages = sum(bool(page.get_drawings()) for page in pdf)
+        warnings = [
+            "PDF → DOCX: текст и встроенные растровые иллюстрации переносятся в редактируемый документ "
+            "для поддерживаемых страниц; точная геометрия исходного PDF не гарантируется.",
+            "Сложная векторная графика, таблицы, неоднозначные колонки или аннотации блокируют "
+            "точный перенос. Отдельный режим «Только текст» доступен после подтверждения потерь.",
+        ]
+        if images:
+            warnings.append(f"В PDF найдено отображений растровых изображений: {images}.")
+        if vector_pages:
+            warnings.append(f"Страниц с векторными рисунками/линиями: {vector_pages}; без потерь импорт не гарантирован.")
         if chars < 20:
             warnings.append("Не найден текстовый слой. Для сканированного PDF необходим OCR.")
-        return {"type": "pdf", "pages": len(pdf), "characters": chars, "sample_pages": snippets,
+        return {"type": "pdf", "pages": len(pdf), "characters": chars, "images": images,
+                "vector_pages": vector_pages, "sample_pages": snippets,
                 "warnings": warnings}
 
 
@@ -319,37 +335,28 @@ def transform_docx(data: bytes, options: dict) -> bytes:
     return out.getvalue()
 
 
-def pdf_to_docx(data: bytes) -> bytes:
+def pdf_to_docx(data: bytes, options: dict | None = None) -> bytes:
+    """Reflow uncomplicated PDF pages, preserving images and column reading order.
+
+    For complex PDF documents, refuse incomplete 'faithful' conversion and
+    require the explicit, confirmed pdf_mode='text_only' opt-in.
+    """
     import fitz
-    doc = Document()
-    doc.styles["Normal"].font.name = "Liberation Serif"
-    doc.styles["Normal"].font.size = Pt(11)
+    from pdf_layout_import import convert_pdf_to_docx, UnsupportedPDFLayout
+
+    settings = options or {}
     with fitz.open(stream=data, filetype="pdf") as pdf:
         if pdf.needs_pass:
             raise DocumentWorkshopError("Защищённый PDF")
         if len(pdf) > 400:
             raise DocumentWorkshopError("PDF более 400 страниц не поддерживается")
-        total_text = 0
-        for i, page in enumerate(pdf):
-            if i:
-                doc.add_page_break()
-            blocks = sorted(page.get_text("blocks"), key=lambda b: (round(b[1]/8), b[0]))
-            for item in blocks:
-                if len(item) < 7 or item[6] != 0:
-                    continue
-                text = item[4].strip()
-                if not text:
-                    continue
-                total_text += len(text)
-                for part in re.split(r"\n\s*\n", text):
-                    merged = re.sub(r"(?<!-)\n", " ", part).strip()
-                    if merged:
-                        doc.add_paragraph(merged)
-        if total_text < 20:
-            raise DocumentWorkshopError("У PDF нет текстового слоя: требуется OCR, который здесь не установлен")
-    buff = BytesIO()
-    doc.save(buff)
-    return buff.getvalue()
+        try:
+            return convert_pdf_to_docx(
+                pdf, mode=settings.get("pdf_mode", "preserve"),
+                confirmed_loss=settings.get("confirm_text_loss", False),
+            )
+        except UnsupportedPDFLayout as exc:
+            raise DocumentWorkshopError(str(exc)) from exc
 
 
 def docx_to_pdf(data: bytes) -> bytes:
@@ -385,7 +392,7 @@ def export(data: bytes, filename: str, options: dict, target: str) -> tuple[byte
         if target == "pdf":
             # No recompression or hidden PDF mutation.
             return data, output_filename(filename, requested, "pdf"), "application/pdf"
-        result = pdf_to_docx(data)
+        result = pdf_to_docx(data, options)
         result = transform_docx(result, options)
         return result, output_filename(filename, requested, "docx"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     revised = transform_docx(data, options)

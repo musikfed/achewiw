@@ -35,6 +35,9 @@ function reset() {
   $('paragraphList').replaceChildren(); $('editPane').hidden = true;
   $('warnings').textContent = 'Проверьте документ, чтобы увидеть структуру.';
   $('summary').textContent = 'Содержимое остаётся только в выбранном файле.';
+  $('pdfModeControls').hidden = true;
+  $('pdfTextOnly').checked = false;
+  $('pdfLossConfirmed').checked = false;
   $('changeCounter').textContent = '0 правок'; busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
@@ -135,6 +138,7 @@ async function inspect() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'HTTP '+response.status);
     report = result; selected = null; rendered = 80; $('editPane').hidden = true;
+    $('pdfModeControls').hidden = result.type !== 'pdf';
     clearPdf();
     $('workflowStatus').textContent = 'Файл прочитан · выбери стиль, затем нажми «Показать страницы PDF».';
     $('paragraphFilter').value = result.type === 'docx' ? 'headings' : 'all';
@@ -156,6 +160,8 @@ function optionsForExport() {
     body_font:$('bodyFont').value, chapter_font:$('chapterFont').value,
     subchapter_font:$('subchapterFont').value, body_size:$('bodySize').value,
     chapter_size:$('chapterSize').value, subchapter_size:$('subchapterSize').value,
+    pdf_mode:$('pdfTextOnly').checked ? 'text_only' : 'preserve',
+    confirm_text_loss:$('pdfLossConfirmed').checked,
     overrides, replacements};
 }
 function requestForm(target, options) {
@@ -238,6 +244,10 @@ for (const id of ['preset','bodyFont','chapterFont','subchapterFont','bodySize',
     }
   });
 }
+$('pdfTextOnly').addEventListener('change', () => {
+  if (!$('pdfTextOnly').checked) $('pdfLossConfirmed').checked = false;
+  clearPdf();
+});
 $('downloadDocx').addEventListener('click', () => download('docx'));
 $('downloadPdf').addEventListener('click', () => download('pdf'));
 $('quickDownloadDocx').addEventListener('click', () => download('docx'));

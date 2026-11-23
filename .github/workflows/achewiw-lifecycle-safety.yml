@@ -79,7 +79,7 @@ jobs:
       - name: Install FastAPI and HTTPX for isolated API tests
         run: python3 -m pip install --disable-pip-version-check -r app/requirements.txt pytest
       - name: Document workshop tests (DOCX and PDF, original preserved)
-        run: PYTHONPATH=app python3 -m pytest -q tests/test_document_workshop.py tests/test_document_fidelity_00g.py
+        run: PYTHONPATH=app python3 -m pytest -q tests/test_document_workshop.py tests/test_document_fidelity_00g.py tests/test_r1_pdf_layout_import.py
       - name: Stage 00-D publication gate stays BLOCKED until repaired and reviewed
         run: |
           python3 scripts/check-document-release-00d.py --expect-blocked
