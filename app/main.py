@@ -2581,6 +2581,54 @@ async def document_workshop_vectorize_picture(
     })
 
 
+@api.get("/docwork/drafts/{draft_id}/vision/preflight")
+async def document_workshop_vision_preflight(draft_id: str, request: Request):
+    """Read-only readiness check. Never load a model or reserve GPU here."""
+    _docwork_session_call(
+        read_docwork_draft, draft_id, _docwork_token(request)
+    )
+    with db() as connection:
+        busy = bool(active_job(connection) or image_operation_active(connection))
+    if busy:
+        return {
+            "ready": False, "reason": "ACHEWIW выполняет GPU-задачу",
+            "models": [], "model_loaded": False, "inference_enabled": False,
+        }
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(4.0, connect=2.0), trust_env=False
+        ) as client:
+            tags = await client.get(OLLAMA_BASE_URL + "/api/tags")
+            tags.raise_for_status()
+            ps = await client.get(OLLAMA_BASE_URL + "/api/ps")
+            ps.raise_for_status()
+        available = [
+            item.get("name", "") for item in tags.json().get("models", [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        ]
+        loaded = [
+            item.get("name", "") for item in ps.json().get("models", [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        ]
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return {
+            "ready": False, "reason": "Не удалось прочитать Ollama",
+            "models": [], "model_loaded": False, "inference_enabled": False,
+        }
+    # A preference, NOT a guarantee of useful diagram OCR.
+    vision = sorted({name for name in available if any(
+        word in name.lower() for word in ("vision", "llava", "vl", "granite3.2-vision")
+    )})
+    return {
+        "ready": bool(vision), "reason": (
+            "Установлены возможные vision-модели; точность ещё не проверялась"
+            if vision else "Vision-модели не обнаружены в списке Ollama"
+        ), "models": vision, "loaded_models": sorted(set(vision) & set(loaded)),
+        "model_loaded": bool(set(vision) & set(loaded)),
+        "inference_enabled": False,
+    }
+
+
 @api.get("/docwork/drafts/{draft_id}/images/{image_index}/original")
 def document_workshop_original_picture(draft_id: str, image_index: int, request: Request):
     """Authorized full-quality PNG for image workbench, not just tiny thumbnail."""
