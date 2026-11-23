@@ -11,6 +11,7 @@ let vectorSource=false, figures=[], history=[], futures=[], editStart=null;
 let down=null, moving=-1, movingOriginal=null, dirty=false, operationBusy=false;
 let baseUrl=null, originalUrl=null, compareUrl=null, generation=0;
 const MAX_OPS=100, MAX_STEPS=60, MAX_CANVAS_PIXELS=16000000;
+const ANNOTATION_KEY_PREFIX='achewiw:docwork:r361:canvas:';
 const canvas=$('wbCanvas'), ctx=canvas.getContext('2d',{alpha:true});
 const status=(text,isError=false)=>{
   $('wbStatus').textContent=text;
@@ -30,6 +31,49 @@ function changeButtons(){
   $('wbDownload').disabled=selected<0||!baseImage;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
+function annotationKey(){
+  // No access token is stored. A draft ID and a single picture determine scope.
+  // External uploaded files and temporary vector preview have no stable base.
+  if(external||vectorSource||selected<0||!baseImage)return null;
+  const draft=host?.current()?.draft;
+  if(!draft?.id)return null;
+  const asset=host?.assetFor(selected)||'original';
+  return ANNOTATION_KEY_PREFIX+draft.id+':'+selected+':'+asset;
+}
+function saveAnnotations(){
+  const key=annotationKey();
+  if(!key)return;
+  try{
+    if(!dirty||!figures.length)localStorage.removeItem(key);
+    else localStorage.setItem(key,JSON.stringify({version:1,figures}));
+  }catch{
+    status('Разметка не сохранилась в браузере: не хватает места или хранилище отключено.',true);
+  }
+}
+function validAnnotation(obj){
+  if(!obj||!['text','rectangle','cover','ellipse','line','arrow'].includes(obj.type))return false;
+  if(!['x','y','w','h'].every(k=>Number.isFinite(obj[k])&&Math.abs(obj[k])<=MAX_CANVAS_PIXELS))return false;
+  if(obj.type==='text'&&(typeof obj.text!=='string'||obj.text.length>180))return false;
+  if(obj.color!=null&&!/^#[0-9a-f]{6}$/i.test(obj.color))return false;
+  return true;
+}
+function loadAnnotations(){
+  const key=annotationKey();
+  if(!key)return;
+  try{
+    const raw=localStorage.getItem(key);
+    if(!raw)return;
+    const saved=JSON.parse(raw);
+    if(saved?.version!==1||!Array.isArray(saved.figures)||
+       saved.figures.length>MAX_OPS||!saved.figures.every(validAnnotation)){
+      status('Сохранённая разметка повреждена — не загружена.',true);
+      return;
+    }
+    figures=saved.figures;dirty=figures.length>0;
+    history=[];futures=[];render();changeButtons();
+    if(dirty)status('Несохранённая разметка восстановлена из этого браузера. Примени замену, чтобы закрепить её в книге.');
+  }catch{status('Не удалось восстановить локальную разметку.',true);}
+}
 function record(){
   history.push(JSON.stringify(figures));
   if(history.length>MAX_STEPS)history.shift();
@@ -42,7 +86,7 @@ function restoreHistory(redo=false){
   to.push(JSON.stringify(figures));
   figures=JSON.parse(from.pop());
   dirty=true;render();
-  changeButtons();
+  changeButtons();saveAnnotations();
 }
 function clearDrawing(){
   figures=[];history=[];futures=[];dirty=false;
@@ -126,6 +170,7 @@ function imageFromBlob(blob){
 }
 async function setCanvasBlob(blob,isExternal=false,fromVector=false){
   if(dirty&&figures.length&&!window.confirm('На холсте есть несохранённые фигуры. Загрузить другое изображение?'))return;
+  saveAnnotations();
   const {img,url}=await imageFromBlob(blob);
   cleanupUrl('baseUrl');baseUrl=url;baseImage=img;baseBlob=blob;
   external=isExternal;vectorSource=fromVector;
@@ -168,6 +213,7 @@ async function choose(index,mode='original'){
   const serial=++generation;
   if(index!==selected&&dirty&&figures.length&&
      !window.confirm('Фигуры на холсте не применены. Сменить рисунок?'))return;
+  saveAnnotations();
   selected=index;
   $('wbPicture').value=String(index);
   clearDrawing();
@@ -181,6 +227,7 @@ async function choose(index,mode='original'){
       await setCanvasBlob(replacement,false,false);
     }else await setCanvasBlob(original,false,false);
     if(serial!==generation)return;
+    loadAnnotations();
     changeButtons();
   }catch(e){status(e.message,true);}
 }
@@ -225,7 +272,7 @@ canvas.addEventListener('pointerdown',event=>{
     record();figures.push({type:'text',x:p.x,y:p.y,w:0,h:0,
       text:$('wbText').value.slice(0,180),color:$('wbColor').value,
       fontSize:number('wbTextSize',10,100,28)});
-    render();return;
+    render();saveAnnotations();return;
   }
   if(tool==='select'){
     moving=-1;
@@ -264,14 +311,14 @@ canvas.addEventListener('pointerup',event=>{
       history.pop();
     }
     dirty=true;moving=-1;movingOriginal=null;down=null;
-    render();changeButtons();return;
+    render();changeButtons();saveAnnotations();return;
   }
   const tool=$('wbTool').value;
   if(['rectangle','ellipse','line','arrow','cover'].includes(tool)&&figures.length<MAX_OPS){
     const shape=newShape(tool,down,p);
     if(shape){record();figures.push(shape);}
   }
-  down=null;render();
+  down=null;render();saveAnnotations();
 });
 canvas.addEventListener('pointercancel',()=>{
   down=null;moving=-1;movingOriginal=null;render();
@@ -366,10 +413,14 @@ $('wbApply').addEventListener('click',async()=>{
       throw new Error(answer.detail||'Не удалось сохранить замену (HTTP '+response.status+')');
     }
     const asset=await response.json();
+    const previousAnnotationKey=annotationKey();
     host.applyAsset(index,asset.id);
     status('Новая версия PNG сохранена отдельно (ID '+asset.id.slice(0,8)+
       '). Для включения в DOCX нажми «Сохранить изменения» и экспортируй копию. '
       +'Оригинал останется прежним.');
+    // The accepted asset already contains these drawn figures. A reopened
+    // replacement must never superimpose them a second time.
+    if(previousAnnotationKey)try{localStorage.removeItem(previousAnnotationKey);}catch{}
     dirty=false;changeButtons();
   }catch(e){status(e.message,true);}
   finally{operationBusy=false;changeButtons();}
@@ -377,11 +428,16 @@ $('wbApply').addEventListener('click',async()=>{
 $('wbRestore').addEventListener('click',async()=>{
   if(selected<0)return;
   const index=selected;
+  if(dirty&&figures.length&&!window.confirm('На холсте есть несохранённая разметка. Снять замену?'))return;
+  saveAnnotations();
+  clearDrawing();
   host.restoreAsset(index);
   try{await choose(index,'original');}catch(e){status(e.message,true);}
   status('Замена снята для следующего экспорта. Предыдущие версии доступны в истории R3.');
 });
+window.addEventListener('pagehide',saveAnnotations);
 $('wbBack').addEventListener('click',()=>{
+  saveAnnotations();
   $('imageWorkbench').hidden=true;
   $('structurePane').hidden=false;
   $('pdfPane').hidden=true;
