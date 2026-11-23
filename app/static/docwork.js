@@ -749,7 +749,7 @@ function renderImageGallery() {
   for (const item of images) {
     const button=document.createElement('button');
     button.type='button'; button.className='imageItem';
-    button.disabled=!item.editable;
+    button.disabled=!Number.isFinite(item.width_px)||!Number.isFinite(item.height_px);
     button.dataset.imageIndex=String(item.index);
     const thumb=document.createElement('img');
     thumb.alt='Иллюстрация №'+(item.index+1);
@@ -793,7 +793,7 @@ function renderImageGallery() {
 function selectImage(index) {
   if (!report || !report.images) return;
   const item=report.images.find(x=>x.index===index);
-  if (!item?.editable) return;
+  if (!item||!Number.isFinite(item.width_px)||!Number.isFinite(item.height_px)) return;
   if(selectedImage!==index){
     clearVectorPreview();
     $('vectorStatus').textContent='Экспериментальная трассировка не меняет оригинал.';
@@ -811,8 +811,12 @@ function selectImage(index) {
   $('imageCorners').value=String(safeRadius);
   $('imageCornersNumber').value=String(safeRadius);
   $('imageEditTitle').textContent='Рисунок №'+(index+1)+' · '+item.width_px+'×'+item.height_px;
-  $('imageEditHint').textContent='Редактируется только эта иллюстрация в новой копии DOCX/PDF. '
-     +'Текст и пропорции изображения сохраняются.';
+  for(const id of ['imageWidth','imageAlign','imageCorners','imageCornersNumber',
+    'applyImageEdit','resetImageEdit'])$(id).disabled=!item.editable;
+  $('imageEditHint').textContent=item.editable ?
+    'Редактируется только эта иллюстрация в новой копии DOCX/PDF. Текст и пропорции сохраняются.' :
+    'Рисунок защищён: находится внутри таблицы или сложного элемента. '
+      +'Изменять размещение и углы нельзя, но отдельная SVG/PNG-копия доступна для сравнения.';
   $('imageControls').hidden=false;
   $('imageList').querySelectorAll('.imageItem').forEach(button=>{
     button.classList.toggle('selected',Number(button.dataset.imageIndex)===index);
