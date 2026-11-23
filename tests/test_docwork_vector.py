@@ -112,6 +112,23 @@ def test_private_token_controls_vector_export_and_no_book_changes(tmp_path,monke
         assert c.delete(url,headers=confirmed).status_code==204
 
 
+@pytest.mark.skipif(not POTRACE_READY,reason="potrace optional CLI unavailable")
+def test_raster_picture_inside_table_can_be_vectorized_without_reformatting_table():
+    doc=Document()
+    table=doc.add_table(rows=1,cols=1)
+    table.cell(0,0).paragraphs[0].add_run().add_picture(
+        BytesIO(synthetic_diagram()))
+    out=BytesIO();doc.save(out)
+    src=out.getvalue()
+    info=__import__("document_workshop").preview(src,"table.docx")
+    assert len(info["images"])==1
+    assert info["images"][0]["editable"] is False
+    svg=convert_picture(src,0,colors=4,output="svg")
+    assert b"<path" in svg
+    assert Document(BytesIO(src)).tables[0].cell(0,0)._tc.xml
+    assert b"data:image" not in svg
+
+
 def test_vector_ui_is_explicit_and_does_not_replace_document():
     from main import STATIC_DIR
     html=(STATIC_DIR/"docwork.html").read_text(encoding="utf-8")
@@ -120,5 +137,6 @@ def test_vector_ui_is_explicit_and_does_not_replace_document():
                    'id="vectorColors"','id="vectorStatus"','id="vectorPreview"'):
         assert marker in html
     assert "exportTracedPicture(" in js
+    assert "button.disabled=!Number.isFinite(item.width_px)" in js
     assert "downloadVectorSvg" in js and "downloadVectorPng" in js
     assert "В книге" not in js # no false claim of source replacement
