@@ -33,6 +33,13 @@ from reader_engagement import map_chapters as map_reader_engagement, fragment_co
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorkshopError,
     preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
+from docwork_sessions import (
+    SessionError as DocworkSessionError, initialize as init_docwork_drafts,
+    create as create_docwork_draft, read as read_docwork_draft,
+    original as original_docwork_draft, save as save_docwork_draft,
+    history as docwork_draft_history, revision_state as docwork_draft_revision,
+    remove as remove_docwork_draft,
+)
 from editorial_review import (initialize as init_versions, snapshot as snapshot_book,
     versions as book_versions, get_version as get_book_version,
     compare as compare_book_versions, review as review_book_version,
@@ -135,6 +142,7 @@ def init_db() -> None:
         init_production_conveyor(connection)
         init_illustrations(connection)
         init_visual_puzzles(connection)
+        init_docwork_drafts(connection)
         mark_interrupted(connection)
     # Derived search/work databases are additive, the existing manuscript stays put.
     # Optional caches must not block reading old approved manuscripts.
@@ -2450,6 +2458,95 @@ def project_generation_history(project_id: str,
         ]
     return items
 
+
+
+# R3: draft sessions are independent of authored project scenes.
+# All routes inherit the existing private-LAN/VPN origin policy from api.
+DOCWORK_DRAFT_TOKEN_HEADER = "x-achewiw-docwork-token"
+
+
+def _docwork_token(request: Request) -> str:
+    return request.headers.get(DOCWORK_DRAFT_TOKEN_HEADER, "")
+
+
+def _docwork_session_call(callback, *args):
+    try:
+        with db() as connection:
+            return callback(connection, *args)
+    except DocworkSessionError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+
+
+@api.post("/docwork/drafts", status_code=201)
+async def document_workshop_new_draft(file: UploadFile = File(...)):
+    """Validate input, then store one immutable source and initial empty draft."""
+    data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
+    try:
+        inspected = await asyncio.to_thread(docwork_preview, data, file.filename or "")
+    except (DocumentWorkshopError, ValueError, OSError, zipfile.BadZipFile) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    created = _docwork_session_call(
+        lambda connection: create_docwork_draft(
+            connection, filename=file.filename or "", source=data, state={}
+        )
+    )
+    return {**created, "preview": inspected}
+
+
+@api.get("/docwork/drafts/{draft_id}")
+def document_workshop_get_draft(draft_id: str, request: Request):
+    return _docwork_session_call(read_docwork_draft, draft_id, _docwork_token(request))
+
+
+@api.get("/docwork/drafts/{draft_id}/source")
+def document_workshop_get_draft_source(draft_id: str, request: Request):
+    data, filename = _docwork_session_call(
+        original_docwork_draft, draft_id, _docwork_token(request)
+    )
+    return Response(content=data, media_type="application/octet-stream", headers={
+        "Content-Disposition": docwork_disposition(filename),
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
+@api.put("/docwork/drafts/{draft_id}")
+async def document_workshop_save_draft(draft_id: str, request: Request):
+    body = await request.body()
+    if len(body) > 110000:
+        raise HTTPException(413, "Объём сохраняемых правок превышен")
+    try:
+        payload = json.loads(body)
+        if not isinstance(payload, dict):
+            raise ValueError("JSON object required")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(422, "Неверное состояние редактора") from exc
+    return _docwork_session_call(
+        save_docwork_draft, draft_id, _docwork_token(request),
+        payload.get("revision"), payload.get("state"),
+    )
+
+
+@api.get("/docwork/drafts/{draft_id}/history")
+def document_workshop_draft_history(draft_id: str, request: Request):
+    return _docwork_session_call(
+        docwork_draft_history, draft_id, _docwork_token(request)
+    )
+
+
+@api.get("/docwork/drafts/{draft_id}/history/{version}")
+def document_workshop_draft_version(draft_id: str, version: int, request: Request):
+    return _docwork_session_call(
+        docwork_draft_revision, draft_id, _docwork_token(request), version
+    )
+
+
+@api.delete("/docwork/drafts/{draft_id}", status_code=204)
+def document_workshop_close_draft(draft_id: str, request: Request):
+    """Deletion ONLY after explicit client confirmation, never automatically."""
+    confirmed = request.headers.get("x-achewiw-confirm-close-draft") == "yes-delete-only-this-draft"
+    _docwork_session_call(remove_docwork_draft, draft_id, _docwork_token(request), confirmed)
+    return Response(status_code=204)
 
 
 @api.post("/docwork/inspect")
