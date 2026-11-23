@@ -20,3 +20,22 @@
 #pdfPane iframe{width:100%;height:min(80vh,1000px);border:1px solid #d9e2d9;border-radius:12px;background:#e8eee9}
 #pdfPane[hidden],#structurePane[hidden]{display:none!important}
 @media(max-width:700px){.workshop-actions{position:static}.workshop-actions button{flex:1}.structure-filter{grid-template-columns:1fr}.guidebar span{flex:1;min-width:140px}}
+
+/* DocWork: page-aware illustration styling, keeps the existing editorial palette. */
+.imageList{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px;margin:14px 0 18px}
+.imageItem{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-height:145px;padding:10px;border:1px solid #dbe5da;border-radius:12px;background:#f8faf7;transition:border-color .15s,background .15s}
+.imageItem:hover,.imageItem.selected{border-color:#337451;background:#eaf5ed}
+.imageItem:disabled{opacity:.6;cursor:not-allowed}
+.imageItem img{width:100%;height:90px;object-fit:contain;border-radius:8px;background:repeating-conic-gradient(#e2e8e2 0% 25%,#f6f8f5 0% 50%) 50%/16px 16px}
+.imageItem strong{font-size:12px}.imageItem small{font-size:11px;color:#6c8272;line-height:1.3}
+.imageControls{border:1px solid #cadbcb;border-radius:14px;padding:15px;background:#fbfcf9;margin:12px 0 20px}
+.imageControls[hidden]{display:none!important}.imageControls h3{font:500 19px Georgia,serif;margin:0 0 12px}
+.imageControls label{display:block;font-size:12px;margin:10px 0}
+.imageStyleGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.imageControls input[type=range]{width:100%;margin:10px 0 3px;accent-color:#28774d}
+.imageValue{display:block;font:600 12px ui-monospace,monospace;color:#32694d}
+.imagePreviewStage{height:220px;max-width:100%;padding:15px;display:flex;align-items:center;justify-content:center;border:1px dashed #bdd4c2;border-radius:12px;background:#f0f4ef}
+.imagePreviewStage img{max-height:100%;object-fit:contain;box-shadow:0 5px 17px #172e2219;transition:width .16s,border-radius .16s}
+@media(max-width:520px){.imageStyleGrid{grid-template-columns:1fr}.imageList{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.control .imageControls input[type=range]{appearance:auto;padding:0;border:0;background:transparent;box-shadow:none;min-height:26px}

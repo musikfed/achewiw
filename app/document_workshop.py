@@ -20,6 +20,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
+from docwork_image_layout import (
+    inventory_docx, apply_image_layout, IllustrationLayoutError
+)
 
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_UNPACKED = 180 * 1024 * 1024
@@ -116,9 +119,15 @@ def preview_docx(data: bytes) -> dict:
     ]
     if len(rows) >= 3000:
         warnings.append("Список ограничен первыми 3000 непустыми абзацами; остальной документ сохраняется в экспорте.")
+    images = inventory_docx(data)
+    if images:
+        warnings.append(
+            f"Найдено встроенных иллюстраций: {len(images)}. "
+            "Для отдельных рисунков можно изменить размер, выравнивание и скругление."
+        )
     return {"type": "docx", "paragraph_count": len(doc.paragraphs),
             "tables": len(doc.tables), "sections": len(doc.sections), "kinds": kinds,
-            "paragraphs": rows, "warnings": warnings}
+            "images": images, "paragraphs": rows, "warnings": warnings}
 
 
 def preview_pdf(data: bytes) -> dict:
@@ -330,6 +339,10 @@ def transform_docx(data: bytes, options: dict) -> bytes:
                     run.bold = True
         elif kind == "body":
             paragraph.style = doc.styles["Normal"]
+    try:
+        apply_image_layout(doc, options.get("image_edits", {}))
+    except IllustrationLayoutError as exc:
+        raise DocumentWorkshopError(str(exc)) from exc
     out = BytesIO()
     doc.save(out)
     return out.getvalue()

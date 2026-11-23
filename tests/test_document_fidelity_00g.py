@@ -140,8 +140,11 @@ def test_docx_inspection_reports_tables_but_no_false_figure_inventory():
     assert info["tables"] == 1
     assert info["paragraph_count"] >= 5
     assert "Рисунок 1" in " ".join(x["text"] for x in info["paragraphs"])
-    # v1 preview exposes no comprehensive image inventory; do not invent a count.
-    assert "images" not in info
+    # R3.1 now inventories inline pictures for editing. The count is grounded
+    # in actual OOXML blips, not a guess from caption text.
+    assert len(info["images"]) == 1
+    assert info["images"][0]["width_px"] == 64
+    assert info["images"][0]["height_px"] == 48
 
 
 def _pdf_with_two_columns_and_png() -> bytes:
