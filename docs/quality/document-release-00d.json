@@ -47,21 +47,24 @@
     {
       "id": "D04",
       "priority": "P0",
-      "status": "known_fail",
-      "criterion": "PDF → DOCX сохраняет все иллюстрации и значимые встроенные графические объекты либо не выдаёт результат за полную конверсию.",
+      "status": "pass",
+      "criterion": "R1: для поддерживаемых PDF переносить отображаемые растровые изображения и подписи; при неподдерживаемой векторной графике или иных непрозрачных объектах возвращать явный отказ, без неполной «полной» конверсии.",
       "evidence": [
         "tests/test_document_fidelity_00g.py::test_pdf_to_docx_must_preserve_images",
-        "app/document_workshop.py::pdf_to_docx"
+        "tests/test_r1_pdf_layout_import.py::test_r1_preserves_raster_pixels_and_caption_sequence_and_columns",
+        "tests/test_r1_pdf_layout_import.py::test_r1_complex_pdf_fails_closed_without_confirmed_loss",
+        "app/pdf_layout_import.py::convert_pdf_to_docx"
       ]
     },
     {
       "id": "D05",
       "priority": "P0",
-      "status": "known_fail",
-      "criterion": "PDF → DOCX не меняет логический порядок чтения текста двух и более колонок.",
+      "status": "pass",
+      "criterion": "R1: в поддерживаемых простых двухколоночных PDF сохранять порядок чтения по колонкам; неоднозначное пересечение и более сложные колонки отклонять (универсальная реконструкция PDF не заявлена).",
       "evidence": [
         "tests/test_document_fidelity_00g.py::test_pdf_to_docx_must_preserve_two_column_reading_order",
-        "app/document_workshop.py::pdf_to_docx"
+        "tests/test_r1_pdf_layout_import.py::test_r1_preserves_raster_pixels_and_caption_sequence_and_columns",
+        "app/pdf_layout_import.py::_reading_order"
       ]
     },
     {
@@ -162,5 +165,13 @@
       "id": "L03",
       "name": "Графические произведения, комиксы, иллюстрированные учебники, Model Shipyard как модули ACHEWIW"
     }
-  ]
+  ],
+  "r1_ci": {
+    "commit": "f34096d93f98ec9b99aa226b4c43761be1ea4fd6",
+    "url": "https://github.com/musikfed/achewiw/actions/runs/45190919985",
+    "passed": 30,
+    "skipped": 1,
+    "known_fail": 0,
+    "scope": "synthetic simple PDF fidelity; no LibreOffice visual proof or production deployment"
+  }
 }
