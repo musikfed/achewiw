@@ -10,7 +10,7 @@ from html import escape
 from io import BytesIO
 from xml.etree import ElementTree as ET
 from book_layout_core import (info, colophon, paragraphs, cover_image,
-    group_images, before_images, after_images, end_images)
+    group_images, before_images, after_images, end_images, verified_illustrations)
 from manuscript_core import chapter_listing
 
 
@@ -23,6 +23,7 @@ def _chapters(project):
 
 def manuscript_fb2(project, illustrations=None) -> bytes:
     book=_chapters(project);meta=info(project)
+    illustrations=verified_illustrations(illustrations)
     ns="http://www.gribuser.ru/xml/fictionbook/2.0"
     link="http://www.w3.org/1999/xlink"
     ET.register_namespace("",ns)
@@ -65,11 +66,10 @@ def manuscript_fb2(project, illustrations=None) -> bytes:
     h=ET.SubElement(tail,f"{{{ns}}}title")
     ET.SubElement(h,f"{{{ns}}}p").text="Выходные сведения"
     for line in colophon(meta):ET.SubElement(tail,f"{{{ns}}}p").text=line
-    for art in illustrations or []:
-        if art.get("path") and art["path"].is_file():
-            ET.SubElement(root,f"{{{ns}}}binary",
-                {"id":"img-"+art["id"],"content-type":"image/png"}).text=(
-                    base64.b64encode(art["path"].read_bytes()).decode("ascii"))
+    for art in illustrations:
+        ET.SubElement(root,f"{{{ns}}}binary",
+            {"id":"img-"+art["id"],"content-type":"image/png"}).text=(
+                base64.b64encode(art["path"].read_bytes()).decode("ascii"))
     return ET.tostring(root,encoding="utf-8",xml_declaration=True)
 
 
@@ -79,6 +79,8 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     book=_chapters(project);meta=info(project)
+    illustrations=verified_illustrations(illustrations)
+    from PIL import Image as PILImage
     doc=Document()
     sec=doc.sections[0]
     sec.page_height,sec.page_width=Cm(21),Cm(14.8)
@@ -109,10 +111,19 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     credits_entry.paragraph_format.left_indent=Cm(0.5)
     doc.add_page_break()
     def put_art(art):
+        # Word: image paragraph must stay with its caption on the same page.
+        # Cap the image height so portrait artwork can fit beside a caption.
+        with PILImage.open(art["path"]) as im:
+            iw, ih = im.size
+        ratio=min(Cm(10.5)/iw, Cm(12.0)/ih)
         p=doc.add_paragraph()
         p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-        p.add_run().add_picture(str(art["path"]),width=Cm(10.5))
-        if art.get("caption"):doc.add_paragraph(art["caption"],style="Caption")
+        p.paragraph_format.keep_together=True
+        p.paragraph_format.keep_with_next=bool(art.get("caption"))
+        p.add_run().add_picture(str(art["path"]),width=Pt(iw*ratio))
+        if art.get("caption"):
+            caption=doc.add_paragraph(art["caption"],style="Caption")
+            caption.paragraph_format.keep_together=True
     for i,ch in enumerate(book["chapters"]):
         if i:doc.add_page_break()
         doc.add_heading(ch["title"],level=1)
@@ -142,10 +153,11 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_noti
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (SimpleDocTemplate,Paragraph,Spacer,
-        PageBreak,Image as RLImage)
+        PageBreak,Image as RLImage,KeepTogether)
     from reportlab.platypus.tableofcontents import TableOfContents
 
     book=_chapters(project);meta=info(project)
+    illustrations=verified_illustrations(illustrations)
     regular=Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
     bold=Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf")
     if not regular.is_file() or not bold.is_file():
@@ -175,14 +187,27 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_noti
         author=meta["author"] or "ACHEWIW")
     story=[]
     def put_art(art,cover=False):
+        # ReportLab's KeepTogether keeps picture and caption on the same page.
+        # Reserve enough frame height for the caption before sizing artwork.
+        caption=None
+        caption_height=0
+        if art.get("caption") and not cover:
+            caption=Paragraph(escape(art["caption"]),center)
+            _, caption_height=caption.wrap(doc.width, doc.height)
+        free_height=doc.height-caption_height-24
+        if free_height<35:
+            raise ValueError("Подпись иллюстрации "+art["id"]+" не помещается на странице A5")
         with PILImage.open(art["path"]) as image:
             iw,ih=image.size
         max_width=(110 if cover else 105)*mm
-        max_height=(150 if cover else 113)*mm
+        max_height=min((150 if cover else 113)*mm, free_height)
         ratio=min(max_width/iw,max_height/ih,1.0)
-        story.append(RLImage(str(art["path"]),width=iw*ratio,height=ih*ratio))
-        if art.get("caption") and not cover:
-            story.append(Paragraph(escape(art["caption"]),center))
+        image_flowable=RLImage(str(art["path"]),width=iw*ratio,height=ih*ratio)
+        image_flowable.hAlign="CENTER"
+        if caption:
+            story.append(KeepTogether([image_flowable, caption]))
+        else:
+            story.append(image_flowable)
     cover=cover_image(illustrations)
     if cover and cover.get("path"):
         put_art(cover,cover=True)
