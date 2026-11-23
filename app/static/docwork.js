@@ -5,6 +5,7 @@ let source = null, report = null, selected = null, previewUrl = null, rendered =
 const overrides = Object.create(null), replacements = Object.create(null);
 
 let draft = null, draftSaveTimer = null, draftSaveBusy = false, draftConflicted = false;
+let lastSavedState = '{}';
 const DRAFT_KEY = 'achewiw-docwork-r3-current';
 const SCRATCH_KEY = 'achewiw-docwork-r3-pending';
 const settingsIds = {
@@ -13,6 +14,12 @@ const settingsIds = {
   body_font:'bodyFont', chapter_font:'chapterFont', subchapter_font:'subchapterFont',
   body_size:'bodySize', chapter_size:'chapterSize', subchapter_size:'subchapterSize'
 };
+function canonicalState(value) {
+  if (Array.isArray(value)) return '['+value.map(canonicalState).join(',')+']';
+  if (value && typeof value==='object')
+    return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonicalState(value[k])).join(',')+'}';
+  return JSON.stringify(value);
+}
 function rememberDraft() {
   if (!draft) return;
   try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
@@ -83,6 +90,10 @@ function applyDraftState(state) {
 function markDraftDirty() {
   if (!draft || !report) return;
   scratchDraft();
+  if (canonicalState(captureDraftState())===lastSavedState && !draftConflicted) {
+    draftMessage('Черновик уже сохранён · редакция №'+draft.revision);
+    return;
+  }
   if (draftConflicted) {
     draftMessage('Конфликт: в другой вкладке уже сохранена новая редакция. Ваши локальные изменения пока не перезаписываются. Скачайте свои правки JSON.',true);
     return;
@@ -95,6 +106,10 @@ async function saveDraftNow() {
   if (!draft || !report || draftConflicted) return;
   clearTimeout(draftSaveTimer);
   if (draftSaveBusy) return;
+  if (canonicalState(captureDraftState())===lastSavedState) {
+    draftMessage('Черновик уже сохранён · редакция №'+draft.revision);
+    return;
+  }
   draftSaveBusy=true;
   const id=draft.id, revision=draft.revision, state=captureDraftState();
   const serial=JSON.stringify(state);
@@ -114,6 +129,7 @@ async function saveDraftNow() {
     if (!response.ok) throw new Error(result.detail||'HTTP '+response.status);
     if (!draft || draft.id!==id) return;
     draft.revision=result.revision; rememberDraft();
+    lastSavedState=canonicalState(state);
     scratchDraft();
     if (JSON.stringify(captureDraftState()) !== serial) {
       markDraftDirty();
@@ -168,6 +184,7 @@ async function restoreDraft() {
       'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     reset();
     draft.revision=meta.revision; rememberDraft();
+    lastSavedState=canonicalState(meta.state);
     $('fileLabel').textContent=meta.filename+' · восстановлено с сервера';
     await inspect(true);
     if (!report) throw new Error('Не удалось заново прочитать структуру документа');
@@ -175,7 +192,7 @@ async function restoreDraft() {
     let pending=null;
     try { pending=JSON.parse(sessionStorage.getItem(SCRATCH_KEY)||'null'); } catch {}
     if (pending?.id===draft.id && pending.revision===draft.revision) {
-      if (JSON.stringify(pending.state)!==JSON.stringify(meta.state)) {
+      if (canonicalState(pending.state)!==canonicalState(meta.state)) {
         applyDraftState(pending.state); markDraftDirty();
         draftMessage('Восстановлены изменения перед F5 · синхронизация с сервером…');
       }
@@ -335,6 +352,7 @@ async function inspect(restoring=false) {
     if (!response.ok) throw new Error(payload.detail || 'HTTP '+response.status);
     if (!reusing) {
       draft={id:payload.id,token:payload.token,revision:payload.revision};
+      lastSavedState='{}';
       rememberDraft();draftConflicted=false; draftControls();
       draftMessage('Исходный файл сохранён на сервере · редакция №1');
       void refreshDraftHistory();
@@ -351,6 +369,7 @@ async function inspect(restoring=false) {
     $('warnings').textContent = (result.warnings || []).join(' ');
     if (result.type === 'pdf') $('warnings').textContent += ' Отдельные абзацы станут редактируемыми после преобразования в DOCX.';
     drawRows(); tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
+    if (!reusing) markDraftDirty();
   } catch (e) {
     report = null; $('warnings').textContent = 'Ошибка проверки: '+e.message; tell(e.message, true);
   } finally {busy(false);}
@@ -481,6 +500,7 @@ $('reloadDraft').addEventListener('click',async()=>{
   try {
     const data=await (await draftFetch('')).json();
     draft.revision=data.revision;draftConflicted=false;rememberDraft();
+    lastSavedState=canonicalState(data.state);
     clearTimeout(draftSaveTimer);applyDraftState(data.state);scratchDraft();
     draftMessage('Загружена серверная редакция №'+data.revision);
     await refreshDraftHistory();
@@ -505,7 +525,7 @@ $('closeDraft').addEventListener('click',async()=>{
         'X-ACHEWIW-Confirm-Close-Draft':'yes-delete-only-this-draft'
       }});
     if (!response.ok) throw new Error('HTTP '+response.status);
-    forgetDraft();draft=null;draftConflicted=false;source=null;
+    forgetDraft();draft=null;draftConflicted=false;lastSavedState='{}';source=null;
     $('sourceFile').value='';reset();draftControls();
     $('fileLabel').textContent='Файл не выбран';
     draftMessage('Черновик закрыт по подтверждению пользователя. Можно загрузить новый файл.');
@@ -514,7 +534,8 @@ $('closeDraft').addEventListener('click',async()=>{
 window.addEventListener('pagehide',()=>{
   if (draft&&report) {
     scratchDraft();
-    if (!draftSaveBusy&&!draftConflicted) {
+    if (!draftSaveBusy&&!draftConflicted &&
+        canonicalState(captureDraftState())!==lastSavedState) {
       // Best effort only. sessionStorage scratch protects unsent edits on F5.
       const state=captureDraftState();
       void fetch('/api/docwork/drafts/'+draft.id,{
