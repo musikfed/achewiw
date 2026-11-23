@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=3">
-<script src="/static/docwork.js?v=5" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=4">
+<script src="/static/docwork.js?v=6" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -130,6 +130,31 @@
             <strong>Лист документа · редактирование по потоку текста</strong>
             <span id="canvasStatus">Перетащи рисунок за рамку в место между абзацами. Текст исправляй прямо на листе.</span>
           </div>
+          <div id="editToolbar" class="editToolbar" role="toolbar" aria-label="Редактирование текста и история действий">
+            <div class="toolbarGroup">
+              <button id="undoEdit" type="button" disabled title="Отменить действие · Ctrl+Z">↶ Отменить</button>
+              <button id="redoEdit" type="button" disabled title="Повторить действие · Ctrl+Y или Ctrl+Shift+Z">↷ Повторить</button>
+              <span id="undoDepth" class="toolbarHint">0 отмен · 0 повторов</span>
+            </div>
+            <div class="toolbarGroup" id="paragraphAlignTools" aria-label="Выравнивание текущего абзаца">
+              <span id="activeParagraphLabel" class="toolbarHint">Нажми на текст для редактирования</span>
+              <button type="button" id="alignLeft" data-align="left" title="По левому краю" disabled aria-pressed="false">☰ Слева</button>
+              <button type="button" id="alignCenter" data-align="center" title="По центру" disabled aria-pressed="false">≡ Центр</button>
+              <button type="button" id="alignRight" data-align="right" title="По правому краю" disabled aria-pressed="false">☷ Справа</button>
+              <button type="button" id="alignJustify" data-align="justify" title="По ширине страницы" disabled aria-pressed="false">▤ По ширине</button>
+              <button type="button" id="alignReset" data-align="inherit" title="Вернуть исходное выравнивание" disabled>Исходное</button>
+            </div>
+            <div class="toolbarGroup">
+              <label for="canvasRole">Тип абзаца</label>
+              <select id="canvasRole" disabled>
+                <option value="keep">Исходный стиль</option>
+                <option value="body">Обычный текст</option>
+                <option value="heading1">Заголовок 1</option>
+                <option value="heading2">Заголовок 2</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint" id="editingHelp">Как редактировать: щёлкни любой текст на листе и печатай. Выделение мышью и клавиши Backspace/Delete работают в текстовом поле. Выравнивание действует на выбранный абзац. Можно отменить до 200 действий в текущей вкладке; старые серверные версии доступны в истории черновика.</p>
           <div id="documentCanvas" class="documentCanvas"></div>
           <button id="canvasMore" type="button" hidden>↓ Показать следующие абзацы документа</button>
           <p class="hint">Это редактор порядка текста и рисунков. Точное расположение по страницам проверь кнопкой «Посмотреть страницы PDF»; оригинал DOCX не меняется.</p>
