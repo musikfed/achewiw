@@ -37,3 +37,5 @@
 .imagePreviewStage{height:220px;max-width:100%;padding:15px;display:flex;align-items:center;justify-content:center;border:1px dashed #bdd4c2;border-radius:12px;background:#f0f4ef}
 .imagePreviewStage img{max-height:100%;object-fit:contain;box-shadow:0 5px 17px #172e2219;transition:width .16s,border-radius .16s}
 @media(max-width:520px){.imageStyleGrid{grid-template-columns:1fr}.imageList{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.control .imageControls input[type=range]{appearance:auto;padding:0;border:0;background:transparent;box-shadow:none;min-height:26px}
