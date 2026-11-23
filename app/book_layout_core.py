@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
-from PIL import Image, UnidentifiedImageError
 
 MAX_EXPORT_IMAGE_BYTES = 50 * 1024 * 1024
 MAX_EXPORT_IMAGE_PIXELS = 24_000_000
@@ -15,7 +14,12 @@ def verified_illustrations(illustrations):
     Does not mutate the catalogue or author's files. The same validation is
     used by EPUB, FB2, PDF and DOCX, including direct Python export callers.
     """
-    result = list(illustrations or [])
+    # Manuscript/Markdown unit tests run before optional graphics dependencies
+    # are installed; import Pillow only when actual artwork is being checked.
+    if not illustrations:
+        return []
+    from PIL import Image, UnidentifiedImageError
+    result = list(illustrations)
     seen = set()
     for art in result:
         if not isinstance(art, dict):
