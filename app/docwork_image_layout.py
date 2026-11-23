@@ -27,7 +27,20 @@ ALIGNS = {
     "center": WD_ALIGN_PARAGRAPH.CENTER,
     "right": WD_ALIGN_PARAGRAPH.RIGHT,
 }
-RADII = {0, 8, 16, 24}
+MAX_RADIUS_PERCENT = 24.0
+
+
+def aspect_radius_cap(width: int, height: int) -> float:
+    """Keep very wide/very tall diagrams subtly rounded, squares may use more."""
+    if not width or not height:
+        return 0.0
+    aspect = max(width, height) / min(width, height)
+    return 8.0 if aspect >= 2.3 else 12.0 if aspect >= 1.5 else 18.0 if aspect >= 1.2 else 24.0
+
+
+def actual_corner_percent(width: int, height: int, chosen: float) -> float:
+    return min(float(chosen), aspect_radius_cap(width, height))
+
 
 
 class IllustrationLayoutError(ValueError):
@@ -98,6 +111,7 @@ def _picture_entry(doc, index: int, shape):
                   "Текст, несколько объектов, таблица или сложная фигура: оставлено без изменений",
         "width_px": width, "height_px": height,
         "ratio": round(width / height, 3) if height else 1,
+        "corner_max_percent": aspect_radius_cap(width, height),
         "inline_width_cm": round(shape.width / 360000, 2),
         "inline_height_cm": round(shape.height / 360000, 2),
     }, raw
@@ -141,7 +155,7 @@ def thumbnail(data: bytes, index: int) -> bytes:
     return blob
 
 
-def _rounded_image(raw: bytes, radius_pct: int) -> BytesIO:
+def _rounded_image(raw: bytes, radius_pct: float) -> BytesIO:
     try:
         with Image.open(BytesIO(raw)) as source:
             source.load()
@@ -154,7 +168,8 @@ def _rounded_image(raw: bytes, radius_pct: int) -> BytesIO:
     # Supersampled mask where affordable; preserve native pixels otherwise.
     scale = 2 if width * height <= 1_500_000 else 1
     bounds = (width * scale, height * scale)
-    radius = round(min(width, height) * radius_pct / 100 * scale)
+    safe_pct = actual_corner_percent(width, height, radius_pct)
+    radius = round(min(width, height) * safe_pct / 100 * scale)
     mask = Image.new("L", bounds, 0)
     ImageDraw.Draw(mask).rounded_rectangle(
         (0, 0, bounds[0] - 1, bounds[1] - 1),
@@ -184,10 +199,10 @@ def _check_changes(changes):
             raise IllustrationLayoutError("Размер рисунка должен быть 25–100% текстовой области")
         if setting.get("align", "center") not in ALIGNS:
             raise IllustrationLayoutError("Неизвестное выравнивание рисунка")
-        if type(setting.get("corner_percent", 0)) is not int or setting.get(
-            "corner_percent", 0
-        ) not in RADII:
-            raise IllustrationLayoutError("Скругление допускает 0, 8, 16 или 24%")
+        corner = setting.get("corner_percent", 0)
+        if (type(corner) not in (int, float) or not 0 <= corner <= MAX_RADIUS_PERCENT
+                or corner * 2 != int(corner * 2)):
+            raise IllustrationLayoutError("Скругление должно быть от 0 до 24% с шагом 0,5%")
 
 
 def apply_image_layout(doc, changes: dict):
