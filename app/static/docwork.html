@@ -4,7 +4,7 @@
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
 <link rel="stylesheet" href="/static/docwork.css?v=9">
 <link rel="stylesheet" href="/static/docwork_workbench.css?v=1">
-<script src="/static/docwork_workbench.js?v=1" defer></script>
+<script src="/static/docwork_workbench.js?v=37" defer></script>
 <script src="/static/docwork.js?v=11" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
@@ -237,11 +237,13 @@
           <button id="wbAutoOutline" type="button">Упростить схему (контуры R3.5)</button>
           <label>Цветов для контуров<select id="wbTraceColors"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option></select></label>
           <button id="wbDownload" type="button">↓ Скачать PNG для Photoshop</button>
+          <button id="wbExportStructure" type="button" disabled>↓ Структура схемы JSON · R3.7</button>
+          <button id="wbExportSvg" type="button" disabled>↓ Редактируемая схема SVG · R3.7</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
           <button id="wbRestore" type="button">↶ Снять замену</button>
           <button id="wbBack" type="button">← Вернуться к документу</button>
         </div>
-        <p class="hint">Схемы можно реконструировать локально по контурам; это не восстановление редактируемых слов. Подключение LLM/VLM для распознавания и проверки геометрии — отдельный этап, только после согласования точности.</p>
+        <p class="hint">R3.7, этап 1: экспорт только нарисованных вручную фигур и надписей в JSON и настоящий редактируемый SVG. Фон исходного рисунка в SVG не включается; автоматическое распознавание текста и связей ещё не реализовано. Перед использованием проверь точность схемы.</p>
       </section>
       <div id="structurePane">
         <section id="documentEditor" class="documentEditor" aria-label="Единый редактор текста и иллюстраций" hidden>
