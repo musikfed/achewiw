@@ -34,7 +34,7 @@ function changeButtons(){
   $('wbImportGraph').disabled=!exportScope()||operationBusy;
   $('wbVisionFile').disabled=!exportScope()||operationBusy;
   $('wbVisionPreflight').disabled=!exportScope()||operationBusy;
-  $('wbVisionAnalyze').disabled=!exportScope()||operationBusy||!$('wbVisionModel').value;
+  $('wbVisionAnalyze').disabled=!exportScope()||exportScope()?.baseAsset!=='original'||operationBusy||!$('wbVisionModel').value;
   $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
