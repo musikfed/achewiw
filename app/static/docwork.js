@@ -3,6 +3,9 @@
 const $ = id => document.getElementById(id);
 let source = null, report = null, selected = null, previewUrl = null, rendered = 80, processing = false;
 const overrides = Object.create(null), replacements = Object.create(null);
+const imageEdits = Object.create(null);
+let selectedImage = null;
+const imageThumbUrls = new Map();
 
 let draft = null, draftSaveTimer = null, draftSaveBusy = false, draftConflicted = false;
 let lastSavedState = '{}';
@@ -31,11 +34,14 @@ function forgetDraft() {
 function captureDraftState() {
   const settings = optionsForExport();
   delete settings.overrides; delete settings.replacements;
+  delete settings.image_edits;
   return {
     settings, overrides:{...overrides}, replacements:{...replacements},
+    images:{...imageEdits},
     editor:{selected, text: selected === null ? '' : $('paragraphText').value,
             role: selected === null ? 'keep' : $('paragraphRole').value},
-    ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered}
+    ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered,
+        selectedImage}
   };
 }
 function scratchDraft() {
@@ -56,10 +62,11 @@ function draftMessage(text, error=false) {
 }
 function applyDraftState(state) {
   if (!state || !report) return;
-  for (const obj of [overrides,replacements])
+  for (const obj of [overrides,replacements,imageEdits])
     for (const key of Object.keys(obj)) delete obj[key];
   Object.assign(overrides,state.overrides || {});
   Object.assign(replacements,state.replacements || {});
+  Object.assign(imageEdits,state.images || {});
   for (const [key,id] of Object.entries(settingsIds)) {
     if (!Object.prototype.hasOwnProperty.call(state.settings||{},key)) continue;
     const element=$(id), value=state.settings[key];
@@ -75,8 +82,12 @@ function applyDraftState(state) {
   rendered=Math.max(80,Math.min(3000,Number(state.ui?.rendered)||80));
   clearPdf();
   $('changeCounter').textContent =
-    new Set(Object.keys(overrides).concat(Object.keys(replacements))).size+' ручных правок';
+    (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
+    + Object.keys(imageEdits).length)+' ручных правок';
   selected=null; $('editPane').hidden=true; drawRows();
+  renderImageGallery();
+  const imageIndex = state.ui?.selectedImage;
+  if (Number.isInteger(imageIndex)) selectImage(imageIndex);
   if (Number.isInteger(state.editor?.selected)) {
     editParagraph(state.editor.selected);
     if (selected!==null) {
@@ -210,6 +221,104 @@ async function restoreDraft() {
       '. Ключ черновика сохранён в этой вкладке, исходный файл не удалён.',true);
   }
 }
+
+function revokeImageThumbnails() {
+  for (const url of imageThumbUrls.values()) URL.revokeObjectURL(url);
+  imageThumbUrls.clear();
+  $('imagePreview').removeAttribute('src');
+}
+function renderImageGallery() {
+  revokeImageThumbnails();
+  const list=$('imageList');
+  list.replaceChildren();
+  $('imageControls').hidden=true;
+  const images=report?.images || [];
+  if (report?.type==='pdf') {
+    $('imageListStatus').textContent =
+      'Для изображений исходного PDF сначала создайте редактируемый DOCX. '
+      +'R1 сохраняет доступные растровые изображения, а этот редактор работает с DOCX.';
+    return;
+  }
+  if (!images.length) {
+    $('imageListStatus').textContent='В этом DOCX встроенные изображения не найдены.';
+    return;
+  }
+  $('imageListStatus').textContent =
+    'Найдено '+images.length+' изображений. '
+    +'Применяются только выбранные изменения; сложные объекты остаются нетронутыми.';
+  for (const item of images) {
+    const button=document.createElement('button');
+    button.type='button'; button.className='imageItem';
+    button.disabled=!item.editable;
+    button.dataset.imageIndex=String(item.index);
+    const thumb=document.createElement('img');
+    thumb.alt='Иллюстрация №'+(item.index+1);
+    thumb.loading='lazy';
+    const title=document.createElement('strong');
+    title.textContent='Рисунок №'+(item.index+1);
+    const desc=document.createElement('small');
+    desc.textContent=item.editable?
+      item.width_px+'×'+item.height_px+
+      (imageEdits[String(item.index)]?' · оформлен':''):
+      (item.reason || 'Сложный объект');
+    button.append(thumb,title,desc);
+    button.addEventListener('click',()=>selectImage(item.index));
+    list.append(button);
+    if (draft) {
+      const currentDraft=draft.id;
+      void fetch('/api/docwork/drafts/'+currentDraft+'/images/'+item.index,{
+        cache:'no-store',
+        headers:{'X-ACHEWIW-Docwork-Token':draft.token}
+      }).then(response=>{
+        if (!response.ok) throw Error('HTTP '+response.status);
+        return response.blob();
+      }).then(blob=>{
+        if (!draft || draft.id!==currentDraft || !button.isConnected) return;
+        const url=URL.createObjectURL(blob);
+        imageThumbUrls.set(item.index,url);
+        thumb.src=url;
+        if (selectedImage===item.index) $('imagePreview').src=url;
+      }).catch(()=>{
+        desc.textContent='Миниатюра недоступна';
+      });
+    }
+  }
+}
+function selectImage(index) {
+  if (!report || !report.images) return;
+  const item=report.images.find(x=>x.index===index);
+  if (!item?.editable) return;
+  selectedImage=index;
+  const saved=imageEdits[String(index)] || {
+    width_percent:70, align:'center',corner_percent:0
+  };
+  $('imageWidth').value=String(saved.width_percent);
+  $('imageAlign').value=saved.align;
+  $('imageCorners').value=String(saved.corner_percent);
+  $('imageEditTitle').textContent='Рисунок №'+(index+1)+' · '+item.width_px+'×'+item.height_px;
+  $('imageEditHint').textContent='Редактируется только эта иллюстрация в новой копии DOCX/PDF. '
+     +'Текст и пропорции изображения сохраняются.';
+  $('imageControls').hidden=false;
+  $('imageList').querySelectorAll('.imageItem').forEach(button=>{
+    button.classList.toggle('selected',Number(button.dataset.imageIndex)===index);
+  });
+  const url=imageThumbUrls.get(index);
+  if (url) $('imagePreview').src=url;
+  else $('imagePreview').removeAttribute('src');
+  updateImageLivePreview();
+}
+function updateImageLivePreview() {
+  if (selectedImage===null) return;
+  const width=Number($('imageWidth').value);
+  const radius=Number($('imageCorners').value);
+  const align=$('imageAlign').value;
+  $('imageWidthLabel').textContent=width+'% ширины текста';
+  const image=$('imagePreview');
+  image.style.width=width+'%';
+  image.style.borderRadius=radius+'%';
+  $('imagePreview').parentNode.style.justifyContent=
+      align==='left'?'flex-start':align==='right'?'flex-end':'center';
+}
 function tell(message, error=false) {
   const node = $('status'); node.textContent = message; node.classList.toggle('error', error);
   node.style.display = 'block'; clearTimeout(tell.timer);
@@ -245,6 +354,12 @@ function reset() {
   $('pdfModeControls').hidden = true;
   $('pdfTextOnly').checked = false;
   $('pdfLossConfirmed').checked = false;
+  selectedImage=null;
+  for (const key of Object.keys(imageEdits)) delete imageEdits[key];
+  revokeImageThumbnails();
+  $('imageList').replaceChildren();
+  $('imageControls').hidden=true;
+  $('imageListStatus').textContent='После проверки DOCX здесь появятся рисунки.';
   $('changeCounter').textContent = '0 правок'; busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
@@ -260,7 +375,9 @@ $('sourceFile').addEventListener('change', () => {
 });
 function changeCount() {
   clearPdf();
-  $('changeCounter').textContent = new Set(Object.keys(overrides).concat(Object.keys(replacements))).size + ' ручных правок';
+  $('changeCounter').textContent =
+    (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
+     + Object.keys(imageEdits).length) + ' ручных правок';
 }
 function rowKind(row) {
   return overrides[row.index] && overrides[row.index] !== 'keep' ? overrides[row.index] : row.kind;
@@ -372,7 +489,8 @@ async function inspect(restoring=false) {
       result.pages+' стр. · символов: '+result.characters;
     $('warnings').textContent = (result.warnings || []).join(' ');
     if (result.type === 'pdf') $('warnings').textContent += ' Отдельные абзацы станут редактируемыми после преобразования в DOCX.';
-    drawRows(); tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
+    drawRows();renderImageGallery();
+    tell('Документ прочитан. Можно менять стиль и скачивать новую редакцию.');
     if (!reusing) markDraftDirty();
   } catch (e) {
     report = null; $('warnings').textContent = 'Ошибка проверки: '+e.message; tell(e.message, true);
@@ -388,7 +506,7 @@ function optionsForExport() {
     chapter_size:$('chapterSize').value, subchapter_size:$('subchapterSize').value,
     pdf_mode:$('pdfTextOnly').checked ? 'text_only' : 'preserve',
     confirm_text_loss:$('pdfLossConfirmed').checked,
-    overrides, replacements};
+    overrides, replacements, image_edits:{...imageEdits}};
 }
 function requestForm(target, options) {
   const form = new FormData(); form.append('file', source, source.name);
@@ -481,6 +599,30 @@ $('quickDownloadDocx').addEventListener('click', () => download('docx'));
 $('quickDownloadPdf').addEventListener('click', () => download('pdf'));
 $('previewPdf').addEventListener('click', buildPdfPreview);
 $('quickPreviewPdf').addEventListener('click', buildPdfPreview);
+for (const id of ['imageWidth','imageAlign','imageCorners']) {
+  $(id).addEventListener('input',updateImageLivePreview);
+  $(id).addEventListener('change',updateImageLivePreview);
+}
+$('applyImageEdit').addEventListener('click',()=>{
+  if (selectedImage===null) return;
+  imageEdits[String(selectedImage)]={
+    width_percent:Number($('imageWidth').value),
+    align:$('imageAlign').value,
+    corner_percent:Number($('imageCorners').value)
+  };
+  changeCount();markDraftDirty();
+  const item=$('imageList').querySelector('[data-image-index="'+selectedImage+'"] small');
+  if (item) item.textContent='Оформлен · '+$('imageWidth').value+'% · '+$('imageAlign').value;
+  tell('Рисунок №'+(selectedImage+1)+' будет оформлен в новой копии документа.');
+});
+$('resetImageEdit').addEventListener('click',()=>{
+  if (selectedImage===null) return;
+  delete imageEdits[String(selectedImage)];
+  const index=selectedImage;
+  selectImage(index);
+  changeCount();markDraftDirty();
+  tell('Оформление рисунка сброшено к исходному.');
+});
 $('outputName').addEventListener('input',markDraftDirty);
 $('pdfLossConfirmed').addEventListener('change',markDraftDirty);
 $('paragraphText').addEventListener('input',markDraftDirty);
