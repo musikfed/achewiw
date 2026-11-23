@@ -146,3 +146,28 @@ def test_r3_browser_has_state_controls_and_client_conflict_handler(studio):
     for marker in ("sessionStorage","restoreDraft()","pagehide",
                    "response.status===409","markDraftDirty"):
         assert marker in js
+
+
+def test_r3_history_limit_is_fail_closed_not_silent_pruning(studio, monkeypatch):
+    import docwork_sessions
+    c,_=studio
+    draft,original=create(c)
+    monkeypatch.setattr(docwork_sessions,"MAX_REVISIONS",2)
+    url="/api/docwork/drafts/"+draft["id"]
+    assert c.put(url,headers=key(draft),
+                 json={"revision":1,"state":{"settings":{"preset":"technical"}}}).status_code==200
+    stop=c.put(url,headers=key(draft),
+               json={"revision":2,"state":{"settings":{"preset":"modern"}}})
+    assert stop.status_code==409 and "500 редакций" in stop.json()["detail"]
+    assert [x["revision"] for x in c.get(url+"/history",headers=key(draft)).json()]==[2,1]
+    assert c.get(url+"/source",headers=key(draft)).content==original
+
+
+def test_r3_nan_or_unknown_state_is_refused_without_server_error(studio):
+    c,_=studio
+    draft,_=create(c)
+    url="/api/docwork/drafts/"+draft["id"]
+    resp=c.put(url,headers={**key(draft),"Content-Type":"application/json"},
+        content='{"revision":1,"state":{"settings":{"unsupported":NaN}}}')
+    assert resp.status_code==422
+    assert c.get(url,headers=key(draft)).json()["revision"]==1
