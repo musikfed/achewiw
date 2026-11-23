@@ -141,11 +141,15 @@
     {
       "id": "D13",
       "priority": "P1",
-      "status": "not_implemented",
-      "criterion": "Редакционная сессия, предложения, изменения и выбранные параметры переживают F5; исходный документ не подменяется без явного утверждения.",
+      "status": "not_tested",
+      "criterion": "R3: сервер хранит исходник и версионированное состояние DocWork с контролем конфликтов; автоматические API-тесты PASS. Ручной сценарий F5, восстановления незавершённого ввода и двух открытых вкладок в реальном браузере ещё не испытан на целевой системе — до этого D13 остаётся not_tested.",
       "evidence": [
+        "tests/test_r3_docwork_sessions.py::test_r3_f5_restores_source_settings_pending_text_and_library_unchanged",
+        "tests/test_r3_docwork_sessions.py::test_r3_parallel_tab_conflict_fails_closed",
+        "tests/test_r3_docwork_sessions.py::test_r3_immutable_history_and_rollback_as_new_revision",
+        "app/docwork_sessions.py",
         "app/static/docwork.js",
-        "docs/DOCUMENT-WORKSHOP-RU.md"
+        "docs/R3-DOCWORK-DURABLE-EDITOR-RU.md"
       ]
     },
     {
@@ -186,5 +190,12 @@
     "passed_in_publishing_step": 24,
     "known_fail": 0,
     "scope": "Synthetic A5 PDF co-location, DOCX keep flags, invalid asset refusal; real Word layout and production remain untested"
+  },
+  "r3_status": {
+    "code": "implemented_in_draft_pr",
+    "browser_live_f5": "not_tested",
+    "browser_two_tabs": "not_tested",
+    "server_persistence": "passed_on_synthetic_api_tests",
+    "note": "Без изменения main и сервера; издательский выпуск остается BLOCKED."
   }
 }

@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
 <link rel="stylesheet" href="/static/docwork.css?v=1">
-<script src="/static/docwork.js?v=2" defer></script>
+<script src="/static/docwork.js?v=3" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -21,6 +21,23 @@
     <button type="button" id="quickDownloadDocx" class="primary" disabled>↓ Новый DOCX</button>
     <button type="button" id="quickDownloadPdf" disabled>↓ Новый PDF</button>
   </div>
+  <section id="draftControls" class="control" aria-label="Защищённый черновик DocWork">
+    <h2>Черновик и история редакций</h2>
+    <p id="draftStatus" class="hint" role="status" aria-live="polite">Выбранный документ ещё не сохранён на сервере. После проверки структуры исходник сохраняется однократно.</p>
+    <div class="actions buttons">
+      <button id="saveDraft" type="button" disabled>Сохранить правки сейчас</button>
+      <button id="reloadDraft" type="button" disabled>Обновить с сервера при конфликте</button>
+      <button id="exportDraftState" type="button" disabled>Скачать мои правки JSON</button>
+      <button id="closeDraft" type="button" disabled>Закрыть черновик</button>
+    </div>
+    <div class="actions">
+      <label for="draftHistory">Сохранённые редакции
+        <select id="draftHistory" disabled><option value="">История недоступна</option></select>
+      </label>
+      <button id="restoreDraftVersion" type="button" disabled>Восстановить выбранную редакцию</button>
+    </div>
+    <p class="hint">Оригинал хранится один раз, изменения — отдельными версиями SQLite. Доступ по секретному ключу этой вкладки браузера. Изменения в другой вкладке не перезаписываются автоматически.</p>
+  </section>
   <div class="columns">
     <section class="control">
       <h2>01 · Исходный документ</h2>
