@@ -2,8 +2,9 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=8">
-<script src="/static/docwork.js?v=10" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=9">
+<script src="/static/docwork.js?v=11" defer></script>
+<script src="/static/docwork-workbench.js?v=1" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -185,8 +186,58 @@
       <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Документ · текст и рисунки</h2></div><div class="previewHeadActions"><span id="changeCounter">0 правок</span><button id="toggleSidebar" type="button" aria-expanded="true" title="Скрыть настройки и список иллюстраций, расширить лист">Скрыть настройки ←</button></div></div>
       <div class="preview-switch">
         <button type="button" id="showStructure" class="selected" aria-pressed="true">Редактор документа</button>
+        <button type="button" id="openImageWorkbench" aria-pressed="false" disabled>✎ Мастерская иллюстраций</button>
         <button type="button" id="previewPdf" disabled>◉ Посмотреть страницы PDF</button>
       </div>
+      <section id="imageWorkbench" class="workbench" aria-label="Мастерская иллюстраций" hidden>
+        <div class="workbenchHeading">
+          <h2>Мастерская иллюстраций · исходник и новая версия</h2>
+          <p>Выбери рисунок из DOCX или загрузи внешний PNG/JPEG/WebP. Правки создают новую PNG-версию, а в книгу попадают только после явного «Применить замену».</p>
+        </div>
+        <div class="workbenchToolbar">
+          <label>Какой рисунок заменяем
+            <select id="wbPicture"></select>
+          </label>
+          <label>Подгрузить внешнее изображение
+            <input id="wbExternal" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+          </label>
+          <button type="button" id="wbUseOriginal">Вернуть исходник на холст</button>
+          <button type="button" id="wbUseReplacement">Открыть текущую замену</button>
+        </div>
+        <div class="workbenchToolbar">
+          <label>Инструмент
+            <select id="wbTool">
+              <option value="select">Переместить фигуру</option>
+              <option value="rectangle">Прямоугольник</option>
+              <option value="ellipse">Эллипс</option>
+              <option value="line">Линия</option>
+              <option value="arrow">Стрелка</option>
+              <option value="text">Надпись</option>
+              <option value="cover">Закрыть старую надпись белым прямоугольником</option>
+            </select>
+          </label>
+          <label>Текст новой надписи<input id="wbText" type="text" maxlength="180" value="Новая подпись"></label>
+          <label>Размер текста, px<input id="wbTextSize" type="number" min="10" max="100" value="28"></label>
+          <label>Цвет<input id="wbColor" type="color" value="#176d47"></label>
+          <label>Толщина линии<input id="wbLineWidth" type="number" min="1" max="30" value="4"></label>
+          <button type="button" id="wbUndo" disabled>↶ Отменить на рисунке</button>
+          <button type="button" id="wbRedo" disabled>↷ Повторить</button>
+        </div>
+        <p id="wbStatus" role="status" aria-live="polite" class="hint">Сначала выбери рисунок. Изображения не отправляются в облако.</p>
+        <div class="workbenchStage">
+          <canvas id="wbCanvas" width="800" height="480" aria-label="Холст для изменения схемы и рисунка"></canvas>
+        </div>
+        <p class="hint">Мышью создай прямоугольник, стрелку или линию; для текста щёлкни на нужном месте. Для перемещения добавленных объектов выбери «Переместить фигуру». Это ручная векторная разметка поверх растра, не распознавание надписей ИИ.</p>
+        <div class="workbenchToolbar">
+          <button id="wbAutoOutline" type="button">Упростить схему (контуры R3.5)</button>
+          <label>Цветов для контуров<select id="wbTraceColors"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option></select></label>
+          <button id="wbDownload" type="button">↓ Скачать PNG отдельно</button>
+          <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
+          <button id="wbRestore" type="button">↶ Снять замену</button>
+          <button id="wbBack" type="button">← Вернуться к документу</button>
+        </div>
+        <p class="hint">Схемы можно реконструировать локально по контурам; это не восстановление редактируемых слов. Подключение LLM/VLM для распознавания и проверки геометрии — отдельный этап, только после согласования точности.</p>
+      </section>
       <div id="structurePane">
         <section id="documentEditor" class="documentEditor" aria-label="Единый редактор текста и иллюстраций" hidden>
           <div class="editorBar">
