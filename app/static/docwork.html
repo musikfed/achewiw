@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=6">
-<script src="/static/docwork.js?v=8" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=7">
+<script src="/static/docwork.js?v=9" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -152,6 +152,23 @@
           <button id="resetImageEdit" type="button">Сбросить этот рисунок</button>
         </div>
         <p class="hint" id="imageEditHint">Изменение будет записано в черновик и применено при экспорте DOCX/PDF.</p>
+        <details class="vectorExperiment" id="vectorExperiment">
+          <summary>Эксперимент: схема → SVG → PNG</summary>
+          <p class="hint">Только отдельная копия рисунка. Для схем и значков с простыми цветами; буквы превратятся в контуры, а фотографии и градиенты могут выглядеть хуже. Оригинал не заменяется.</p>
+          <label>Число цветов в векторной схеме
+            <select id="vectorColors">
+              <option value="2">2 цвета · контурная схема</option>
+              <option value="4" selected>4 цвета · схема</option>
+              <option value="6">6 цветов · сложнее</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button type="button" id="downloadVectorSvg">↓ Подготовить SVG</button>
+            <button type="button" id="downloadVectorPng">↓ SVG → PNG (2×)</button>
+          </div>
+          <p id="vectorStatus" class="hint" role="status" aria-live="polite">Трассировка включается только по нажатию. Нет пакетного режима и автоматического изменения книги.</p>
+          <img id="vectorPreview" alt="Результат экспериментальной трассировки" hidden>
+        </details>
       </div>
       <h2 id="exportSection">04 · Имя и формат</h2>
       <label>Имя нового файла (без расширения)<input type="text" id="outputName" maxlength="120" placeholder="Karate Linux — белый пояс — редакция 2"></label>
