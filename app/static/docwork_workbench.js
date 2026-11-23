@@ -31,6 +31,7 @@ function changeButtons(){
   $('wbDownload').disabled=selected<0||!baseImage;
   $('wbExportSvg').disabled=selected<0||!baseImage||!figures.length;
   $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
+  $('wbImportGraph').disabled=!exportScope()||operationBusy;
   $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
@@ -516,6 +517,13 @@ function saveLabelAssignments(assignments){
     return false;
   }
 }
+function exportScope(){
+  const draft=host?.current()?.draft;
+  if(!draft?.id||selected<0||!baseImage||external||vectorSource)return null;
+  return {draftId:draft.id,pictureIndex:selected,
+    baseAsset:host.assetFor(selected)||'original',
+    width:canvas.width,height:canvas.height};
+}
 function auditGraph(){
   const checker=window.ACHEWIWDiagramGraph;
   if(!checker)throw Error('Модуль проверки геометрии не загружен');
@@ -624,7 +632,10 @@ $('wbExportSvg').addEventListener('click',()=>{
 });
 $('wbExportGraph').addEventListener('click',()=>{
   if(!baseImage||!figures.length)return;
+  const scope=exportScope();
+  if(!scope){status('JSON с привязкой к книге доступен только для исходного рисунка DOCX.',true);return;}
   const schema={format:'achewiw-verified-diagram-layer',version:1,
+    documentScope:scope,
     canvas:{width:canvas.width,height:canvas.height},
     origin:'manual',recognition:'not-performed',sourceRasterEmbedded:false,
     shapes:structuredShapes(),geometryAudit:auditGraph(),
@@ -634,6 +645,34 @@ $('wbExportGraph').addEventListener('click',()=>{
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
 });
 
+$('wbImportGraph').addEventListener('change',async()=>{
+  const input=$('wbImportGraph'),file=input.files?.[0];
+  input.value='';
+  if(!file)return;
+  try{
+    if(!exportScope())throw Error('Открой исходный рисунок DOCX');
+    if(file.size>256*1024)throw Error('JSON больше 256 КиБ');
+    const raw=await file.text();
+    const decoder=window.ACHEWIWDiagramImport;
+    if(!decoder)throw Error('Модуль импорта не загружен');
+    const validated=decoder.validate(JSON.parse(raw),exportScope());
+    if(!confirm('Заменить ТОЛЬКО текущую ручную разметку ('+
+      validated.shapes.length+' фигур) данными из JSON? Исходный DOCX останется прежним.'))return;
+    // Keep previous vector layer accessible through Undo.
+    record();
+    figures=validated.shapes;
+    dirty=true;
+    render();changeButtons();
+    saveAnnotations();
+    // Reviews are scoped by the restored geometry, never by stale positions.
+    if(!saveLinkDecisions(validated.decisions)||!saveLabelAssignments(validated.assignments))
+      status('Фигуры восстановлены; часть подтверждений не сохранилась в браузере.',true);
+    else status('Разметка восстановлена из JSON. Изменение оригинального DOCX не выполнялось.');
+    $('wbGraphAudit').hidden=true;
+  }catch(error){
+    status('Импорт отклонён: '+error.message,true);
+  }
+});
 $('wbDownload').addEventListener('click',async()=>{
   if(!baseImage)return;
   try{downloadBlob(await canvasPng(),
