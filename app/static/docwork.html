@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="/static/docwork.css?v=9">
 <script src="/static/docwork.js?v=11" defer></script>
 <script src="/static/docwork-workbench.js?v=1" defer></script>
+<script src="/static/docwork_workbench.js?v=1" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -224,6 +225,10 @@
           <button type="button" id="wbRedo" disabled>↷ Повторить</button>
         </div>
         <p id="wbStatus" role="status" aria-live="polite" class="hint">Сначала выбери рисунок. Изображения не отправляются в облако.</p>
+        <div class="workbenchCompare" aria-label="Оригинал и результат редактирования">
+          <figure><figcaption>Исходная иллюстрация</figcaption><img id="wbOriginalPreview" alt="Оригинальное изображение" hidden></figure>
+          <figure><figcaption>Текущая редакция</figcaption><img id="wbCurrentPreview" alt="Изображение после редактирования" hidden></figure>
+        </div>
         <div class="workbenchStage">
           <canvas id="wbCanvas" width="800" height="480" aria-label="Холст для изменения схемы и рисунка"></canvas>
         </div>
@@ -231,7 +236,7 @@
         <div class="workbenchToolbar">
           <button id="wbAutoOutline" type="button">Упростить схему (контуры R3.5)</button>
           <label>Цветов для контуров<select id="wbTraceColors"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option></select></label>
-          <button id="wbDownload" type="button">↓ Скачать PNG отдельно</button>
+          <button id="wbDownload" type="button">↓ Скачать PNG для Photoshop</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
           <button id="wbRestore" type="button">↶ Снять замену</button>
           <button id="wbBack" type="button">← Вернуться к документу</button>
