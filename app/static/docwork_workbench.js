@@ -413,14 +413,14 @@ $('wbApply').addEventListener('click',async()=>{
       throw new Error(answer.detail||'Не удалось сохранить замену (HTTP '+response.status+')');
     }
     const asset=await response.json();
+    const previousAnnotationKey=annotationKey();
     host.applyAsset(index,asset.id);
     status('Новая версия PNG сохранена отдельно (ID '+asset.id.slice(0,8)+
       '). Для включения в DOCX нажми «Сохранить изменения» и экспортируй копию. '
       +'Оригинал останется прежним.');
     // The accepted asset already contains these drawn figures. A reopened
     // replacement must never superimpose them a second time.
-    const oldKey=ANNOTATION_KEY_PREFIX+draft.id+':'+index+':'+(host.assetFor(index)||'original');
-    try{localStorage.removeItem(oldKey);}catch{}
+    if(previousAnnotationKey)try{localStorage.removeItem(previousAnnotationKey);}catch{}
     dirty=false;changeButtons();
   }catch(e){status(e.message,true);}
   finally{operationBusy=false;changeButtons();}
@@ -428,6 +428,9 @@ $('wbApply').addEventListener('click',async()=>{
 $('wbRestore').addEventListener('click',async()=>{
   if(selected<0)return;
   const index=selected;
+  if(dirty&&figures.length&&!window.confirm('На холсте есть несохранённая разметка. Снять замену?'))return;
+  saveAnnotations();
+  clearDrawing();
   host.restoreAsset(index);
   try{await choose(index,'original');}catch(e){status(e.message,true);}
   status('Замена снята для следующего экспорта. Предыдущие версии доступны в истории R3.');
