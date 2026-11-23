@@ -71,6 +71,8 @@ def test_docx():
     doc=Document()
     doc.add_heading("Тестовая глава",1)
     image=Image.new("RGB",(320,180),(207,138,51))
+    from PIL import ImageDraw
+    ImageDraw.Draw(image).rectangle((45,30,225,140),fill=(45,90,150))
     out=BytesIO();image.save(out,"PNG");out.seek(0)
     doc.add_paragraph().add_run().add_picture(out)
     doc.add_paragraph("Рисунок 1 — Проверка скругления",style="Caption")
@@ -144,6 +146,17 @@ def main():
         ok("R3.1 relative width and center alignment",
            abs(shape.width/text_width-0.65)<0.02
            and revised.paragraphs[0].alignment==WD_ALIGN_PARAGRAPH.CENTER)
+        vector_base=base+"/images/0/vectorize"
+        vector_svg_request=json.dumps({"colors":4,"output":"svg","scale":2}).encode()
+        code,svg=request("POST",vector_base,vector_svg_request,
+                         "application/json",token=token)
+        ok("R3.5 SVG contains real vector paths without embedded raster",
+           code==200 and b"<path" in svg and b"data:image" not in svg)
+        vector_png_request=json.dumps({"colors":4,"output":"png","scale":2}).encode()
+        code,png=request("POST",vector_base,vector_png_request,
+                         "application/json",token=token)
+        ok("R3.5 SVG-to-PNG is returned as genuine raster",
+           code==200 and png[:4]==bytes([137,80,78,71]))
         code,source=request("GET",base+"/source",token=token)
         ok("R3.1 source still byte-identical",
            code==200 and sha256(source).digest()==sha256(original).digest())
