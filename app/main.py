@@ -32,7 +32,8 @@ from narrative_direction import scene_contract, reject_vacant_dialogue
 from reader_engagement import map_chapters as map_reader_engagement, fragment_contract as reader_fragment_contract
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
 from document_workshop import (MAX_UPLOAD as DOCWORK_UPLOAD_LIMIT, DocumentWorkshopError,
-    preview as docwork_preview, export as docwork_export, content_disposition as docwork_disposition)
+    preview as docwork_preview, export as docwork_export, validate_upload as docwork_validate_upload,
+    content_disposition as docwork_disposition)
 from docwork_image_layout import thumbnail as docwork_image_thumbnail, IllustrationLayoutError
 from docwork_vector import convert_picture as docwork_vectorize_picture, VectorExperimentError
 from docwork_vector import source_image as docwork_original_picture
@@ -2690,6 +2691,7 @@ async def document_workshop_normative_preflight(
         raise HTTPException(422, "R4 проверяет готовый DOCX. Для PDF нужен отдельный preflight.")
     data = await file.read(DOCWORK_UPLOAD_LIMIT + 1)
     try:
+        docwork_validate_upload(data, file.filename or "")
         return await asyncio.to_thread(docwork_normative_audit, data, profile)
     except (NormativePreflightError, ValueError, OSError, zipfile.BadZipFile) as exc:
         raise HTTPException(422, str(exc)) from exc
