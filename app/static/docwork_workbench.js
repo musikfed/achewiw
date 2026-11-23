@@ -447,45 +447,103 @@ function svgFromShapes(shapes){
   }
   return parts.join('\n')+'\n</svg>\n';
 }
+// R3.7C: browser-local review; every decision is tied to exact geometry.
+const LINK_REVIEW_PREFIX='achewiw:docwork:r37c:links:';
+function linkReviewKey(){
+  const key=annotationKey();
+  return key?LINK_REVIEW_PREFIX+key:null;
+}
+function geometrySignature(){
+  return JSON.stringify(structuredShapes().map(({id,type,x,y,w,h})=>({id,type,x,y,w,h})));
+}
+function readLinkDecisions(){
+  const key=linkReviewKey();
+  if(!key)return {};
+  try{
+    const saved=JSON.parse(localStorage.getItem(key)||'null');
+    if(saved?.version!==1||saved.signature!==geometrySignature()||
+       !saved.decisions||typeof saved.decisions!=='object')return {};
+    return Object.fromEntries(Object.entries(saved.decisions)
+      .filter(([id,v])=>/^shape-\d+$/.test(id)&&
+        (v==='accepted'||v==='rejected')).slice(0,100));
+  }catch{return {};}
+}
+function saveLinkDecisions(decisions){
+  const key=linkReviewKey();
+  if(!key){status('Для сохранения решений открой исходный рисунок DOCX, не внешний файл.',true);return false;}
+  try{
+    localStorage.setItem(key,JSON.stringify({
+      version:1,signature:geometrySignature(),decisions
+    }));
+    return true;
+  }catch{
+    status('Не удалось сохранить подтверждения: локальное хранилище недоступно.',true);
+    return false;
+  }
+}
 function auditGraph(){
   const checker=window.ACHEWIWDiagramGraph;
   if(!checker)throw Error('Модуль проверки геометрии не загружен');
-  return checker.inspect(structuredShapes());
+  return checker.applyReviews(checker.inspect(structuredShapes()),readLinkDecisions());
 }
-$('wbAuditGraph').addEventListener('click',()=>{
+function showLinkAudit(){
   const panel=$('wbGraphAudit');
   try{
     const audit=auditGraph();
     panel.replaceChildren();
     const heading=document.createElement('strong');
-    heading.textContent='R3.7B · Проверка геометрии (не распознавание смысла)';
+    heading.textContent='R3.7C · Ручная проверка связей (без распознавания смысла)';
     const summary=document.createElement('p');
     summary.textContent='Узлов: '+audit.summary.nodes+
-      ' · линий и стрелок: '+audit.summary.edges+
-      ' · возможных связей: '+audit.summary.candidateEdges+
-      ' · неопределённых: '+audit.summary.unresolvedEdges+
-      ' · неподписанных связями надписей: '+audit.summary.unassignedLabels+'.';
+      ' · линий/стрелок: '+audit.summary.edges+
+      ' · подтверждено: '+audit.reviewSummary.confirmed+
+      ' · отклонено: '+audit.reviewSummary.rejected+
+      ' · ожидают проверки: '+audit.reviewSummary.pending+'.';
     panel.append(heading,summary);
     const list=document.createElement('ul');
     for(const edge of audit.edges){
       const item=document.createElement('li');
-      item.textContent=edge.id+' · '+(edge.type==='arrow'?'стрелка':'линия')+
-        ' · '+(edge.status==='candidate'?'геометрический кандидат ':'требует проверки ')+
+      const description=document.createElement('span');
+      description.textContent=edge.id+' · '+(edge.type==='arrow'?'стрелка':'линия')+
         ' · начало: '+(edge.fromCandidates.join(', ')||'вне узлов')+
-        ' · конец: '+(edge.toCandidates.join(', ')||'вне узлов');
+        ' · конец: '+(edge.toCandidates.join(', ')||'вне узлов')+
+        ' · '+(edge.reviewDecision==='accepted'?'подтверждено человеком':
+          edge.reviewDecision==='rejected'?'отклонено':'не подтверждено');
+      item.append(description);
+      if(edge.status==='candidate'){
+        for(const [decision,label] of [
+          ['accepted','✓ Подтвердить'],['rejected','✕ Отклонить'],['pending','Сбросить решение']
+        ]){
+          const button=document.createElement('button');
+          button.type='button';button.textContent=label;
+          button.disabled=edge.reviewDecision===decision;
+          button.addEventListener('click',()=>{
+            const updated=readLinkDecisions();
+            if(decision==='pending')delete updated[edge.id];
+            else updated[edge.id]=decision;
+            if(saveLinkDecisions(updated))showLinkAudit();
+          });
+          item.append(' ',button);
+        }
+      }else{
+        const reason=document.createElement('small');
+        reason.textContent=' · Неоднозначно ('+edge.issues.join(', ')+
+          '): исправь геометрию перед подтверждением.';
+        item.append(reason);
+      }
       list.append(item);
     }
     panel.append(list);
     const note=document.createElement('p');
-    note.textContent='Ни одна связь не подтверждена автоматически. Надписи не привязаны к узлам; исходная схема не изменена.';
-    panel.append(note);
-    panel.hidden=false;
+    note.textContent='Решения сохраняются только в этом браузере для текущего черновика и геометрии. Экспортируй JSON для переноса. Исходный DOCX не меняется.';
+    panel.append(note);panel.hidden=false;
   }catch(error){
     panel.replaceChildren();
     panel.textContent='Проверка схемы не выполнена: '+error.message;
     panel.hidden=false;
   }
-});
+}
+$('wbAuditGraph').addEventListener('click',showLinkAudit);
 $('wbExportSvg').addEventListener('click',()=>{
   if(!baseImage||!figures.length)return;
   const shapes=structuredShapes();
@@ -498,7 +556,8 @@ $('wbExportGraph').addEventListener('click',()=>{
   const schema={format:'achewiw-verified-diagram-layer',version:1,
     canvas:{width:canvas.width,height:canvas.height},
     origin:'manual',recognition:'not-performed',sourceRasterEmbedded:false,
-    shapes:structuredShapes(),geometryAudit:auditGraph()};
+    shapes:structuredShapes(),geometryAudit:auditGraph(),
+    reviewStorage:'browser-local; export JSON to preserve decisions'};
   downloadBlob(new Blob([JSON.stringify(schema,null,2)+'\n'],{type:'application/json'}),
     'ACHEWIW-diagram-'+(selected+1)+'-structure.json');
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
