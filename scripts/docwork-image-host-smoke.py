@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DocWork R3.2 integrated editing smoke test against a running ACHEWIW Studio.
+"""DocWork R3.3 integrated text and paragraph alignment smoke test against a running ACHEWIW Studio.
 
 Only synthetic DOCX bytes and a test draft with an unguessable ID are used.
 On successful test draft creation it explicitly deletes ONLY that test draft.
@@ -100,8 +100,9 @@ def main():
         styles={"0":{"width_percent":65,"align":"center","corner_percent":16}}
         positions={"0":{"before_paragraph":0,"order":1}}
         edits={"3":"Отредактированный текст после иллюстрации."}
+        alignment={"3":"justify"}
         state={"images":styles,"moves":positions,"replacements":edits,
-               "settings":{"preset":"book"}}
+               "alignments":alignment,"settings":{"preset":"book"}}
         code,resp=request("PUT",base,json.dumps({"revision":1,"state":state}).encode(),
                           "application/json",token)
         ok("R3.1 image styling saved",code==200)
@@ -110,10 +111,13 @@ def main():
            code==200 and json.loads(resp).get("state",{}).get("images")==styles)
         ok("R3.2 picture position survives reload",
            code==200 and json.loads(resp).get("state",{}).get("moves")==positions)
+        ok("R3.3 paragraph alignment survives reload",
+           code==200 and json.loads(resp).get("state",{}).get("alignments")==alignment)
 
         body,mime=multipart(original,fields={
             "options":json.dumps({"preset":"book","image_edits":styles,
-                                  "image_moves":positions,"replacements":edits}),
+                                  "image_moves":positions,"replacements":edits,
+                                  "paragraph_alignments":alignment}),
             "target":"docx"
         })
         code,resp=request("POST","/api/docwork/export",body,mime)
@@ -126,6 +130,8 @@ def main():
            revised.paragraphs[1].text.startswith("Рисунок 1"))
         ok("R3.2 text edited on document canvas is exported",
            revised.paragraphs[3].text=="Отредактированный текст после иллюстрации.")
+        ok("R3.3 justified paragraph is real DOCX formatting",
+           revised.paragraphs[3].alignment==WD_ALIGN_PARAGRAPH.JUSTIFY)
         shape=revised.inline_shapes[0]
         rid=shape._inline.xpath(".//a:blip")[0].get(qn("r:embed"))
         blob=revised.part.related_parts[rid].blob

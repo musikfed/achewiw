@@ -40,6 +40,12 @@ CHAPTER = re.compile(r"^(?:глава|часть|урок|chapter|part|lesson)\s
 SUBHEADING = re.compile(r"^\d+(?:\.\d+){1,4}\.?\s+\S", re.U)
 SIMPLE_TITLE = re.compile(r"^(?:введение|заключение|содержание|предисловие|послесловие|список литературы|источники)$", re.I)
 FORMATS = {"keep", "body", "heading1", "heading2"}
+PARAGRAPH_ALIGNMENTS = {
+    "left": WD_ALIGN_PARAGRAPH.LEFT,
+    "center": WD_ALIGN_PARAGRAPH.CENTER,
+    "right": WD_ALIGN_PARAGRAPH.RIGHT,
+    "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+}
 DANGEROUS_PARTS = {"word/vbaproject.bin", "word/activeX/"}
 
 
@@ -111,7 +117,12 @@ def preview_docx(data: bytes) -> dict:
         # Limit excessive API payloads for unusually large documents.
         if len(rows) < 3000 and (paragraph.text.strip() or kind != "body"):
             protected = _complex_paragraph(paragraph) or len(paragraph.text) > 5000
+            explicit_alignment = next(
+                (key for key, value in PARAGRAPH_ALIGNMENTS.items()
+                 if paragraph.alignment == value), "inherit"
+            )
             rows.append({"index": idx, "kind": kind, "style": paragraph.style.name,
+                         "alignment": explicit_alignment,
                          "text": paragraph.text if len(paragraph.text) <= 5000 else paragraph.text[:300],
                          "editable": not protected})
     warnings = [
@@ -311,13 +322,20 @@ def transform_docx(data: bytes, options: dict) -> bytes:
         raise DocumentWorkshopError("Неизвестный стиль оформления")
     overrides = options.get("overrides", {})
     replacements = options.get("replacements", {})
-    if not isinstance(overrides, dict) or not isinstance(replacements, dict):
+    alignments = options.get("paragraph_alignments", {})
+    if not isinstance(overrides, dict) or not isinstance(replacements, dict) or not isinstance(alignments, dict):
         raise DocumentWorkshopError("Некорректная карта изменений")
-    if len(overrides) > 1000 or len(replacements) > 100:
+    if len(overrides) > 1000 or len(replacements) > 100 or len(alignments) > 1000:
         raise DocumentWorkshopError("Слишком много изменений за один проход")
     doc = Document(BytesIO(data))
     if len(doc.paragraphs) > MAX_PARAGRAPHS:
         raise DocumentWorkshopError("Слишком большой документ")
+    # Reject all invalid paragraph indices before touching the output copy.
+    for key, alignment in alignments.items():
+        if (not isinstance(key, str) or not key.isdecimal()
+                or int(key) >= len(doc.paragraphs)
+                or alignment not in PARAGRAPH_ALIGNMENTS):
+            raise DocumentWorkshopError("Недопустимый номер или выравнивание абзаца")
     _apply_preset(doc, preset)
     _custom_heading_fonts(doc, options)
     if options.get("clear_highlights", False):
@@ -329,6 +347,9 @@ def transform_docx(data: bytes, options: dict) -> bytes:
         manual = overrides.get(str(idx), "keep")
         if manual not in FORMATS:
             raise DocumentWorkshopError("Неизвестная роль абзаца")
+        # Direct paragraph alignment preserves text runs, fields and images.
+        if str(idx) in alignments:
+            paragraph.alignment = PARAGRAPH_ALIGNMENTS[alignments[str(idx)]]
         if str(idx) in replacements:
             new_text = replacements[str(idx)]
             if not isinstance(new_text, str):

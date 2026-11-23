@@ -83,3 +83,26 @@
  text-align:center;margin:2px auto 0;padding:5px 8px;width:100%;min-height:38px;
  border:1px solid transparent;border-radius:6px;resize:vertical;background:transparent}
 .canvasFigure .canvasCaptionText:focus{outline:2px solid #8fbe9b;border-color:#4b8f60;background:#fff}
+
+/* R3.3: accessible in-document editing + bounded undo timeline. */
+.editToolbar{position:sticky;top:75px;z-index:12;display:flex;flex-wrap:wrap;align-items:center;
+ gap:8px;padding:10px 12px;margin:8px 0 12px;border:1px solid #cbdccb;border-radius:12px;
+ background:#f7fbf7;box-shadow:0 4px 14px #122c1917}
+.toolbarGroup{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.toolbarGroup button{white-space:nowrap;padding:7px 10px;font-size:12px}
+.toolbarGroup button[aria-pressed=true]{background:#235b3d;color:white;border-color:#235b3d}
+.toolbarGroup button:disabled{opacity:.44;cursor:not-allowed}
+.toolbarHint{font:11px/1.4 system-ui,sans-serif;color:#536d5b;margin:0 8px 0 0}
+#canvasRole{width:auto;min-width:128px;max-width:190px;font-size:12px;padding:6px}
+#editingHelp{font-size:13px;color:#345d46;background:#eaf5ed;border-left:3px solid #5c9775;
+ border-radius:5px;padding:9px 12px;margin:10px 0}
+.canvasText{cursor:text;transition:background .15s,border-color .15s;white-space:pre-wrap}
+.canvasText:hover{border-color:#aac9b5;background:#f8fbf8}
+.canvasText:focus{border-color:#448a61;background:#fff;outline:2px solid #81ae90}
+.canvasText[disabled]{cursor:default}
+.canvasText[data-align=left]{text-align:left}
+.canvasText[data-align=center]{text-align:center}
+.canvasText[data-align=right]{text-align:right}
+.canvasText[data-align=justify]{text-align:justify}
+.canvasText[data-align=inherit]{text-align:inherit}
+@media(max-width:720px){.editToolbar{top:60px}.toolbarGroup{width:100%}}

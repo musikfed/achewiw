@@ -5,6 +5,12 @@ let source = null, report = null, selected = null, previewUrl = null, rendered =
 const overrides = Object.create(null), replacements = Object.create(null);
 const imageEdits = Object.create(null);
 const imageMoves = Object.create(null);
+const paragraphAlignments = Object.create(null);
+let activeParagraph = null;
+const undoStack = [], redoStack = [];
+const MAX_UNDO_STEPS = 200;
+const MAX_UNDO_CHARS = 5_000_000;
+let lastUndoKey = '', lastUndoTime = 0;
 let imageMoveCounter = 0;
 let canvasLimit = 120;
 let selectedImage = null;
@@ -27,6 +33,104 @@ function canonicalState(value) {
     return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonicalState(value[k])).join(',')+'}';
   return JSON.stringify(value);
 }
+/* R3.3: bounded multi-step action timeline. Only changes to manuscript text,
+   paragraph formatting and picture layout are undoable; binary source is never
+   copied. Fast typing in the same paragraph is grouped into one action. */
+function undoSnapshot() {
+  return JSON.stringify({
+    overrides:{...overrides},replacements:{...replacements},
+    paragraphAlignments:{...paragraphAlignments},
+    images:{...imageEdits},moves:{...imageMoves}
+  });
+}
+function timelineStatus() {
+  $('undoEdit').disabled=undoStack.length===0;
+  $('redoEdit').disabled=redoStack.length===0;
+  $('undoDepth').textContent=undoStack.length+' отмен · '+redoStack.length+
+    ' повторов · до '+MAX_UNDO_STEPS+' шагов';
+}
+function limitUndoStack(stack) {
+  while(stack.length>MAX_UNDO_STEPS)stack.shift();
+  let sum=stack.reduce((size,snapshot)=>size+snapshot.length,0);
+  while(sum>MAX_UNDO_CHARS && stack.length>1)sum-=stack.shift().length;
+}
+function resetUndoTimeline() {
+  undoStack.length=0;redoStack.length=0;
+  lastUndoKey='';lastUndoTime=0;activeParagraph=null;
+  timelineStatus();
+}
+function editWithUndo(actionKey, mutation, coalesce=false) {
+  if(!report)return;
+  const before=undoSnapshot();
+  mutation();
+  const after=undoSnapshot();
+  if(before===after)return;
+  const now=Date.now();
+  const sameTyping=coalesce&&lastUndoKey===actionKey&&
+    now-lastUndoTime<850&&undoStack.length>0;
+  if(!sameTyping)undoStack.push(before);
+  limitUndoStack(undoStack);
+  redoStack.length=0;
+  lastUndoKey=actionKey;
+  lastUndoTime=now;
+  changeCount();markDraftDirty();timelineStatus();
+}
+function applyUndoSnapshot(data) {
+  const state=JSON.parse(data);
+  for(const [object,source] of [
+    [overrides,state.overrides], [replacements,state.replacements],
+    [paragraphAlignments,state.paragraphAlignments],
+    [imageEdits,state.images], [imageMoves,state.moves]
+  ]) {
+    for(const key of Object.keys(object))delete object[key];
+    Object.assign(object,source||{});
+  }
+  imageMoveCounter=Math.max(0,...Object.values(imageMoves)
+    .map(item=>Number(item?.order)||0));
+  const previous=activeParagraph;
+  changeCount();drawRows();renderDocumentCanvas();
+  activeParagraph=previous;
+  updateEditToolbar();
+  markDraftDirty();
+}
+function undoEditAction(redo=false) {
+  const from=redo?redoStack:undoStack;
+  const to=redo?undoStack:redoStack;
+  if(!from.length)return;
+  const previous=from.pop();
+  to.push(undoSnapshot());limitUndoStack(to);
+  lastUndoKey='';lastUndoTime=0;
+  applyUndoSnapshot(previous);
+  timelineStatus();
+  const area=activeParagraph===null?null:
+    $('documentCanvas').querySelector(
+      '.canvasText[data-paragraph-index="'+activeParagraph+'"]');
+  if(area && area.tagName==='TEXTAREA') {
+    area.focus({preventScroll:true});
+    const pos=Math.min(area.value.length,area.selectionStart??area.value.length);
+    area.setSelectionRange(pos,pos);
+  }
+}
+function selectTextParagraph(index) {
+  activeParagraph=index;
+  updateEditToolbar();
+}
+function updateEditToolbar() {
+  const row=report?.paragraphs?.find(item=>item.index===activeParagraph);
+  const allowed=report?.type==='docx'&&!!row&&!!row.editable;
+  $('activeParagraphLabel').textContent=allowed?
+    'Абзац №'+(activeParagraph+1)+' · текст изменяется прямо на листе':
+    'Нажми на текст для редактирования';
+  const alignment=allowed?(paragraphAlignments[String(activeParagraph)]||
+    row.alignment||'inherit'):'inherit';
+  for(const id of ['alignLeft','alignCenter','alignRight','alignJustify','alignReset']) {
+    const button=$(id);
+    button.disabled=!allowed;
+    button.setAttribute('aria-pressed',String(allowed&&button.dataset.align===alignment));
+  }
+  $('canvasRole').disabled=!allowed;
+  $('canvasRole').value=allowed?(overrides[String(activeParagraph)]||'keep'):'keep';
+}
 function rememberDraft() {
   if (!draft) return;
   try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
@@ -42,6 +146,7 @@ function captureDraftState() {
   return {
     settings, overrides:{...overrides}, replacements:{...replacements},
     images:{...imageEdits}, moves:{...imageMoves},
+    alignments:{...paragraphAlignments},
     editor:{selected, text: selected === null ? '' : $('paragraphText').value,
             role: selected === null ? 'keep' : $('paragraphRole').value},
     ui:{search:$('paragraphSearch').value, filter:$('paragraphFilter').value, rendered,
@@ -66,12 +171,14 @@ function draftMessage(text, error=false) {
 }
 function applyDraftState(state) {
   if (!state || !report) return;
-  for (const obj of [overrides,replacements,imageEdits,imageMoves])
+  resetUndoTimeline();
+  for (const obj of [overrides,replacements,imageEdits,imageMoves,paragraphAlignments])
     for (const key of Object.keys(obj)) delete obj[key];
   Object.assign(overrides,state.overrides || {});
   Object.assign(replacements,state.replacements || {});
   Object.assign(imageEdits,state.images || {});
   Object.assign(imageMoves,state.moves || {});
+  Object.assign(paragraphAlignments,state.alignments || {});
   imageMoveCounter=Math.max(0,...Object.values(imageMoves)
     .map(x=>Number(x?.order)||0));
   canvasLimit=Math.max(120,Math.min(3000,Number(state.ui?.canvasLimit)||120));
@@ -90,12 +197,14 @@ function applyDraftState(state) {
   rendered=Math.max(80,Math.min(3000,Number(state.ui?.rendered)||80));
   clearPdf();
   $('changeCounter').textContent =
-    (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
+    (new Set(Object.keys(overrides).concat(Object.keys(replacements),
+       Object.keys(paragraphAlignments))).size
     + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
       +' ручных правок';
   selected=null; $('editPane').hidden=true; drawRows();
   renderImageGallery();
   renderDocumentCanvas();
+  updateEditToolbar();
   const imageIndex = state.ui?.selectedImage;
   if (Number.isInteger(imageIndex)) selectImage(imageIndex);
   if (Number.isInteger(state.editor?.selected)) {
@@ -252,9 +361,8 @@ function styleFigure(index, patch) {
   if (!item?.editable) return;
   const state={...canvasImageStyle(item),...patch};
   state.width_percent=Math.max(25,Math.min(100,Math.round(state.width_percent)));
-  imageEdits[String(index)]=state;
+  editWithUndo('picture-style:'+index,()=>{imageEdits[String(index)]=state;});
   selectedImage=index;
-  changeCount();markDraftDirty();
   renderDocumentCanvas();
   selectImage(index);
 }
@@ -272,12 +380,13 @@ function moveFigureTo(index, beforeParagraph) {
       .filter(x=>x.editable&&Number.isInteger(x.caption_index))
       .map(x=>x.caption_index));
   if (captionIndices.has(beforeParagraph)) return;
-  imageMoveCounter=Math.min(1000000,imageMoveCounter+1);
-  imageMoves[String(index)]={
-    before_paragraph:beforeParagraph, order:imageMoveCounter
-  };
+  editWithUndo('picture-move:'+index,()=>{
+    imageMoveCounter=Math.min(1000000,imageMoveCounter+1);
+    imageMoves[String(index)]={
+      before_paragraph:beforeParagraph,order:imageMoveCounter
+    };
+  });
   selectedImage=index;
-  changeCount();markDraftDirty();
   renderDocumentCanvas();selectImage(index);
   $('canvasStatus').textContent='Рисунок №'+(index+1)+
     ' перенесён. Положение сохранится в DOCX/PDF после экспорта.';
@@ -349,7 +458,7 @@ function canvasFigure(item) {
     const revert=document.createElement('button');
     revert.type='button';revert.textContent='Вернуть место';
     revert.addEventListener('click',()=>{
-      delete imageMoves[key];changeCount();markDraftDirty();
+      editWithUndo('picture-restore:'+key,()=>{delete imageMoves[key];});
       renderDocumentCanvas();
       $('canvasStatus').textContent='Рисунок вернулся на исходное место.';
     });
@@ -378,11 +487,13 @@ function canvasFigure(item) {
         captionInput.rows=2;
         captionInput.spellcheck=false;
         captionInput.value=replacements[String(caption.index)]??caption.text;
+        captionInput.addEventListener('focus',()=>selectTextParagraph(caption.index));
         captionInput.addEventListener('input',()=>{
           if(captionInput.value.length>5000)captionInput.value=captionInput.value.slice(0,5000);
-          if(captionInput.value===caption.text)delete replacements[String(caption.index)];
-          else replacements[String(caption.index)]=captionInput.value;
-          changeCount();markDraftDirty();
+          editWithUndo('type-caption:'+caption.index,()=>{
+            if(captionInput.value===caption.text)delete replacements[String(caption.index)];
+            else replacements[String(caption.index)]=captionInput.value;
+          },true);
         });
         captionInput.addEventListener('dragstart',event=>event.stopPropagation());
         label.append(captionInput);
@@ -408,18 +519,23 @@ function canvasText(row) {
   if(kind==='heading1')area.classList.add('canvasHeading');
   if(kind==='heading2')area.classList.add('canvasSubheading');
   area.dataset.paragraphIndex=String(row.index);
-  area.spellcheck=false;area.value=content;area.rows=Math.max(2,Math.min(8,
+  area.spellcheck=false;area.value=content;
+  area.title='Нажми здесь и печатай — текст этого абзаца изменится в новой копии DOCX';
+  area.dataset.align=paragraphAlignments[String(row.index)]||row.alignment||'inherit';
+  area.rows=Math.max(2,Math.min(8,
     Math.ceil(content.length/110)+content.split('\n').length));
   area.setAttribute('aria-label','Абзац №'+(row.index+1)+' — редактирование на листе');
+  area.addEventListener('focus',()=>selectTextParagraph(row.index));
   area.addEventListener('input',()=>{
     if(area.value.length>5000) {
       area.value=area.value.slice(0,5000);
       tell('Размер редактируемого абзаца ограничен 5000 символами',true);
     }
-    if(area.value===row.text) delete replacements[String(row.index)];
-    else replacements[String(row.index)]=area.value;
-    if(selected===row.index)$('paragraphText').value=area.value;
-    changeCount();markDraftDirty();
+    editWithUndo('type-text:'+row.index,()=>{
+      if(area.value===row.text) delete replacements[String(row.index)];
+      else replacements[String(row.index)]=area.value;
+      if(selected===row.index)$('paragraphText').value=area.value;
+    },true);
   });
   return area;
 }
@@ -466,7 +582,8 @@ function renderDocumentCanvas() {
   $('canvasMore').hidden=hiddenCount===0;
   $('canvasMore').textContent=hiddenCount?
     '↓ Показать ещё абзацы · '+hiddenCount+' скрыто':'';
-  $('canvasStatus').textContent='Редактируй текст прямо на листе. Рисунки перетаскивай '
+  updateEditToolbar();
+  $('canvasStatus').textContent='Щёлкни абзац и печатай. Выравнивание и отмена действий — в верхней панели. Рисунки перетаскивай '
     +'между абзацами (или выбери рисунок и нажми на полоску вставки). '
     +'Показано абзацев: '+limit+' из '+rows.length+'.';
 }
@@ -609,15 +726,18 @@ function reset() {
   $('pdfTextOnly').checked = false;
   $('pdfLossConfirmed').checked = false;
   selectedImage=null;canvasLimit=120;imageMoveCounter=0;
+  resetUndoTimeline();
   for (const key of Object.keys(imageEdits)) delete imageEdits[key];
   for (const key of Object.keys(imageMoves)) delete imageMoves[key];
+  for (const key of Object.keys(paragraphAlignments)) delete paragraphAlignments[key];
   revokeImageThumbnails();
   $('imageList').replaceChildren();
   $('imageControls').hidden=true;
   $('imageListStatus').textContent='После проверки DOCX здесь появятся рисунки.';
   $('documentCanvas').replaceChildren();
   $('documentEditor').hidden=true;
-  $('changeCounter').textContent = '0 правок'; busy(false);
+  $('changeCounter').textContent = '0 правок';
+  updateEditToolbar();busy(false);
 }
 $('sourceFile').addEventListener('change', () => {
   if (draft) {
@@ -633,7 +753,8 @@ $('sourceFile').addEventListener('change', () => {
 function changeCount() {
   clearPdf();
   $('changeCounter').textContent =
-    (new Set(Object.keys(overrides).concat(Object.keys(replacements))).size
+    (new Set(Object.keys(overrides).concat(Object.keys(replacements),
+       Object.keys(paragraphAlignments))).size
      + new Set(Object.keys(imageEdits).concat(Object.keys(imageMoves))).size)
        + ' ручных правок';
 }
@@ -702,19 +823,25 @@ $('saveParagraph').addEventListener('click', () => {
   const item = report && report.paragraphs && report.paragraphs.find(x => x.index === selected);
   if (!item) return;
   const key = String(item.index), role = $('paragraphRole').value;
-  if (role === 'keep') delete overrides[key]; else overrides[key] = role;
-  if (item.editable) {
-    const edited = $('paragraphText').value;
-    if (edited !== item.text) replacements[key] = edited;
-    else delete replacements[key];
-  }
-  changeCount(); drawRows(); markDraftDirty();
+  editWithUndo('advanced-paragraph:'+item.index,()=>{
+    if (role === 'keep') delete overrides[key]; else overrides[key] = role;
+    if (item.editable) {
+      const edited = $('paragraphText').value;
+      if (edited !== item.text) replacements[key] = edited;
+      else delete replacements[key];
+    }
+  });
+  drawRows();renderDocumentCanvas();
   tell('Правка подготовлена и будет сохранена. Для новой редакции документа нажмите «Скачать».');
 });
 $('resetParagraph').addEventListener('click', () => {
   if (selected === null) return;
-  delete overrides[selected]; delete replacements[selected];
-  changeCount(); editParagraph(selected); markDraftDirty(); tell('Локальная правка сброшена.');
+  editWithUndo('reset-paragraph:'+selected,()=>{
+    delete overrides[selected]; delete replacements[selected];
+    delete paragraphAlignments[selected];
+  });
+  editParagraph(selected); renderDocumentCanvas();
+  tell('Локальная правка сброшена.');
 });
 async function inspect(restoring=false) {
   if (!source) return;
@@ -764,8 +891,9 @@ function optionsForExport() {
     chapter_size:$('chapterSize').value, subchapter_size:$('subchapterSize').value,
     pdf_mode:$('pdfTextOnly').checked ? 'text_only' : 'preserve',
     confirm_text_loss:$('pdfLossConfirmed').checked,
-    overrides, replacements, image_edits:{...imageEdits},
-    image_moves:{...imageMoves}};
+    overrides, replacements,
+    paragraph_alignments:{...paragraphAlignments},
+    image_edits:{...imageEdits}, image_moves:{...imageMoves}};
 }
 function requestForm(target, options) {
   const form = new FormData(); form.append('file', source, source.name);
@@ -864,23 +992,67 @@ for (const id of ['imageWidth','imageAlign','imageCorners']) {
 }
 $('applyImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
-  imageEdits[String(selectedImage)]={
-    width_percent:Number($('imageWidth').value),
-    align:$('imageAlign').value,
-    corner_percent:Number($('imageCorners').value)
-  };
-  changeCount();markDraftDirty();renderDocumentCanvas();
+  editWithUndo('picture-style:'+selectedImage,()=>{
+    imageEdits[String(selectedImage)]={
+      width_percent:Number($('imageWidth').value),
+      align:$('imageAlign').value,
+      corner_percent:Number($('imageCorners').value)
+    };
+  });
+  renderDocumentCanvas();
   const item=$('imageList').querySelector('[data-image-index="'+selectedImage+'"] small');
   if (item) item.textContent='Оформлен · '+$('imageWidth').value+'% · '+$('imageAlign').value;
   tell('Рисунок №'+(selectedImage+1)+' будет оформлен в новой копии документа.');
 });
 $('resetImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
-  delete imageEdits[String(selectedImage)];
   const index=selectedImage;
+  editWithUndo('picture-reset:'+index,()=>{delete imageEdits[String(index)];});
   selectImage(index);
-  changeCount();markDraftDirty();renderDocumentCanvas();
+  renderDocumentCanvas();
   tell('Оформление рисунка сброшено к исходному.');
+});
+$('undoEdit').addEventListener('click',()=>undoEditAction(false));
+$('redoEdit').addEventListener('click',()=>undoEditAction(true));
+for(const id of ['alignLeft','alignCenter','alignRight','alignJustify','alignReset']) {
+  $(id).addEventListener('click',()=>{
+    const index=activeParagraph,row=report?.paragraphs?.find(x=>x.index===index);
+    if(!row?.editable||report?.type!=='docx')return;
+    const alignment=$(id).dataset.align;
+    editWithUndo('paragraph-align:'+index,()=>{
+      if(alignment==='inherit')delete paragraphAlignments[String(index)];
+      else paragraphAlignments[String(index)]=alignment;
+    });
+    renderDocumentCanvas();
+    updateEditToolbar();
+    const editor=$('documentCanvas').querySelector(
+      '.canvasText[data-paragraph-index="'+index+'"]');
+    editor?.focus({preventScroll:true});
+  });
+}
+$('canvasRole').addEventListener('change',()=>{
+  const index=activeParagraph,row=report?.paragraphs?.find(x=>x.index===index);
+  if(!row?.editable||report?.type!=='docx')return;
+  const role=$('canvasRole').value;
+  editWithUndo('paragraph-role:'+index,()=>{
+    if(role==='keep')delete overrides[String(index)];
+    else overrides[String(index)]=role;
+  });
+  drawRows();renderDocumentCanvas();updateEditToolbar();
+  $('documentCanvas').querySelector(
+    '.canvasText[data-paragraph-index="'+index+'"]')?.focus({preventScroll:true});
+});
+document.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey||!report||report.type!=='docx')return;
+  // Do not hijack native undo in filename, search, other form controls.
+  if(!event.target.closest('#documentEditor'))return;
+  const key=event.key.toLowerCase();
+  if(key==='z'||key==='y'){
+    const redo=key==='y'||(key==='z'&&event.shiftKey);
+    if((redo?redoStack:undoStack).length===0)return;
+    event.preventDefault();
+    undoEditAction(redo);
+  }
 });
 $('outputName').addEventListener('input',markDraftDirty);
 $('pdfLossConfirmed').addEventListener('change',markDraftDirty);
