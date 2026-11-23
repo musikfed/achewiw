@@ -28,10 +28,12 @@ def test_current_gate_is_explicitly_blocked():
     assert report["result"] == "BLOCKED"
     # R1 closes two *scoped* synthetic criteria, but publication remains blocked.
     assert not any("D04" in x or "D05" in x for x in report["blockers"])
-    assert any("D06" in x for x in report["blockers"])
-    assert any("D07" in x for x in report["blockers"])
+    # R1 and R2 are verified for scoped synthetic cases; R3/R4/manual QA block release.
+    assert not any("D06" in x or "D07" in x for x in report["blockers"])
+    assert any("D10" in x for x in report["blockers"])
+    assert any("D11" in x for x in report["blockers"])
     assert any("MANUAL" in x for x in report["blockers"])
-    assert report["statuses"]["pass"] >= 7
+    assert report["statuses"]["pass"] >= 9
 
 
 def test_release_mode_fails_closed_with_current_issues():
