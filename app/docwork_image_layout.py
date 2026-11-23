@@ -16,6 +16,7 @@ from docx import Document
 from docx.enum.shape import WD_INLINE_SHAPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 from PIL import Image, ImageChops, ImageDraw, UnidentifiedImageError
 
 MAX_IMAGES = 100
@@ -191,7 +192,7 @@ def apply_image_layout(doc, changes: dict):
         if not record["editable"] or original is None:
             raise IllustrationLayoutError("Иллюстрация №" + key + ": " + record["reason"])
         paragraph = _ancestor(shape._inline, "w:p")
-        selected.append((shape, paragraph, original, setting))
+        selected.append((shape, Paragraph(paragraph, doc), original, setting))
 
     for shape, paragraph, original, setting in selected:
         # Width uses the current document's text area AFTER the selected preset.
@@ -215,12 +216,11 @@ def apply_image_layout(doc, changes: dict):
         paragraph.alignment = ALIGNS[setting.get("align", "center")]
         paragraph.paragraph_format.keep_together = True
         # Keep the picture beside an immediately following caption.
-        if paragraph.getnext() is not None:
-            following = paragraph.getnext()
-            if following.tag == qn("w:p") and "caption" in (
-                (following.find(qn("w:pPr")) is not None
-                and following.xml.lower()) or ""
-            ):
+        following = paragraph._p.getnext()
+        if following is not None and following.tag == qn("w:p"):
+            style_el = following.find(qn("w:pPr"))
+            style_el = style_el.find(qn("w:pStyle")) if style_el is not None else None
+            if style_el is not None and (style_el.get(qn("w:val")) or "").lower() == "caption":
                 paragraph.paragraph_format.keep_with_next = True
 
         radius = setting.get("corner_percent", 0)
