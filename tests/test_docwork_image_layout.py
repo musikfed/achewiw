@@ -95,7 +95,7 @@ def test_proportional_alignment_and_rounded_pixels_do_not_mutate_original():
     {"0":{"width_percent":10,"align":"center","corner_percent":16}},
     {"0":{"width_percent":True,"align":"center","corner_percent":0}},
     {"0":{"width_percent":70,"align":"middle","corner_percent":0}},
-    {"0":{"width_percent":70,"align":"left","corner_percent":18}},
+    {"0":{"width_percent":70,"align":"left","corner_percent":18.3}},
     {"0":{"width_percent":70,"align":"left","corner_percent":0,"unknown":1}},
     {"99":{"width_percent":70,"align":"center","corner_percent":0}},
     {"2":{"width_percent":70,"align":"center","corner_percent":0}},

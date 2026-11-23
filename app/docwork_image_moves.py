@@ -30,6 +30,21 @@ def _caption_index(paragraphs, source_el):
     return None
 
 
+def paragraph_section_indices(paragraphs) -> dict[int, int]:
+    """Map original top-level Word paragraph indices to their section.
+
+    In OOXML a section break is carried by w:pPr/w:sectPr of the *last*
+    paragraph in the preceding section; do not relocate that paragraph.
+    """
+    mapping = {}
+    section = 0
+    for index, paragraph in enumerate(paragraphs):
+        mapping[index] = section
+        if paragraph._p.xpath("./w:pPr/w:sectPr"):
+            section += 1
+    return mapping
+
+
 def apply_image_moves(doc, moves):
     """Reposition editable picture+caption pairs before numbered text paragraphs.
 
@@ -43,11 +58,8 @@ def apply_image_moves(doc, moves):
         raise IllustrationLayoutError("Некорректная карта перемещений иллюстраций")
     if not moves:
         return
-    if len(doc.sections) != 1:
-        raise IllustrationLayoutError(
-            "Перемещение изображений между разделами Word пока не поддерживается"
-        )
     paragraphs = list(doc.paragraphs)
+    section_of = paragraph_section_indices(paragraphs)
     body = doc.element.body
     count = len(paragraphs)
     shapes = list(doc.inline_shapes)
@@ -90,6 +102,23 @@ def apply_image_moves(doc, moves):
             raise IllustrationLayoutError("Перемещение рисунка в таблице запрещено")
         caption_idx = _caption_index(paragraphs, source_el)
         linked = paragraphs[caption_idx]._p if caption_idx is not None else None
+        source_para_index=next(
+            (i for i, p in enumerate(paragraphs) if p._p == source_el), None
+        )
+        if source_para_index is None:
+            raise IllustrationLayoutError("Исходный абзац рисунка не найден")
+        if source_el.xpath("./w:pPr/w:sectPr"):
+            raise IllustrationLayoutError("Рисунок содержит границу раздела; перенос запрещён")
+        section=section_of[source_para_index]
+        if caption_idx is not None:
+            if section_of[caption_idx]!=section or linked.xpath("./w:pPr/w:sectPr"):
+                raise IllustrationLayoutError("Подпись входит в границу другого раздела")
+        target_section=section_of[dest] if dest<count else len(doc.sections)-1
+        if target_section!=section:
+            raise IllustrationLayoutError(
+                "Перенос разрешён только внутри одного раздела Word. "
+                "Для другого раздела сначала проверь разметку и колонтитулы."
+            )
         if dest < count:
             target = paragraphs[dest]
             if target._p.getparent() != body or not target.text.strip():

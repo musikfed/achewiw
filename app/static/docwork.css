@@ -106,3 +106,35 @@
 .canvasText[data-align=justify]{text-align:justify}
 .canvasText[data-align=inherit]{text-align:inherit}
 @media(max-width:720px){.editToolbar{top:60px}.toolbarGroup{width:100%}}
+
+/* R3.4: non-obstructing collapsible controls, two font libraries, visible save state */
+.workshop-actions.is-compact{position:static;justify-content:flex-end;min-height:36px;padding:4px 9px;margin:0 0 10px;box-shadow:none}
+.workshop-actions.is-compact>*:not(#toggleActionBar){display:none!important}
+#toggleActionBar,#toggleEditToolbar{font-size:11px;padding:6px 10px;border:1px solid #cbd9cc;background:#f8fbf8}
+.editToolbar.is-compact{position:static;box-shadow:none;border:0;background:transparent;padding:4px 0}
+.editToolbar.is-compact>.toolbarGroup:not(.toolbarToggleGroup){display:none!important}
+.editToolbar.is-compact .toolbarToggleGroup{margin-left:auto}
+.saveSummary{min-width:210px;display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.saveIndicator{font:600 12px/1.4 system-ui,sans-serif;max-width:250px}
+.saveIndicator[data-save-state=saved]{color:#256b4a}
+.saveIndicator[data-save-state=dirty],.saveIndicator[data-save-state=saving]{color:#845c20}
+.saveIndicator[data-save-state=error],.saveIndicator[data-save-state=conflict]{color:#ac2f2c}
+.fontChoiceIntro{padding:12px 0 4px;font-size:13px}
+.fontChoiceIntro>strong{font-size:14px}.fontChoiceIntro label{max-width:330px}
+.fontCollections{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:10px 0 12px}
+.fontCollection{border:1px solid #d7e2d7;border-radius:12px;padding:14px;background:#f8fbf8;min-width:0}
+.fontCollection>strong{display:block;font:650 13px system-ui,sans-serif;margin:0 0 4px}
+.fontCollection>small{display:block;font-size:11px;color:#64806c;min-height:26px}
+.fontCollection label{margin:7px 0}.fontCollection select{font-size:12px}
+.fontCollection button{font-size:12px;padding:7px 10px;margin-top:7px}
+#imageCornersNumber{max-width:100px!important;font-size:13px!important}
+#imageCornerHint{display:block;margin-top:5px;line-height:1.5}
+@media(max-width:540px){.fontCollections{grid-template-columns:1fr}.saveSummary{min-width:0}}
+
+/* Full-width reading/editing mode for books with many pictures. */
+.columns.editor-wide{grid-template-columns:minmax(0,1fr)}
+.columns.editor-wide>section.control{display:none!important}
+.columns.editor-wide>section.preview{min-width:0;grid-column:1}
+.columns.editor-wide .documentCanvas{max-width:950px}
+.previewHeadActions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+#toggleSidebar{font-size:12px;padding:7px 11px}

@@ -21,6 +21,73 @@ let lastSavedState = '{}';
 let recoveredLocalScratch = null;
 const DRAFT_KEY = 'achewiw-docwork-r3-current';
 const SCRATCH_KEY = 'achewiw-docwork-r3-pending';
+const FONT_CHOICES=[
+  'Times New Roman','Arial','Calibri',
+  'Liberation Serif','Liberation Sans','Liberation Mono',
+  'DejaVu Serif','DejaVu Sans','DejaVu Sans Mono',
+  'Carlito','Caladea','FreeSerif','FreeSans','FreeMono'
+];
+function populateFontSelects() {
+  for(const id of ['bodyFont','chapterFont','subchapterFont']){
+    const select=$(id);
+    for(const name of FONT_CHOICES){
+      const option=document.createElement('option');
+      option.value=name;option.textContent=name;
+      select.append(option);
+    }
+  }
+}
+populateFontSelects();
+function applyCatalogFont(sourceId) {
+  const target=$('fontApplyTarget').value;
+  const font=$(sourceId).value;
+  if(!FONT_CHOICES.includes(font)||!['bodyFont','chapterFont','subchapterFont'].includes(target))return;
+  $(target).value=font;
+  $(target).dispatchEvent(new Event('change',{bubbles:true}));
+}
+$('applyStandardFont').addEventListener('click',()=>applyCatalogFont('fontStandardChoices'));
+$('applyOtherFont').addEventListener('click',()=>applyCatalogFont('fontOtherChoices'));
+function toggleBar(id,buttonId,storageKey){
+  const bar=$(id),button=$(buttonId);
+  const compact=!bar.classList.contains('is-compact');
+  bar.classList.toggle('is-compact',compact);
+  button.textContent=compact?'Показать панель ↓':'Скрыть панель ↑';
+  button.setAttribute('aria-expanded',String(!compact));
+  try{sessionStorage.setItem(storageKey,compact?'1':'0');}catch{}
+}
+for(const [id,buttonId,key] of [
+  ['workshopActions','toggleActionBar','achewiw-docwork-actionbar-compact'],
+  ['editToolbar','toggleEditToolbar','achewiw-docwork-editbar-compact']
+]){
+  $(buttonId).addEventListener('click',()=>toggleBar(id,buttonId,key));
+  try{
+    if(sessionStorage.getItem(key)==='1')toggleBar(id,buttonId,key);
+  }catch{}
+}
+function radiusLimit(item){
+  return item?.corner_max_percent??24;
+}
+function controlledRadius(item,amount){
+  const value=Number(amount);
+  return Math.max(0,Math.min(radiusLimit(item),Number.isFinite(value)?Math.round(value*2)/2:0));
+}
+function cornerPixelRadius(img,percent){
+  const width=img.getBoundingClientRect().width;
+  const item=(report?.images||[]).find(x=>x.index===Number(img.dataset.imageIndex));
+  if(!item)return;
+  const displayedHeight=width * item.height_px/item.width_px;
+  img.style.borderRadius=(Math.min(width,displayedHeight)*controlledRadius(item,percent)/100).toFixed(2)+'px';
+}
+function toggleSidebar(){
+  const root=$('workshopColumns'),button=$('toggleSidebar');
+  const wide=!root.classList.contains('editor-wide');
+  root.classList.toggle('editor-wide',wide);
+  button.textContent=wide?'Показать настройки →':'Скрыть настройки ←';
+  button.setAttribute('aria-expanded',String(!wide));
+  try{sessionStorage.setItem('achewiw-docwork-sidebar-hidden',wide?'1':'0');}catch{}
+}
+$('toggleSidebar').addEventListener('click',toggleSidebar);
+try{if(sessionStorage.getItem('achewiw-docwork-sidebar-hidden')==='1')toggleSidebar();}catch{}
 const settingsIds = {
   preset:'preset', output_name:'outputName', auto_headings:'autoHeadings',
   clear_highlights:'clearHighlights', hide_proofing:'hideProofing', heading_bold:'headingBold',
@@ -160,7 +227,7 @@ function scratchDraft() {
   })); } catch { $('draftStatus').textContent = 'Локальная страховочная копия не поместилась в браузер. Нажмите «Сохранить правки сейчас».'; }
 }
 function draftControls() {
-  for (const id of ['saveDraft','reloadDraft','exportDraftState','closeDraft'])
+  for (const id of ['saveDraft','quickSaveDraft','saveCanvasNow','reloadDraft','exportDraftState','closeDraft'])
     $(id).disabled = !draft;
   $('restoreDraftVersion').disabled = !draft || !$('draftHistory').value;
   $('draftHistory').disabled = !draft;
@@ -168,6 +235,17 @@ function draftControls() {
 function draftMessage(text, error=false) {
   $('draftStatus').textContent = text;
   $('draftStatus').classList.toggle('error',error);
+  let state='idle',short='○ Черновик ещё не открыт';
+  if (/Конфликт|другой вкладке/i.test(text)){state='conflict';short='⚠ Конфликт версий';}
+  else if (error||/не сохранены|не удалось|Ошибка/i.test(text)){state='error';short='⚠ Не сохранено';}
+  else if (/Сохраняем/i.test(text)){state='saving';short='◷ Сохранение на сервере…';}
+  else if (/несохранённые|запланировано/i.test(text)){state='dirty';short='● Есть несохранённые правки';}
+  else if (/сохранён|Загружена серверная редакция|Исходный файл сохранён/i.test(text)){
+    state='saved';short='✓ Сохранено в SQLite · версия №'+(draft?.revision??'?');
+  }
+  $('saveIndicator').dataset.saveState=state;
+  $('saveIndicator').textContent=short;
+  $('canvasSaveState').textContent=short;
 }
 function applyDraftState(state) {
   if (!state || !report) return;
@@ -373,6 +451,13 @@ function moveFigureTo(index, beforeParagraph) {
       beforeParagraph<0 || beforeParagraph>report.paragraph_count) return;
   if (beforeParagraph!==report.paragraph_count &&
       (!target || !String(target.text||'').trim())) return;
+  const targetSection=beforeParagraph===report.paragraph_count ?
+    report.sections-1 : target?.section_index;
+  if (item.section_index!==targetSection){
+    $('canvasStatus').textContent='Нельзя переносить рисунок между разными разделами Word. '
+      +'Размещение внутри своего раздела разрешено; границы разделов и колонтитулы защищены.';
+    return;
+  }
   if (beforeParagraph===item.paragraph_index ||
       beforeParagraph===item.caption_index ||
       (report.images||[]).some(x=>x.paragraph_index===beforeParagraph)) return;
@@ -472,7 +557,7 @@ function canvasFigure(item) {
   img.className='canvasFigurePhoto';img.dataset.imageIndex=key;
   img.alt='Рисунок №'+(item.index+1);
   img.style.width=style.width_percent+'%';
-  img.style.borderRadius=style.corner_percent+'%';
+  img.addEventListener('load',()=>cornerPixelRadius(img,style.corner_percent));
   const thumbnail=imageThumbUrls.get(item.index);
   if(thumbnail)img.src=thumbnail;
   line.append(img);fig.append(line);
@@ -642,7 +727,11 @@ function renderImageGallery() {
         const url=URL.createObjectURL(blob);
         imageThumbUrls.set(item.index,url);
         thumb.src=url;
-        if (selectedImage===item.index) $('imagePreview').src=url;
+        if (selectedImage===item.index) {
+          $('imagePreview').src=url;
+          $('imagePreview').onload=()=>cornerPixelRadius($('imagePreview'),
+            $('imageCorners').value);
+        }
         for(const pic of $('documentCanvas').querySelectorAll(
             '.canvasFigurePhoto[data-image-index="'+item.index+'"]')) pic.src=url;
       }).catch(()=>{
@@ -661,7 +750,12 @@ function selectImage(index) {
   };
   $('imageWidth').value=String(saved.width_percent);
   $('imageAlign').value=saved.align;
-  $('imageCorners').value=String(saved.corner_percent);
+  const cap=radiusLimit(item);
+  $('imageCorners').max=String(cap);
+  $('imageCornersNumber').max=String(cap);
+  const safeRadius=controlledRadius(item,saved.corner_percent);
+  $('imageCorners').value=String(safeRadius);
+  $('imageCornersNumber').value=String(safeRadius);
   $('imageEditTitle').textContent='Рисунок №'+(index+1)+' · '+item.width_px+'×'+item.height_px;
   $('imageEditHint').textContent='Редактируется только эта иллюстрация в новой копии DOCX/PDF. '
      +'Текст и пропорции изображения сохраняются.';
@@ -686,7 +780,12 @@ function updateImageLivePreview() {
   $('imageWidthLabel').textContent=width+'% ширины текста';
   const image=$('imagePreview');
   image.style.width=width+'%';
-  image.style.borderRadius=radius+'%';
+  image.dataset.imageIndex=String(selectedImage);
+  const item=(report?.images||[]).find(x=>x.index===selectedImage);
+  $('imageCornerHint').textContent=radius.toFixed(1)+'% · '
+    +(item?.ratio>1.5?'широкая/высокая схема — мягкие углы':'пропорции соблюдены')
+    +'; предел для этой картинки: '+radiusLimit(item)+'%';
+  cornerPixelRadius(image,radius);
   $('imagePreview').parentNode.style.justifyContent=
       align==='left'?'flex-start':align==='right'?'flex-end':'center';
 }
@@ -986,10 +1085,21 @@ $('quickDownloadDocx').addEventListener('click', () => download('docx'));
 $('quickDownloadPdf').addEventListener('click', () => download('pdf'));
 $('previewPdf').addEventListener('click', buildPdfPreview);
 $('quickPreviewPdf').addEventListener('click', buildPdfPreview);
-for (const id of ['imageWidth','imageAlign','imageCorners']) {
+for(const id of ['imageWidth','imageAlign']){
   $(id).addEventListener('input',updateImageLivePreview);
   $(id).addEventListener('change',updateImageLivePreview);
 }
+$('imageCorners').addEventListener('input',()=>{
+  $('imageCornersNumber').value=$('imageCorners').value;
+  updateImageLivePreview();
+});
+$('imageCornersNumber').addEventListener('input',()=>{
+  const item=(report?.images||[]).find(x=>x.index===selectedImage);
+  const pct=controlledRadius(item,$('imageCornersNumber').value);
+  $('imageCorners').value=String(pct);
+  $('imageCornersNumber').value=String(pct);
+  updateImageLivePreview();
+});
 $('applyImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
   editWithUndo('picture-style:'+selectedImage,()=>{
@@ -1058,9 +1168,13 @@ $('outputName').addEventListener('input',markDraftDirty);
 $('pdfLossConfirmed').addEventListener('change',markDraftDirty);
 $('paragraphText').addEventListener('input',markDraftDirty);
 $('paragraphRole').addEventListener('change',markDraftDirty);
-$('saveDraft').addEventListener('click',async()=>{
-  await saveDraftNow();await refreshDraftHistory();
-});
+async function manualSave() {
+  if(!draft)return;
+  await saveDraftNow();
+  await refreshDraftHistory();
+}
+for(const id of ['saveDraft','quickSaveDraft','saveCanvasNow'])
+  $(id).addEventListener('click',()=>{void manualSave();});
 $('draftHistory').addEventListener('change',draftControls);
 $('restoreDraftVersion').addEventListener('click',async()=>{
   const version=Number($('draftHistory').value);
@@ -1129,5 +1243,6 @@ window.addEventListener('pagehide',()=>{
 });
 window.addEventListener('beforeunload',()=>{if(previewUrl)URL.revokeObjectURL(previewUrl);});
 draftControls();
+draftMessage('Выбранный документ ещё не сохранён на сервере.');
 void restoreDraft();
 })();

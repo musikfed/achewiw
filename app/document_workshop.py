@@ -23,12 +23,21 @@ from docx.shared import Cm, Pt, RGBColor
 from docwork_image_layout import (
     inventory_docx, apply_image_layout, IllustrationLayoutError
 )
-from docwork_image_moves import apply_image_moves
+from docwork_image_moves import apply_image_moves, paragraph_section_indices
 
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_UNPACKED = 180 * 1024 * 1024
 MAX_PARAGRAPHS = 20000
-FONT_NAMES = {"Liberation Serif", "DejaVu Serif", "Times New Roman", "Arial", "Calibri"}
+# GOST is a document-formatting requirement, not a universal font family.
+# These are permitted choices; standards-specific profiles are introduced in R4.
+# The Docker image installs the open families below. Microsoft families are
+# retained for DOCX compatibility and may be substituted by LibreOffice on Linux.
+FONT_NAMES = {
+    "Liberation Serif", "Liberation Sans", "Liberation Mono",
+    "DejaVu Serif", "DejaVu Sans", "DejaVu Sans Mono",
+    "Carlito", "Caladea", "FreeSerif", "FreeSans", "FreeMono",
+    "Times New Roman", "Arial", "Calibri",
+}
 PRESETS = {
     "preserve": {"name": "Сохранить исходное", "body": None, "head": None, "size": None},
     "book": {"name": "Книжная классика", "body": "Liberation Serif", "head": "Liberation Serif", "size": 11},
@@ -109,6 +118,7 @@ def preview_docx(data: bytes) -> dict:
     if len(doc.paragraphs) > MAX_PARAGRAPHS:
         raise DocumentWorkshopError("Документ слишком велик для интерактивной редакции")
     rows = []
+    sections_by_index = paragraph_section_indices(doc.paragraphs)
     kinds = {"heading1": 0, "heading2": 0, "body": 0}
     for idx, paragraph in enumerate(doc.paragraphs):
         kind = inferred_kind(paragraph)
@@ -122,6 +132,7 @@ def preview_docx(data: bytes) -> dict:
                  if paragraph.alignment == value), "inherit"
             )
             rows.append({"index": idx, "kind": kind, "style": paragraph.style.name,
+                         "section_index": sections_by_index.get(idx, 0),
                          "alignment": explicit_alignment,
                          "text": paragraph.text if len(paragraph.text) <= 5000 else paragraph.text[:300],
                          "editable": not protected})
@@ -132,6 +143,8 @@ def preview_docx(data: bytes) -> dict:
     if len(rows) >= 3000:
         warnings.append("Список ограничен первыми 3000 непустыми абзацами; остальной документ сохраняется в экспорте.")
     images = inventory_docx(data)
+    for item in images:
+        item["section_index"] = sections_by_index.get(item.get("paragraph_index"))
     if images:
         warnings.append(
             f"Найдено встроенных иллюстраций: {len(images)}. "
