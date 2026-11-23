@@ -78,3 +78,8 @@
 .structureDetails{margin:18px 0;border-top:1px solid #e1e8df;padding:14px 0}
 .structureDetails>summary{cursor:pointer;font:650 13px system-ui,sans-serif;color:#315942;margin-bottom:15px}
 @media(max-width:600px){.documentCanvas{padding:12px}.canvasFigure{padding:7px}.canvasText{font-size:14px}}
+
+.canvasFigure .canvasCaptionText{font:12px/1.5 Georgia,serif;color:#526d5a;
+ text-align:center;margin:2px auto 0;padding:5px 8px;width:100%;min-height:38px;
+ border:1px solid transparent;border-radius:6px;resize:vertical;background:transparent}
+.canvasFigure .canvasCaptionText:focus{outline:2px solid #8fbe9b;border-color:#4b8f60;background:#fff}
