@@ -17,6 +17,7 @@ chmod 600 "$LOG" "$SMOKE"
 STAGE="preflight"
 RESULT="FAIL"
 PREVIOUS="unrecorded"
+PREVIOUS_BRANCH="unrecorded"
 NEW_SHA="unrecorded"
 
 finish() {
@@ -29,6 +30,7 @@ finish() {
     echo "- Итог: **$RESULT**"
     echo "- Этап завершения: $STAGE"
     echo "- Ветка для испытания: $REMOTE"
+    echo "- Прежняя ветка: $PREVIOUS_BRANCH"
     echo "- Прежний коммит: $PREVIOUS"
     echo "- Испытанный коммит: $NEW_SHA"
     echo "- Данные книг и соседние приложения: ни один сценарий не обращается к ним напрямую"
@@ -93,7 +95,8 @@ exec > >(tee -a "$LOG") 2>&1
     exit 2
   fi
   PREVIOUS="$(git rev-parse HEAD)"
-  echo "Прежний коммит: $PREVIOUS"
+  PREVIOUS_BRANCH="$(git symbolic-ref --short -q HEAD || echo detached)"
+  echo "Прежняя ветка: $PREVIOUS_BRANCH; коммит: $PREVIOUS"
 
   command -v docker >/dev/null || { echo "Прекращено: Docker отсутствует"; exit 2; }
   docker info >/dev/null 2>&1 || { echo "Прекращено: нет доступа к Docker"; exit 2; }
