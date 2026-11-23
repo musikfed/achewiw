@@ -137,7 +137,7 @@ def preview_pdf(data: bytes) -> dict:
                 snippets.append({"page": i+1, "text": text[:1100]})
         # Inspection is not a promise of perfect PDF layout reconstruction.
         images = sum(
-            sum(1 for b in page.get_text("blocks") if len(b) > 6 and b[6] == 1)
+            sum(1 for b in page.get_text("dict", sort=False)["blocks"] if b.get("type") == 1)
             for page in pdf
         )
         vector_pages = sum(bool(page.get_drawings()) for page in pdf)
