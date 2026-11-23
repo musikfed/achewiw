@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "stage": "00-Д",
+  "date": "2026-11-23",
+  "release_target": "ACHEWIW Document Workshop: сохранный редакционный выпуск DOCX/PDF и дальнейшая типография",
+  "status_notice": "Матрица фиксирует результаты синтетических проверок. PASS не доказывает визуальной или нормативной готовности.",
+  "baseline_ci": {
+    "commit": "1984f650bd4591375d130f0429f6bafd3f7e8e24",
+    "url": "https://github.com/musikfed/achewiw/actions/runs/45182938224",
+    "passed": 19,
+    "xfailed": 2,
+    "skipped": 1
+  },
+  "manual_signoff": {
+    "approved": false,
+    "evidence_ref": null,
+    "reviewer": null
+  },
+  "checks": [
+    {
+      "id": "D01",
+      "priority": "P0",
+      "status": "pass",
+      "criterion": "Исходный DOCX при структурной обработке не перезаписывается, сохранены рисунок/подпись/таблица, математический OOXML и hyperlink в синтетическом примере.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_docx_roundtrip_retains_figure_caption_table_hyperlink_math"
+      ]
+    },
+    {
+      "id": "D02",
+      "priority": "P0",
+      "status": "pass",
+      "criterion": "DOCX: замена сложного абзаца с drawing/hyperlink/OfficeMath запрещается.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_docx_replacement_rejects_complex_paragraph"
+      ]
+    },
+    {
+      "id": "D03",
+      "priority": "P0",
+      "status": "pass",
+      "criterion": "PDF → PDF без изменения исходного PDF полностью побайтно сохраняет файл.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_pdf_original_pass_through_is_byte_identical"
+      ]
+    },
+    {
+      "id": "D04",
+      "priority": "P0",
+      "status": "known_fail",
+      "criterion": "PDF → DOCX сохраняет все иллюстрации и значимые встроенные графические объекты либо не выдаёт результат за полную конверсию.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_pdf_to_docx_must_preserve_images",
+        "app/document_workshop.py::pdf_to_docx"
+      ]
+    },
+    {
+      "id": "D05",
+      "priority": "P0",
+      "status": "known_fail",
+      "criterion": "PDF → DOCX не меняет логический порядок чтения текста двух и более колонок.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_pdf_to_docx_must_preserve_two_column_reading_order",
+        "app/document_workshop.py::pdf_to_docx"
+      ]
+    },
+    {
+      "id": "D06",
+      "priority": "P0",
+      "status": "not_tested",
+      "criterion": "Картинка + подпись в книжном PDF/DOCX остаются связаны при переходе страницы; разрывы без явного сигнала недопустимы.",
+      "evidence": [
+        "app/publishing_exports.py::manuscript_docx",
+        "app/publishing_exports.py::manuscript_pdf"
+      ]
+    },
+    {
+      "id": "D07",
+      "priority": "P0",
+      "status": "not_tested",
+      "criterion": "Отсутствующий файл иллюстрации в принятом произведении запрещает выпуск или явно фиксируется и утверждается; не пропускается молча.",
+      "evidence": [
+        "app/illustrations_core.py",
+        "app/publishing_exports.py"
+      ]
+    },
+    {
+      "id": "D08",
+      "priority": "P0",
+      "status": "pass",
+      "criterion": "PDF без текстового слоя не выдаётся за успешное текстовое преобразование; OCR явно требуется.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_scan_only_pdf_is_rejected_without_ocr"
+      ]
+    },
+    {
+      "id": "D09",
+      "priority": "P1",
+      "status": "pass",
+      "criterion": "Ограничение 3000 строк предпросмотра не обрезает полный экспорт DOCX (синтетический пример 3005 абзацев).",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py::test_preview_cutoff_does_not_truncate_exported_docx"
+      ]
+    },
+    {
+      "id": "D10",
+      "priority": "P1",
+      "status": "not_tested",
+      "criterion": "Визуальный DOCX → PDF через LibreOffice подтверждён сравнением страниц, шрифтов, колонтитулов, длинных таблиц и подписей.",
+      "evidence": [
+        "tests/test_document_workshop.py::test_docx_to_pdf_if_libreoffice_installed"
+      ]
+    },
+    {
+      "id": "D11",
+      "priority": "P1",
+      "status": "not_implemented",
+      "criterion": "Для каждого заявленного ГОСТ и библиографического профиля известны номер/редакция/область применения, автоматические и ручные правила приёмки.",
+      "evidence": [
+        "app/document_workshop.py::PRESETS"
+      ]
+    },
+    {
+      "id": "D12",
+      "priority": "P1",
+      "status": "not_tested",
+      "criterion": "Универсальные DOCX: сноски, библиография, оглавление, перекрёстные ссылки, таблицы на границе страниц и формулы проверены на сохранность.",
+      "evidence": [
+        "tests/test_document_fidelity_00g.py"
+      ]
+    },
+    {
+      "id": "D13",
+      "priority": "P1",
+      "status": "not_implemented",
+      "criterion": "Редакционная сессия, предложения, изменения и выбранные параметры переживают F5; исходный документ не подменяется без явного утверждения.",
+      "evidence": [
+        "app/static/docwork.js",
+        "docs/DOCUMENT-WORKSHOP-RU.md"
+      ]
+    },
+    {
+      "id": "D14",
+      "priority": "P1",
+      "status": "not_tested",
+      "criterion": "Проверка итогового DOCX/PDF от выполняющего выпуск пользователя, с доказательством визуального просмотра на целевой системе.",
+      "evidence": [
+        "docs/STAGE-00G-DOCUMENT-FIDELITY-RU.md"
+      ]
+    }
+  ],
+  "later_modules": [
+    {
+      "id": "L01",
+      "name": "Приём произведений от сторонних авторов: отдельное пространство, управление правами, статус и происхождение исходника"
+    },
+    {
+      "id": "L02",
+      "name": "Модерация издателем: заявки, решения, immutable export, выдача на скачивание"
+    },
+    {
+      "id": "L03",
+      "name": "Графические произведения, комиксы, иллюстрированные учебники, Model Shipyard как модули ACHEWIW"
+    }
+  ]
+}
