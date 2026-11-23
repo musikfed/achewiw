@@ -305,6 +305,10 @@ function applyDraftState(state) {
 }
 function markDraftDirty() {
   if (!draft || !report) return;
+  if (lastNormativeReport) {
+    resetNormativeReport();
+    $('normativeStatus').textContent='Документ изменён после проверки; прежний отчёт недействителен. Нажми «Проверить DOCX» снова.';
+  }
   scratchDraft();
   if (canonicalState(captureDraftState())===lastSavedState && !draftConflicted) {
     draftMessage('Черновик уже сохранён · редакция №'+draft.revision);
