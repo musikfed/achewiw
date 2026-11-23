@@ -122,7 +122,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core
       - name: Real publishing artifacts, genres and safe data reset
         run: |
-          PYTHONPATH=app python3 -m pytest -q tests/test_publishing_exports.py tests/test_book_editorial_release.py
+          PYTHONPATH=app python3 -m pytest -q tests/test_publishing_exports.py tests/test_book_editorial_release.py tests/test_r2_illustration_fidelity.py
           PYTHONPATH=app python3 -m pytest -q tests/test_app.py
       - name: Check user systemd telemetry ownership
         run: |
