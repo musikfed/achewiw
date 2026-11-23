@@ -266,7 +266,8 @@ function moveFigureTo(index, beforeParagraph) {
   if (beforeParagraph!==report.paragraph_count &&
       (!target || !String(target.text||'').trim())) return;
   if (beforeParagraph===item.paragraph_index ||
-      beforeParagraph===item.caption_index) return;
+      beforeParagraph===item.caption_index ||
+      (report.images||[]).some(x=>x.paragraph_index===beforeParagraph)) return;
   const captionIndices=new Set((report.images||[])
       .filter(x=>x.editable&&Number.isInteger(x.caption_index))
       .map(x=>x.caption_index));
@@ -288,7 +289,8 @@ function canvasDropZone(before) {
   zone.title='Поставить выбранный рисунок перед абзацем №'+(before+1);
   zone.setAttribute('aria-label',zone.title);
   zone.addEventListener('dragover',event=>{
-    if (!(event.dataTransfer?.types||[]).includes('application/x-achewiw-image')) return;
+    const formats=Array.from(event.dataTransfer?.types||[]);
+    if (!formats.includes('application/x-achewiw-image')) return;
     event.preventDefault();event.dataTransfer.dropEffect='move';
     zone.classList.add('dragOver');
   });
