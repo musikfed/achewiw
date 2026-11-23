@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=7">
-<script src="/static/docwork.js?v=9" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=8">
+<script src="/static/docwork.js?v=10" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -43,7 +43,7 @@
     </div>
     <p class="hint">Оригинал хранится один раз, изменения — отдельными версиями SQLite. Доступ по секретному ключу этой вкладки браузера. Изменения в другой вкладке не перезаписываются автоматически.</p>
   </section>
-  <div class="columns">
+  <div class="columns" id="workshopColumns">
     <section class="control">
       <h2>01 · Исходный документ</h2>
       <label class="upload" for="sourceFile">
@@ -182,7 +182,7 @@
       <p id="conversionHint" class="hint">DOCX → PDF: LibreOffice Writer. PDF → DOCX: перенос поддерживаемого текста и встроенных изображений; сложная структура блокируется. Сканам нужен OCR. Перед выпуском визуально сверьте страницы.</p>
     </section>
     <section class="preview" aria-label="Предпросмотр и ручная редактура">
-      <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Документ · текст и рисунки</h2></div><span id="changeCounter">0 правок</span></div>
+      <div class="previewHead"><div><p class="eyebrow">СТРУКТУРА / ПРЕДПРОСМОТР</p><h2>Документ · текст и рисунки</h2></div><div class="previewHeadActions"><span id="changeCounter">0 правок</span><button id="toggleSidebar" type="button" aria-expanded="true" title="Скрыть настройки и список иллюстраций, расширить лист">Скрыть настройки ←</button></div></div>
       <div class="preview-switch">
         <button type="button" id="showStructure" class="selected" aria-pressed="true">Редактор документа</button>
         <button type="button" id="previewPdf" disabled>◉ Посмотреть страницы PDF</button>
