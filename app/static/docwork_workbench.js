@@ -31,6 +31,7 @@ function changeButtons(){
   $('wbDownload').disabled=selected<0||!baseImage;
   $('wbExportSvg').disabled=selected<0||!baseImage||!figures.length;
   $('wbExportGraph').disabled=selected<0||!baseImage||!figures.length;
+  $('wbAuditGraph').disabled=selected<0||!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
 function annotationKey(){
@@ -91,6 +92,7 @@ function restoreHistory(redo=false){
   changeButtons();saveAnnotations();
 }
 function clearDrawing(){
+  $('wbGraphAudit').hidden=true;
   figures=[];history=[];futures=[];dirty=false;
   down=null;moving=-1;changeButtons();
 }
@@ -445,6 +447,45 @@ function svgFromShapes(shapes){
   }
   return parts.join('\n')+'\n</svg>\n';
 }
+function auditGraph(){
+  const checker=window.ACHEWIWDiagramGraph;
+  if(!checker)throw Error('Модуль проверки геометрии не загружен');
+  return checker.inspect(structuredShapes());
+}
+$('wbAuditGraph').addEventListener('click',()=>{
+  const panel=$('wbGraphAudit');
+  try{
+    const audit=auditGraph();
+    panel.replaceChildren();
+    const heading=document.createElement('strong');
+    heading.textContent='R3.7B · Проверка геометрии (не распознавание смысла)';
+    const summary=document.createElement('p');
+    summary.textContent='Узлов: '+audit.summary.nodes+
+      ' · линий и стрелок: '+audit.summary.edges+
+      ' · возможных связей: '+audit.summary.candidateEdges+
+      ' · неопределённых: '+audit.summary.unresolvedEdges+
+      ' · неподписанных связями надписей: '+audit.summary.unassignedLabels+'.';
+    panel.append(heading,summary);
+    const list=document.createElement('ul');
+    for(const edge of audit.edges){
+      const item=document.createElement('li');
+      item.textContent=edge.id+' · '+(edge.type==='arrow'?'стрелка':'линия')+
+        ' · '+(edge.status==='candidate'?'геометрический кандидат ':'требует проверки ')+
+        ' · начало: '+(edge.fromCandidates.join(', ')||'вне узлов')+
+        ' · конец: '+(edge.toCandidates.join(', ')||'вне узлов');
+      list.append(item);
+    }
+    panel.append(list);
+    const note=document.createElement('p');
+    note.textContent='Ни одна связь не подтверждена автоматически. Надписи не привязаны к узлам; исходная схема не изменена.';
+    panel.append(note);
+    panel.hidden=false;
+  }catch(error){
+    panel.replaceChildren();
+    panel.textContent='Проверка схемы не выполнена: '+error.message;
+    panel.hidden=false;
+  }
+});
 $('wbExportSvg').addEventListener('click',()=>{
   if(!baseImage||!figures.length)return;
   const shapes=structuredShapes();
@@ -457,7 +498,7 @@ $('wbExportGraph').addEventListener('click',()=>{
   const schema={format:'achewiw-verified-diagram-layer',version:1,
     canvas:{width:canvas.width,height:canvas.height},
     origin:'manual',recognition:'not-performed',sourceRasterEmbedded:false,
-    shapes:structuredShapes()};
+    shapes:structuredShapes(),geometryAudit:auditGraph()};
   downloadBlob(new Blob([JSON.stringify(schema,null,2)+'\n'],{type:'application/json'}),
     'ACHEWIW-diagram-'+(selected+1)+'-structure.json');
   status('Структура JSON сохранена. Все объекты добавлены вручную; распознавания ИИ не было.');
