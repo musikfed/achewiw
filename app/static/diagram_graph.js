@@ -56,5 +56,22 @@
         unresolvedEdges:edges.filter(e=>e.status==='unresolved').length,
         unassignedLabels:labels.length}};
   }
-  return {inspect};
+  function applyReviews(audit,decisions){
+    if(!audit||!Array.isArray(audit.edges)||!decisions||typeof decisions!=='object')
+      throw Error('Некорректные данные рецензирования');
+    let confirmed=0,rejected=0;
+    const edges=audit.edges.map(edge=>{
+      const review=Object.prototype.hasOwnProperty.call(decisions,edge.id)
+        ?decisions[edge.id]:null;
+      // An ambiguous edge cannot be accepted, even if stale browser data says so.
+      const decision=edge.status==='candidate'&&
+          (review==='accepted'||review==='rejected')?review:'pending';
+      if(decision==='accepted')confirmed++;
+      if(decision==='rejected')rejected++;
+      return {...edge,reviewDecision:decision,confirmed:decision==='accepted'};
+    });
+    return {...audit,edges,confirmedRelations:confirmed,
+      reviewSummary:{confirmed,rejected,pending:edges.length-confirmed-rejected}};
+  }
+  return {inspect,applyReviews};
 });

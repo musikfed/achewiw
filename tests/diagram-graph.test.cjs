@@ -44,3 +44,26 @@ test('нельзя смешивать два объекта с одинаков�
 test('набор более 100 объектов отклоняется',()=>{
  assert.throws(()=>inspect(Array.from({length:101},(_,i)=>rect('x'+i,i,0))));
 });
+
+test('только человек может подтвердить однозначного кандидата',()=>{
+ const audit=inspect([rect('a',0,0),rect('b',200,0),edge('e','arrow',50,40,200,0)]);
+ const {applyReviews}=require('../app/static/diagram_graph.js');
+ const reviewed=applyReviews(audit,{'e':'accepted'});
+ assert.equal(reviewed.confirmedRelations,1);
+ assert.equal(reviewed.edges[0].confirmed,true);
+ assert.equal(audit.confirmedRelations,0);
+});
+test('неоднозначное соединение не подтверждается даже старым решением',()=>{
+ const audit=inspect([rect('a',0,0),edge('e','arrow',50,40,200,0)]);
+ const {applyReviews}=require('../app/static/diagram_graph.js');
+ const reviewed=applyReviews(audit,{'e':'accepted'});
+ assert.equal(reviewed.confirmedRelations,0);
+ assert.equal(reviewed.edges[0].reviewDecision,'pending');
+});
+test('отклонённая связь остаётся неподтверждённой',()=>{
+ const audit=inspect([rect('a',0,0),rect('b',200,0),edge('e','line',50,40,200,0)]);
+ const {applyReviews}=require('../app/static/diagram_graph.js');
+ const reviewed=applyReviews(audit,{'e':'rejected'});
+ assert.equal(reviewed.reviewSummary.rejected,1);
+ assert.equal(reviewed.edges[0].confirmed,false);
+});
