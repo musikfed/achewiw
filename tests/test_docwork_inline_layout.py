@@ -153,6 +153,31 @@ def test_r3_session_stores_image_position_and_server_exports_moved_copy(tmp_path
         assert c.get(url+"/source",headers=h).content==source
 
 
+def test_caption_text_can_be_edited_and_moves_with_its_figure():
+    source=document_with_figures()
+    revised=workshop.transform_docx(source,{
+        "image_moves":{"0":{"before_paragraph":0,"order":2}},
+        "replacements":{"3":"Рисунок 1 — Обновлённая подпись в редакторе"},
+        "image_edits":{"0":{"width_percent":70,"align":"center","corner_percent":8}}
+    })
+    order=document_order(revised)
+    assert order[:3]==[
+        "picture","Рисунок 1 — Обновлённая подпись в редакторе","Глава 1"
+    ]
+    assert order.count("Рисунок 1 — Обновлённая подпись в редакторе")==1
+
+
+def test_no_moves_keeps_original_picture_and_caption_order():
+    source=document_with_figures()
+    revised=workshop.transform_docx(source,{"preset":"preserve","image_moves":{}})
+    assert document_order(revised)==document_order(source)
+
+
+def test_non_dictionary_moves_fail_closed():
+    with pytest.raises(workshop.DocumentWorkshopError):
+        workshop.transform_docx(document_with_figures(),{"image_moves":[]})
+
+
 def test_integrated_canvas_is_on_same_docwork_page_not_a_new_tab():
     html=(main.STATIC_DIR/"docwork.html").read_text(encoding="utf-8")
     js=(main.STATIC_DIR/"docwork.js").read_text(encoding="utf-8")
