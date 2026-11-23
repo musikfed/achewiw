@@ -1012,6 +1012,48 @@ $('resetImageEdit').addEventListener('click',()=>{
   renderDocumentCanvas();
   tell('Оформление рисунка сброшено к исходному.');
 });
+$('undoEdit').addEventListener('click',()=>undoEditAction(false));
+$('redoEdit').addEventListener('click',()=>undoEditAction(true));
+for(const id of ['alignLeft','alignCenter','alignRight','alignJustify','alignReset']) {
+  $(id).addEventListener('click',()=>{
+    const index=activeParagraph,row=report?.paragraphs?.find(x=>x.index===index);
+    if(!row?.editable||report?.type!=='docx')return;
+    const alignment=$(id).dataset.align;
+    editWithUndo('paragraph-align:'+index,()=>{
+      if(alignment==='inherit')delete paragraphAlignments[String(index)];
+      else paragraphAlignments[String(index)]=alignment;
+    });
+    renderDocumentCanvas();
+    updateEditToolbar();
+    const editor=$('documentCanvas').querySelector(
+      '.canvasText[data-paragraph-index="'+index+'"]');
+    editor?.focus({preventScroll:true});
+  });
+}
+$('canvasRole').addEventListener('change',()=>{
+  const index=activeParagraph,row=report?.paragraphs?.find(x=>x.index===index);
+  if(!row?.editable||report?.type!=='docx')return;
+  const role=$('canvasRole').value;
+  editWithUndo('paragraph-role:'+index,()=>{
+    if(role==='keep')delete overrides[String(index)];
+    else overrides[String(index)]=role;
+  });
+  drawRows();renderDocumentCanvas();updateEditToolbar();
+  $('documentCanvas').querySelector(
+    '.canvasText[data-paragraph-index="'+index+'"]')?.focus({preventScroll:true});
+});
+document.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey||!report||report.type!=='docx')return;
+  // Do not hijack native undo in filename, search, other form controls.
+  if(!event.target.closest('#documentEditor'))return;
+  const key=event.key.toLowerCase();
+  if(key==='z'||key==='y'){
+    const redo=key==='y'||(key==='z'&&event.shiftKey);
+    if((redo?redoStack:undoStack).length===0)return;
+    event.preventDefault();
+    undoEditAction(redo);
+  }
+});
 $('outputName').addEventListener('input',markDraftDirty);
 $('pdfLossConfirmed').addEventListener('change',markDraftDirty);
 $('paragraphText').addEventListener('input',markDraftDirty);
