@@ -105,7 +105,7 @@ def test_image_asset_upload_export_undo_restore_and_document_integrity(tmp_path,
         assert c.put(base,headers=headers,json={"revision":2,
                      "state":{"artwork":{}}}).status_code==200
         assert c.get(base,headers=headers).json()["state"]["artwork"]=={}
-        earlier=c.get(base+"/revisions/2",headers=headers)
+        earlier=c.get(base+"/history/2",headers=headers)
         assert earlier.status_code==200 and earlier.json()["state"]["artwork"]=={"0":aid}
         assert c.get(base+"/assets/"+aid,headers=headers).status_code==200
         close={**headers,"X-ACHEWIW-Confirm-Close-Draft":"yes-delete-only-this-draft"}
