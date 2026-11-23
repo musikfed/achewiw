@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1010" viewBox="0 0 1600 1010" role="img" aria-label="Архитектура AI-предприятия: владелец, оркестрация, четыре линии производства, приёмка, выпуск и экономика">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0c1726"/><stop offset="1" stop-color="#16374c"/></linearGradient><linearGradient id="owner" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#126e8e"/><stop offset="1" stop-color="#279e8b"/></linearGradient><style>text{font-family:DejaVu Sans,Arial,sans-serif;fill:#f0f7fa}.lead{font-size:43px;font-weight:700}.cap{font-size:21px;fill:#b8d1de}.head{font-size:25px;font-weight:700}.small{font-size:18px;fill:#bdd3de}.box{fill:#18394e;stroke:#53839c;stroke-width:2}.wire{fill:none;stroke:#64c1d4;stroke-width:3}</style></defs>
+<rect width="1600" height="1010" fill="url(#bg)"/><circle cx="1460" cy="100" r="230" fill="#4cb4be" opacity=".09"/><circle cx="100" cy="970" r="250" fill="#2cad83" opacity=".07"/>
+<text x="70" y="65" font-size="21" fill="#91b9c9" letter-spacing="3">OWNER × AI · ONE-PERSON ENTERPRISE</text>
+<text x="70" y="120" class="lead">От идеи до продукта, выпуска и дохода</text>
+<text x="70" y="156" class="cap">Инженерия · издательство · дизайн · исследования · продвижение · учёт</text>
+<rect x="412" y="196" width="776" height="106" rx="21" fill="url(#owner)"/><text x="800" y="239" text-anchor="middle" font-size="29" font-weight="700">ВЛАДЕЛЕЦ — ИНЖЕНЕР И АВТОР</text><text x="800" y="271" text-anchor="middle" font-size="19">Цель · бюджет · безопасность · права · окончательное утверждение</text>
+<path d="M800 302 V337" class="wire"/>
+<rect x="298" y="337" width="1004" height="108" rx="18" class="box"/><text x="800" y="381" text-anchor="middle" font-size="29" font-weight="700">AI-КОНВЕЙЕР И КОНТЕКСТ</text><text x="800" y="417" text-anchor="middle" class="cap">ACHEWIW · Ollama · RAG/Graph · Python · роли моделей · журнал</text>
+<path d="M800 445 V482 M219 482 H1381 M219 482 V509 M607 482 V509 M993 482 V509 M1381 482 V509" class="wire"/>
+<g><rect x="54" y="509" width="330" height="163" rx="15" class="box"/><rect x="442" y="509" width="330" height="163" rx="15" class="box"/><rect x="828" y="509" width="330" height="163" rx="15" class="box"/><rect x="1216" y="509" width="330" height="163" rx="15" class="box"/>
+<text x="219" y="555" text-anchor="middle" class="head">РЕДАКЦИЯ</text><text x="219" y="594" text-anchor="middle" class="small">Книги, журналы, комиксы</text><text x="219" y="627" text-anchor="middle" class="small">Канон, вёрстка, факты</text>
+<text x="607" y="555" text-anchor="middle" class="head">РАЗРАБОТКА</text><text x="607" y="594" text-anchor="middle" class="small">Python, API, Code Grinder</text><text x="607" y="627" text-anchor="middle" class="small">Тесты, версии, релизы</text>
+<text x="993" y="555" text-anchor="middle" class="head">ЛАБОРАТОРИЯ</text><text x="993" y="594" text-anchor="middle" class="small">ESP32, камеры, роботы</text><text x="993" y="627" text-anchor="middle" class="small">Испытания, замеры</text>
+<text x="1381" y="555" text-anchor="middle" class="head">ДИЗАЙН</text><text x="1381" y="594" text-anchor="middle" class="small">Обложки, графика</text><text x="1381" y="627" text-anchor="middle" class="small">Схемы, типографика</text></g>
+<path d="M219 672 V704 M607 672 V704 M993 672 V704 M1381 672 V704 M219 704 H1381 M800 704 V730" class="wire"/>
+<rect x="298" y="730" width="1004" height="88" rx="16" fill="#5c412b" stroke="#e4ad67" stroke-width="2"/><text x="800" y="765" text-anchor="middle" font-size="27" font-weight="700">GATE: ПРОВЕРКА ЧЕЛОВЕКОМ</text><text x="800" y="795" text-anchor="middle" font-size="19">Факты · подписи · лицензии · расчёты · QA · физическая безопасность</text>
+<path d="M800 818 V843 M424 843 H1176 M424 843 V863 M1176 843 V863" class="wire"/>
+<rect x="78" y="863" width="690" height="91" rx="16" fill="#174c4c" stroke="#5ab6a3" stroke-width="2"/><rect x="832" y="863" width="690" height="91" rx="16" fill="#223f61" stroke="#78a4d5" stroke-width="2"/>
+<text x="423" y="900" text-anchor="middle" class="head">ПУБЛИКАЦИЯ И ПРОДВИЖЕНИЕ</text><text x="423" y="932" text-anchor="middle" class="small">Литрес · сайт · VK · SEO · обратная связь</text>
+<text x="1177" y="900" text-anchor="middle" class="head">ЭКОНОМИКА И УЧЁТ</text><text x="1177" y="932" text-anchor="middle" class="small">Продажи · роялти · затраты · налоги · маржа</text>
+<text x="800" y="988" text-anchor="middle" class="small">Реальные метрики возвращаются владельцу. ЦЕЛЕВАЯ СХЕМА: не все связи уже реализованы.</text>
+</svg>
