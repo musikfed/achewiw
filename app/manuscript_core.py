@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 
 from book_layout_core import (info, colophon, paragraphs, group_images,
-    cover_image, before_images, after_images, end_images)
+    cover_image, before_images, after_images, end_images, verified_illustrations)
 
 
 def chapter_listing(project) -> dict:
@@ -63,6 +63,7 @@ def manuscript_epub(project, illustrations=None) -> bytes:
     book=chapter_listing(project)
     if not book["chapters"]:
         raise ValueError("No authored scene texts to export")
+    illustrations=verified_illustrations(illustrations)
     meta=info(project)
     title=escape(meta["title"])
     identifier=uuid.uuid5(uuid.NAMESPACE_URL,"achewiw:"+str(project.id))
@@ -77,11 +78,7 @@ def manuscript_epub(project, illustrations=None) -> bytes:
     images=list(illustrations or [])
     art_by_id={}
     for art in images:
-        image_id=str(art.get("id",""))
-        if not re.fullmatch(r"[a-f0-9]{32}",image_id):
-            continue
-        if not art.get("path") or not art["path"].is_file():
-            continue
+        image_id=str(art["id"])
         fname=f"image-{image_id}.png"
         if image_id not in art_by_id:
             files["EPUB/"+fname]=art["path"].read_bytes()
@@ -89,9 +86,9 @@ def manuscript_epub(project, illustrations=None) -> bytes:
                             (' properties="cover-image"' if art.get("placement")=="cover" else '')+'/>')
             art_by_id[image_id]=fname
     def fig(art):
-        filename=art_by_id.get(str(art.get("id","")))
+        filename=art_by_id.get(str(art["id"]))
         if not filename:
-            return ""
+            raise ValueError("Иллюстрация отсутствует в EPUB: "+str(art["id"]))
         caption=str(art.get("caption") or "")
         return ('<figure><img src="'+filename+'" alt="'+
                 escape(caption or "Иллюстрация",quote=True)+'"/>'+
@@ -163,7 +160,7 @@ def manuscript_epub(project, illustrations=None) -> bytes:
     files["EPUB/style.css"]=(
         'body{font-family:serif;line-height:1.6;margin:1em;}'
         'h2{text-align:center;margin:2em 0 1em;}p{text-indent:1em;}'
-        'figure{text-align:center;margin:1.2em auto;}figure img{max-width:100%;height:auto;}'
+        'figure{text-align:center;margin:1.2em auto;break-inside:avoid;page-break-inside:avoid;}figure img{max-width:100%;height:auto;}'
         'figcaption{font-style:italic;font-size:.9em;}'
         '.titlepage{text-align:center;margin-top:25%;}.titlepage h1{font-size:2em;}'
         '.cover img{max-height:95vh;object-fit:contain;}'
