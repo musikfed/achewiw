@@ -2,8 +2,8 @@
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACHEWIW · Умный редактор DOCX / PDF</title>
-<link rel="stylesheet" href="/static/docwork.css?v=4">
-<script src="/static/docwork.js?v=6" defer></script>
+<link rel="stylesheet" href="/static/docwork.css?v=5">
+<script src="/static/docwork.js?v=7" defer></script>
 </head><body>
 <header class="top"><a class="brand" href="/">✦ ACHEWIW</a><span>УМНЫЙ РЕДАКТОР / WORD & PDF</span><a href="/" class="back">← Библиотека и генератор</a></header>
 <main class="layout">
@@ -17,6 +17,10 @@
   </div>
   <div class="workshop-actions" id="workshopActions">
     <div><strong>Результат редактора</strong><small id="workflowStatus">Выберите файл DOCX или PDF, затем нажмите «Проверить структуру».</small></div>
+    <div class="saveSummary">
+      <span id="saveIndicator" class="saveIndicator" data-save-state="idle" role="status" aria-live="polite">○ Открой документ для сохранения</span>
+      <button type="button" id="quickSaveDraft" class="primary" disabled>💾 Сохранить изменения</button>
+    </div>
     <button type="button" id="quickPreviewPdf" disabled>◉ Показать страницы PDF</button>
     <button type="button" id="quickDownloadDocx" class="primary" disabled>↓ Новый DOCX</button>
     <button type="button" id="quickDownloadPdf" disabled>↓ Новый PDF</button>
@@ -25,7 +29,7 @@
     <h2>Черновик и история редакций</h2>
     <p id="draftStatus" class="hint" role="status" aria-live="polite">Выбранный документ ещё не сохранён на сервере. После проверки структуры исходник сохраняется однократно.</p>
     <div class="actions buttons">
-      <button id="saveDraft" type="button" disabled>Сохранить правки сейчас</button>
+      <button id="saveDraft" type="button" disabled>💾 Сохранить изменения</button>
       <button id="reloadDraft" type="button" disabled>Обновить с сервера при конфликте</button>
       <button id="exportDraftState" type="button" disabled>Скачать мои правки JSON</button>
       <button id="closeDraft" type="button" disabled>Закрыть черновик</button>
@@ -57,12 +61,56 @@
           <option value="karate">KARATE LINUX · зелёные заголовки</option>
         </select>
       </label>
+      <div class="fontChoiceIntro">
+        <strong>Выбор шрифта · две библиотеки</strong>
+        <p class="hint">Слева — шрифты для нормативных и издательских макетов; справа — дополнительные. Это подборка для оформления, а не подтверждение соответствия ГОСТ: конкретные требования зависят от типа документа и стандарта.</p>
+        <label>К чему применить выбранный шрифт
+          <select id="fontApplyTarget">
+            <option value="bodyFont">Основной текст</option>
+            <option value="chapterFont">Заголовки глав</option>
+            <option value="subchapterFont">Заголовки подразделов</option>
+          </select>
+        </label>
+      </div>
+      <div class="fontCollections">
+        <div class="fontCollection">
+          <strong>Для нормативного оформления</strong>
+          <small>ГОСТ-ориентированные документы и отчёты</small>
+          <label for="fontStandardChoices">Семейство
+            <select id="fontStandardChoices">
+              <option value="Liberation Serif">Liberation Serif · доступен в Docker</option>
+              <option value="Times New Roman">Times New Roman · при наличии у получателя</option>
+              <option value="DejaVu Serif">DejaVu Serif · доступен в Docker</option>
+              <option value="Liberation Sans">Liberation Sans · доступен в Docker</option>
+            </select>
+          </label>
+          <button type="button" id="applyStandardFont">Применить шрифт</button>
+        </div>
+        <div class="fontCollection">
+          <strong>Дополнительные шрифты</strong>
+          <small>Книги, схемы, презентационные страницы</small>
+          <label for="fontOtherChoices">Семейство
+            <select id="fontOtherChoices">
+              <option value="Carlito">Carlito · свободный аналог Calibri</option>
+              <option value="Caladea">Caladea · для книжных заголовков</option>
+              <option value="FreeSerif">FreeSerif · книга</option>
+              <option value="FreeSans">FreeSans · схемы</option>
+              <option value="FreeMono">FreeMono · примеры кода</option>
+              <option value="Liberation Mono">Liberation Mono · моноширинный</option>
+              <option value="DejaVu Sans">DejaVu Sans · интерфейсы</option>
+              <option value="DejaVu Sans Mono">DejaVu Sans Mono · терминал</option>
+            </select>
+          </label>
+          <button type="button" id="applyOtherFont">Применить шрифт</button>
+        </div>
+      </div>
+      <p class="hint" id="fontAvailabilityNote">Шрифты с лицензией Microsoft не скачиваются в контейнер. При экспорте PDF LibreOffice может подменить отсутствующий Times New Roman на Liberation Serif. Сверяйте страницы перед выпуском.</p>
       <div class="font-grid">
-        <label>Шрифт основного текста<select id="bodyFont"><option value="keep">По стилю документа</option><option>Times New Roman</option><option>Liberation Serif</option><option>DejaVu Serif</option><option>Arial</option><option>Calibri</option></select></label>
+        <label>Шрифт основного текста<select id="bodyFont"><option value="keep">По стилю документа</option></select></label>
         <label>Размер текста, пт<input id="bodySize" type="number" min="8" max="16" step="0.5" placeholder="По шаблону"></label>
-        <label>Шрифт глав<select id="chapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Шрифт глав<select id="chapterFont"><option value="keep">По стилю документа</option></select></label>
         <label>Размер глав, пт<input id="chapterSize" type="number" min="11" max="30" step="0.5" placeholder="По шаблону"></label>
-        <label>Шрифт подглав<select id="subchapterFont"><option value="keep">По стилю документа</option><option>Arial</option><option>DejaVu Serif</option><option>Times New Roman</option><option>Liberation Serif</option><option>Calibri</option></select></label>
+        <label>Шрифт подглав<select id="subchapterFont"><option value="keep">По стилю документа</option></select></label>
         <label>Размер подглав, пт<input id="subchapterSize" type="number" min="9" max="25" step="0.5" placeholder="По шаблону"></label>
       </div>
       <div class="checklist"><label><input type="checkbox" id="headingBold" checked> Заголовки глав и подглав — жирным</label>
@@ -131,6 +179,10 @@
             <span id="canvasStatus">Перетащи рисунок за рамку в место между абзацами. Текст исправляй прямо на листе.</span>
           </div>
           <div id="editToolbar" class="editToolbar" role="toolbar" aria-label="Редактирование текста и история действий">
+            <div class="toolbarGroup">
+              <button id="saveCanvasNow" type="button" class="primary" disabled>💾 Сохранить</button>
+              <span id="canvasSaveState" class="toolbarHint">Нет открытого черновика</span>
+            </div>
             <div class="toolbarGroup">
               <button id="undoEdit" type="button" disabled title="Отменить действие · Ctrl+Z">↶ Отменить</button>
               <button id="redoEdit" type="button" disabled title="Повторить действие · Ctrl+Y или Ctrl+Shift+Z">↷ Повторить</button>
