@@ -2696,7 +2696,7 @@ async def document_workshop_vision_analyze(
                 # No model pulling, no unloading another model or changing host services.
                 import base64
                 result = await client.post(OLLAMA_BASE_URL + "/api/chat", json={
-                    "model": body.model, "stream": False, "keep_alive": 0,
+                    "model": body.model, "stream": False, "keep_alive": "30s",
                     "options": {"temperature": 0.0, "num_predict": 1400},
                     "messages": [{"role": "user",
                                   "content": vision_prompt(actual_width, actual_height),
