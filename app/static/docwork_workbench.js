@@ -29,6 +29,8 @@ function changeButtons(){
   $('wbRedo').disabled=!futures.length;
   $('wbApply').disabled=selected<0||!baseImage||operationBusy;
   $('wbDownload').disabled=selected<0||!baseImage;
+  $('wbExportStructure').disabled=!baseImage||!figures.length;
+  $('wbExportSvg').disabled=!baseImage||!figures.length;
   $('wbUseReplacement').disabled=selected<0||!host?.assetFor(selected);
 }
 function annotationKey(){
@@ -386,6 +388,72 @@ function downloadBlob(blob,name){
   a.href=url;a.download=name;document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+// R3.7 phase 1: export manually verified primitives as real editable SVG/JSON.
+// Deliberately do not include raster pixels or claim automatic image understanding.
+function structuredDrawing(){
+  if(!baseImage||!figures.length)throw new Error('Сначала нарисуй и проверь фигуры схемы.');
+  const width=canvas.width,height=canvas.height;
+  if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||
+     width*height>MAX_CANVAS_PIXELS)throw new Error('Недопустимый размер схемы.');
+  const elements=figures.map((item,index)=>{
+    if(!validAnnotation(item))throw new Error('Неподдерживаемый объект №'+(index+1));
+    const {type,x,y,w,h}=item;
+    const color=/^#[0-9a-f]{6}$/i.test(item.color||'')?item.color:'#176d47';
+    const stroke=Number.isFinite(item.stroke)?Math.max(1,Math.min(30,item.stroke)):3;
+    const fontSize=Number.isFinite(item.fontSize)?
+      Math.max(10,Math.min(100,item.fontSize)):26;
+    return {id:'element-'+(index+1),type,x,y,w,h,color,stroke,
+      ...(type==='text'?{text:item.text||'',fontSize}:{})};
+  });
+  return {format:'achewiw-diagram',version:1,mode:'manual-review-required',
+    source:'manual-canvas-overlay',canvas:{width,height},elements};
+}
+function xmlText(value){
+  return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function svgFromStructure(structure){
+  const {width,height}=structure.canvas;
+  const out=[`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    '<title>Редактируемая схема ACHEWIW — ручная разметка</title>'];
+  for(const obj of structure.elements){
+    const {type,x,y,w,h,color,stroke}=obj;
+    const style=`stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+    if(type==='rectangle')out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" ${style}/>`);
+    else if(type==='cover')out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="white"/>`);
+    else if(type==='ellipse')out.push(`<ellipse cx="${x+w/2}" cy="${y+h/2}" rx="${Math.max(1,Math.abs(w/2))}" ry="${Math.max(1,Math.abs(h/2))}" ${style}/>`);
+    else if(type==='line'||type==='arrow'){
+      out.push(`<line x1="${x}" y1="${y}" x2="${x+w}" y2="${y+h}" ${style}/>`);
+      if(type==='arrow'){
+        const angle=Math.atan2(h,w),size=Math.max(10,stroke*3),ex=x+w,ey=y+h;
+        const p1=[ex-size*Math.cos(angle-.46),ey-size*Math.sin(angle-.46)];
+        const p2=[ex-size*Math.cos(angle+.46),ey-size*Math.sin(angle+.46)];
+        out.push(`<polygon points="${ex},${ey} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}" fill="${color}"/>`);
+      }
+    }else if(type==='text'){
+      // Canvas uses top-aligned glyphs; SVG baseline is slightly offset.
+      out.push(`<text x="${x}" y="${y+obj.fontSize}" font-family="Arial, sans-serif" font-size="${obj.fontSize}" font-weight="600" fill="${color}">${xmlText(obj.text)}</text>`);
+    }
+  }
+  out.push('</svg>');
+  return out.join('\n');
+}
+$('wbExportStructure').addEventListener('click',()=>{
+  try{
+    const graph=structuredDrawing();
+    downloadBlob(new Blob([JSON.stringify(graph,null,2)],{type:'application/json'}),
+      'ACHEWIW-diagram-'+(selected+1)+'-editable.json');
+    status('Структура схемы выгружена в JSON. Это ручная разметка, а не распознавание рисунка.');
+  }catch(e){status(e.message,true);}
+});
+$('wbExportSvg').addEventListener('click',()=>{
+  try{
+    const graph=structuredDrawing();
+    downloadBlob(new Blob([svgFromStructure(graph)],{type:'image/svg+xml;charset=utf-8'}),
+      'ACHEWIW-diagram-'+(selected+1)+'-editable.svg');
+    status('Редактируемый SVG выгружен. В нём только созданные вручную фигуры и текст, без фонового растра.');
+  }catch(e){status(e.message,true);}
+});
 $('wbDownload').addEventListener('click',async()=>{
   if(!baseImage)return;
   try{downloadBlob(await canvasPng(),
