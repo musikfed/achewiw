@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="/static/docwork.css?v=9">
 <link rel="stylesheet" href="/static/docwork_workbench.css?v=1">
 <script src="/static/diagram_graph.js?v=1" defer></script>
+<script src="/static/diagram_import.js?v=1" defer></script>
 <script src="/static/docwork_workbench.js?v=1" defer></script>
 <script src="/static/docwork.js?v=11" defer></script>
 </head><body>
@@ -240,6 +241,7 @@
           <button id="wbDownload" type="button">↓ Скачать PNG для Photoshop</button>
           <button id="wbExportSvg" type="button" disabled>↓ SVG: редактируемые фигуры</button>
           <button id="wbExportGraph" type="button" disabled>↓ JSON: структура схемы</button>
+          <label>Восстановить ручную схему из JSON <input id="wbImportGraph" type="file" accept=".json,application/json" disabled></label>
           <button id="wbAuditGraph" type="button" disabled>Проверить связи схемы</button>
           <button id="wbApply" type="button" class="primary">✓ Применить замену в книге</button>
           <button id="wbRestore" type="button">↶ Снять замену</button>
