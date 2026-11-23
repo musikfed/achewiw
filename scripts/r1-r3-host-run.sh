@@ -67,6 +67,8 @@ finish() {
   exit "$status"
 }
 trap finish EXIT
+# Show each step live while keeping full technical output only in local /tmp.
+exec > >(tee -a "$LOG") 2>&1
 
 {
   echo "=== R1-R3 HOST TEST ==="
@@ -137,6 +139,6 @@ trap finish EXIT
   echo "Успешно: испытательная версия R1–R3 запущена и проверена."
   echo "Откройте http://192.168.0.100:7080/docwork/ в браузере через LAN/VPN."
   echo "Проверьте F5, две вкладки и ручное редактирование на ИСКУССТВЕННОМ документе."
-} >> "$LOG" 2>&1
+}
 
 # Print only the sanitized report to console. Raw Docker logs are local.
