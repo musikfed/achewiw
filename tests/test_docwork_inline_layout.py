@@ -72,7 +72,7 @@ def test_move_picture_with_caption_to_new_position_without_mutating_source():
     assert order==[
         "Глава 1","Исправленный текст А","Текст Б. Объяснение.",
         "picture","Рисунок 2 — Схема Б",
-        "picture","Рисунок 1 — Схема А","Текст В. Итоги",
+        "picture","Рисунок 1 — Схема А","Текст В. Итоги.",
     ]
     doc=Document(BytesIO(result))
     assert doc.tables[0].cell(0,0).text=="Не двигать эту таблицу"
@@ -91,7 +91,7 @@ def test_multiple_images_can_move_to_same_target_in_explicit_order():
         "Глава 1",
         "picture","Рисунок 2 — Схема Б",
         "picture","Рисунок 1 — Схема А",
-        "Текст А. Введение.","Текст Б. Объяснение.","Текст В. Итоги"
+        "Текст А. Введение.","Текст Б. Объяснение.","Текст В. Итоги."
     ]
 
 
@@ -148,7 +148,7 @@ def test_r3_session_stores_image_position_and_server_exports_moved_copy(tmp_path
                       files={"file":("story.docx",source)})
         assert result.status_code==200,result.text
         assert document_order(result.content)[-3:]==[
-            "picture","Рисунок 1 — Схема А","Текст В. Итоги"
+            "picture","Рисунок 1 — Схема А","Текст В. Итоги."
         ]
         assert c.get(url+"/source",headers=h).content==source
 
