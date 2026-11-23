@@ -6,6 +6,7 @@ const overrides = Object.create(null), replacements = Object.create(null);
 
 let draft = null, draftSaveTimer = null, draftSaveBusy = false, draftConflicted = false;
 let lastSavedState = '{}';
+let recoveredLocalScratch = null;
 const DRAFT_KEY = 'achewiw-docwork-r3-current';
 const SCRATCH_KEY = 'achewiw-docwork-r3-pending';
 const settingsIds = {
@@ -196,8 +197,11 @@ async function restoreDraft() {
         applyDraftState(pending.state); markDraftDirty();
         draftMessage('Восстановлены изменения перед F5 · синхронизация с сервером…');
       }
-    } else if (pending?.id===draft.id && pending.revision < draft.revision) {
-      draftMessage('Сервер содержит более новую редакцию. При необходимости сохраните локальные правки JSON перед продолжением.',true);
+    } else if (pending?.id===draft.id && pending.revision < draft.revision &&
+               canonicalState(pending.state)!==canonicalState(meta.state)) {
+      recoveredLocalScratch=pending;
+      draftMessage('После F5 найдены более старые несохранённые локальные изменения. '
+        +'Они НЕ перезаписали сервер. Сначала скачайте локальные правки JSON, затем решите, как объединить версии.',true);
     }
     await refreshDraftHistory();
     if (!draftSaveTimer) draftMessage('Редактор восстановлен · редакция №'+draft.revision);
@@ -499,7 +503,7 @@ $('reloadDraft').addEventListener('click',async()=>{
   if (!draft||!confirm('Перезагрузить последнюю версию с сервера? Сначала скачайте несохранённые правки JSON.')) return;
   try {
     const data=await (await draftFetch('')).json();
-    draft.revision=data.revision;draftConflicted=false;rememberDraft();
+    draft.revision=data.revision;draftConflicted=false;recoveredLocalScratch=null;rememberDraft();
     lastSavedState=canonicalState(data.state);
     clearTimeout(draftSaveTimer);applyDraftState(data.state);scratchDraft();
     draftMessage('Загружена серверная редакция №'+data.revision);
@@ -508,8 +512,11 @@ $('reloadDraft').addEventListener('click',async()=>{
 });
 $('exportDraftState').addEventListener('click',()=>{
   if (!draft) return;
-  const state=captureDraftState();
-  const file=new Blob([JSON.stringify({id:draft.id,revision:draft.revision,state},null,2)],
+  const state=recoveredLocalScratch?.id===draft.id ?
+    recoveredLocalScratch.state : captureDraftState();
+  const baseRevision=recoveredLocalScratch?.id===draft.id ?
+    recoveredLocalScratch.revision : draft.revision;
+  const file=new Blob([JSON.stringify({id:draft.id,revision:baseRevision,state},null,2)],
     {type:'application/json'});
   const url=URL.createObjectURL(file);
   const link=document.createElement('a');link.href=url;link.download='ACHEWIW-docwork-my-edits.json';
@@ -525,7 +532,8 @@ $('closeDraft').addEventListener('click',async()=>{
         'X-ACHEWIW-Confirm-Close-Draft':'yes-delete-only-this-draft'
       }});
     if (!response.ok) throw new Error('HTTP '+response.status);
-    forgetDraft();draft=null;draftConflicted=false;lastSavedState='{}';source=null;
+    forgetDraft();draft=null;draftConflicted=false;lastSavedState='{}';
+    recoveredLocalScratch=null;source=null;
     $('sourceFile').value='';reset();draftControls();
     $('fileLabel').textContent='Файл не выбран';
     draftMessage('Черновик закрыт по подтверждению пользователя. Можно загрузить новый файл.');
