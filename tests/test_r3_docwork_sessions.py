@@ -171,3 +171,11 @@ def test_r3_nan_or_unknown_state_is_refused_without_server_error(studio):
         content='{"revision":1,"state":{"settings":{"unsupported":NaN}}}')
     assert resp.status_code==422
     assert c.get(url,headers=key(draft)).json()["revision"]==1
+
+
+def test_r3_click_passes_bool_not_mouse_event_to_inspection(studio):
+    c,_=studio
+    js=c.get("/static/docwork.js").text
+    assert "$('inspect').addEventListener('click', () => { void inspect(false); });" in js
+    assert "const reusing=restoring||!!draft;" in js
+    assert "reusing?'/api/docwork/inspect':'/api/docwork/drafts'" in js
