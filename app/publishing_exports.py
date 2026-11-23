@@ -120,7 +120,7 @@ def manuscript_docx(project, illustrations=None) -> bytes:
         p.alignment=WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.keep_together=True
         p.paragraph_format.keep_with_next=bool(art.get("caption"))
-        p.add_run().add_picture(str(art["path"]),width=Pt(iw*ratio))
+        p.add_run().add_picture(str(art["path"]),width=int(iw*ratio))
         if art.get("caption"):
             caption=doc.add_paragraph(art["caption"],style="Caption")
             caption.paragraph_format.keep_together=True
