@@ -1,0 +1,31 @@
+name: ACHEWIW book graceful pause
+on:
+  pull_request:
+    paths:
+      - "app/book_pause_control.py"
+      - "app/main.py"
+      - "app/static/app.js"
+      - "app/static/index.html"
+      - "tests/test_book_graceful_pause.py"
+      - ".github/workflows/book-graceful-pause.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  author-pause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Changed code syntax
+        run: |
+          python -m py_compile app/book_pause_control.py app/main.py tests/test_book_graceful_pause.py
+          node --check app/static/app.js
+      - name: Focused pause regression
+        run: python -m unittest discover -s tests -p test_book_graceful_pause.py -v
