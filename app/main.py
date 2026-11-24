@@ -443,6 +443,15 @@ def build_prompt(project: Project, request: AIRequest) -> str:
             + task + extra)[:35000]
 
 
+@app.get("/publication/")
+def publication_project_page(_=Depends(require_auth)):
+    """Separate work/edition manager; does not replace the writing Studio."""
+    return FileResponse(STATIC_DIR / "publication.html", headers={
+        "Cache-Control":"no-store",
+        "X-ACHEWIW-App":"publication-editions",
+    })
+
+
 @app.get("/docwork/")
 def document_workshop_page(_=Depends(require_auth)):
     return FileResponse(STATIC_DIR / "docwork.html", headers={"Cache-Control": "no-store",
@@ -465,7 +474,7 @@ def index(_=Depends(require_auth)):
 
 
 @app.get("/static/{filename}")
-def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js", "writing_blocks.js", "docwork.js", "docwork.css"], _=Depends(require_auth)):
+def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js", "writing_blocks.js", "docwork.js", "docwork.css", "publication.js"], _=Depends(require_auth)):
     return FileResponse(STATIC_DIR / filename, headers={"Cache-Control": "no-store"})
 
 
