@@ -1,0 +1,29 @@
+name: ACHEWIW publication branches and editions
+on:
+  pull_request:
+    paths:
+      - "app/publication_versions.py"
+      - "app/main.py"
+      - "tests/test_publication_versions.py"
+      - ".github/workflows/publication-versions.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate Python syntax
+        run: |
+          python -W error::SyntaxWarning -m py_compile app/publication_versions.py app/main.py tests/test_publication_versions.py
+      - name: In-memory editorial branch and edition tests
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p test_publication_versions.py -v
