@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Validate exact and versioned local CSS/JS used by ACHEWIW Studio.
 
-The five editorial assets intentionally share one cache key. The sixth asset,
-conveyor.js, has an independent cache key so its pipeline UI can be revised
-without requiring a rebuild of the editorial bundle.
+Five editorial assets share one cache key. The conveyor and optional author
+speech-input modules use independent keys, but must still be local, explicit,
+versioned, present, and listed exactly once.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ EDITORIAL = {
     "/static/style.css", "/static/app.js", "/static/monitor.js",
     "/static/writing_blocks.js", "/static/illustrations.js",
 }
-INDEPENDENT = {"/static/conveyor.js"}
+INDEPENDENT = {"/static/conveyor.js", "/static/author_dictation.js"}
 EXPECTED = EDITORIAL | INDEPENDENT
 
 
@@ -77,5 +77,6 @@ if __name__ == "__main__":
     print(
         "ACHEWIW clean-update: проверено "
         f"{len(versions)} CSS/JS ресурсов; "
-        f"редактор={primary}; конвейер={versions['/static/conveyor.js']}"
+        f"редактор={primary}; конвейер={versions['/static/conveyor.js']}; "
+        f"диктовка={versions['/static/author_dictation.js']}"
     )
