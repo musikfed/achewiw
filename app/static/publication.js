@@ -66,7 +66,10 @@ async function showPoint(id){
   const cp=await api(base()+'/checkpoints/'+encodeURIComponent(id));
   const project=cp.project||{};
   const scenes=Array.isArray(project.scenes)?project.scenes:[];
-  $('pointInfo').textContent=(cp.label||'Редакция')+' · '+cp.created_at+
+  $('pointInfo').textContent=(cp.important?'★ КЛЮЧЕВАЯ ТОЧКА · ':'')+
+    (cp.label||'Редакция')+' · '+cp.created_at+
+    (cp.page_label?' · '+cp.page_label:'')+
+    (cp.note?' · '+cp.note:'')+
     ' · '+scenes.length+' сцен · контрольная сумма '+cp.project_sha256.slice(0,16);
   $('pointPreview').textContent=JSON.stringify({
     title:project.title,genre:project.genre,
@@ -80,9 +83,10 @@ async function loadPoints(){
   points=await api(base()+'/branches/'+b.id+'/checkpoints');
   const root=$('checkpoints');
   for(const cp of points){
-    const div=node('div',undefined,'entry');const controls=node('div',undefined,'actions');
-    div.append(node('strong',cp.label+' · '+cp.id.slice(0,8)));
-    div.append(node('small',cp.created_at));
+    const div=node('div',undefined,'entry'+(cp.important?' key-change':''));const controls=node('div',undefined,'actions');
+    div.append(node('strong',(cp.important?'★ ВАЖНО · ':'')+cp.label+' · '+cp.id.slice(0,8)));
+    div.append(node('small',cp.created_at+(cp.page_label?' · '+cp.page_label:'')));
+    if(cp.note)div.append(node('p',cp.note,'snapshot-note'));
     controls.append(action('Просмотреть',()=>showPoint(cp.id)));
     controls.append(action('Создать ветку отсюда',async()=>{
       const name=window.prompt('Название новой ветки:',cp.label+' — альтернативная редакция');
@@ -130,7 +134,10 @@ $('checkpoint').addEventListener('click',async()=>{
     const project=await api('/api/projects/'+selectedProject());
     const label=$('checkpointLabel').value.trim()||'Редактура';
     await write(base()+'/branches/'+branch.id+'/checkpoints',{
-      label,expected_head:branch.current_checkpoint_id,project_state:project
+      label,expected_head:branch.current_checkpoint_id,project_state:project,
+      page_label:$('checkpointPage').value.trim(),
+      note:$('checkpointNote').value.trim(),
+      important:$('checkpointImportant').checked
     });
     await loadBranches(branch.id);report('Снимок сохранён, исходная рукопись не изменена.');
   }catch(e){report(e.message,true)}
