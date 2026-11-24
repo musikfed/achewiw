@@ -1,0 +1,33 @@
+name: ACHEWIW DOCWORK image mirror
+on:
+  pull_request:
+    paths:
+      - "app/docwork_image_layout.py"
+      - "app/static/docwork.js"
+      - "app/static/docwork.html"
+      - "tests/test_docwork_image_flip.py"
+      - ".github/workflows/docwork-image-mirror.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal independent dependencies
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<13" "python-docx>=1.1,<2"
+      - name: Static checks
+        run: |
+          node --check app/static/docwork.js
+          python -W error::SyntaxWarning -m py_compile app/docwork_image_layout.py tests/test_docwork_image_flip.py
+      - name: Mirror original and exported DOCX pixel checks
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p test_docwork_image_flip.py -v
