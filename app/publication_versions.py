@@ -84,6 +84,9 @@ def initialize(conn):
         branch_id TEXT NOT NULL,
         parent_checkpoint_id TEXT,
         label TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        important INTEGER NOT NULL DEFAULT 0,
+        page_label TEXT NOT NULL DEFAULT '',
         project_json TEXT NOT NULL,
         project_sha256 TEXT NOT NULL,
         manifest_json TEXT NOT NULL,
@@ -161,21 +164,29 @@ def _checkpoint(conn, project_id, checkpoint_id):
     return row
 
 
-def _make_checkpoint(conn, project_id, branch_id, parent_id, label, data, manifest):
+def _make_checkpoint(conn, project_id, branch_id, parent_id, label, data, manifest,
+                     note="", important=False, page_label=""):
+    if not isinstance(note,str) or len(note)>1200:
+        raise EditionError(422,"Слишком длинная заметка к редакции")
+    if type(important) is not bool:
+        raise EditionError(422,"Флаг важной редакции должен быть логическим")
+    if not isinstance(page_label,str) or len(page_label)>100:
+        raise EditionError(422,"Слишком длинная метка страницы или главы")
     checkpoint_id = uuid.uuid4().hex
     now = stamp()
     conn.execute("""INSERT INTO publication_checkpoints
-        (id,project_id,branch_id,parent_checkpoint_id,label,project_json,
-         project_sha256,manifest_json,manifest_sha256,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (checkpoint_id,project_id,branch_id,parent_id,label,data,
-         digest(data),manifest,digest(manifest),now))
+        (id,project_id,branch_id,parent_checkpoint_id,label,note,important,
+         page_label,project_json,project_sha256,manifest_json,manifest_sha256,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (checkpoint_id,project_id,branch_id,parent_id,label,note,int(important),
+         page_label,data,digest(data),manifest,digest(manifest),now))
     conn.execute(
         "UPDATE publication_branches SET current_checkpoint_id=? WHERE id=?",
         (checkpoint_id, branch_id)
     )
     return {"id":checkpoint_id, "branch_id":branch_id, "project_id":project_id,
             "parent_checkpoint_id":parent_id, "label":label,
+            "note":note, "important":important, "page_label":page_label,
             "project_sha256":digest(data), "manifest_sha256":digest(manifest),
             "created_at":now}
 
@@ -213,7 +224,8 @@ def create_branch(conn, project_id, name, medium="book", from_checkpoint=None):
             "head":point,"created_at":now}
 
 
-def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None, project_state=None):
+def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None,
+               project_state=None, note="", important=False, page_label=""):
     label = validate_label(label)
     validate_id(expected_head)
     with conn:
@@ -235,7 +247,7 @@ def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None,
         data = (canonical_project(project_state,project_id)
                 if project_state is not None else _checkpoint(conn,project_id,expected_head)["project_json"])
         return _make_checkpoint(conn,project_id,branch_id,expected_head,
-                                label,data,manifest_data)
+                                label,data,manifest_data,note,important,page_label)
 
 
 def list_branches(conn, project_id):
@@ -249,7 +261,7 @@ def list_branches(conn, project_id):
 def list_checkpoints(conn, project_id, branch_id):
     _branch(conn,project_id,branch_id)
     return [dict(x) for x in conn.execute(
-        "SELECT id, branch_id, parent_checkpoint_id, label, "
+        "SELECT id, branch_id, parent_checkpoint_id, label, note, important, page_label, "
         "project_sha256,manifest_sha256,created_at "
         "FROM publication_checkpoints WHERE project_id=? AND branch_id=? "
         "ORDER BY created_at DESC",(project_id,branch_id)
@@ -260,6 +272,8 @@ def read_checkpoint(conn, project_id, checkpoint_id):
     row=_checkpoint(conn,project_id,checkpoint_id)
     return {"id":row["id"],"project_id":row["project_id"],
             "branch_id":row["branch_id"],"label":row["label"],
+            "note":row["note"],"important":bool(row["important"]),
+            "page_label":row["page_label"],
             "parent_checkpoint_id":row["parent_checkpoint_id"],
             "project_sha256":row["project_sha256"],
             "manifest_sha256":row["manifest_sha256"],
