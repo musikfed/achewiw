@@ -42,6 +42,16 @@ from docwork_assets import (
     get as get_docwork_asset, replacements as get_docwork_asset_replacements,
     normalize_image as normalize_docwork_asset,
 )
+from publication_versions import (
+    EditionError, initialize as init_publication_versions,
+    create_branch as create_publication_branch,
+    checkpoint as save_publication_checkpoint,
+    list_branches as list_publication_branches,
+    list_checkpoints as list_publication_checkpoints,
+    read_checkpoint as read_publication_checkpoint,
+    seal_edition as seal_publication_edition,
+    list_editions as list_publication_editions,
+)
 from docwork_sessions import (
     SessionError as DocworkSessionError, initialize as init_docwork_drafts,
     create as create_docwork_draft, read as read_docwork_draft,
@@ -153,6 +163,7 @@ def init_db() -> None:
         init_visual_puzzles(connection)
         init_docwork_drafts(connection)
         init_docwork_assets(connection)
+        init_publication_versions(connection)
         mark_interrupted(connection)
     # Derived search/work databases are additive, the existing manuscript stays put.
     # Optional caches must not block reading old approved manuscripts.
@@ -456,6 +467,83 @@ def index(_=Depends(require_auth)):
 @app.get("/static/{filename}")
 def asset(filename: Literal["app.js", "style.css", "monitor.js", "illustrations.js", "writing_blocks.js", "docwork.js", "docwork.css"], _=Depends(require_auth)):
     return FileResponse(STATIC_DIR / filename, headers={"Cache-Control": "no-store"})
+
+
+
+# Work/edition snapshots are isolated from the mutable main project and DOCWORK.
+# No API in this section overwrites a manuscript or removes an edition.
+class PublicationBranchCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    medium: Literal["book", "comic", "illustrated_book", "other"] = "book"
+    from_checkpoint: str | None = None
+
+
+class PublicationCheckpointCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=120)
+    expected_head: str
+    project_state: Project | None = None
+    manifest: dict | None = None
+
+
+class PublicationEditionCreate(BaseModel):
+    checkpoint_id: str
+    label: str = Field(min_length=1, max_length=120)
+    medium: Literal["book", "comic", "illustrated_book", "other"] = "book"
+
+
+def _publication_call(method, *args, **kwargs):
+    try:
+        with db() as connection:
+            return method(connection, *args, **kwargs)
+    except EditionError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+
+
+@api.get("/projects/{project_id}/publication/branches")
+def publication_branches_api(project_id: str):
+    return _publication_call(list_publication_branches, project_id)
+
+
+@api.post("/projects/{project_id}/publication/branches", status_code=201)
+def publication_new_branch_api(project_id: str, body: PublicationBranchCreate):
+    return _publication_call(create_publication_branch, project_id, body.name,
+                             medium=body.medium, from_checkpoint=body.from_checkpoint)
+
+
+@api.get("/projects/{project_id}/publication/branches/{branch_id}/checkpoints")
+def publication_checkpoints_api(project_id: str, branch_id: str):
+    return _publication_call(list_publication_checkpoints, project_id, branch_id)
+
+
+@api.post("/projects/{project_id}/publication/branches/{branch_id}/checkpoints",
+          status_code=201)
+def publication_checkpoint_api(project_id: str, branch_id: str,
+                               body: PublicationCheckpointCreate):
+    # Branch-specific revisions never update the canonical Projects table.
+    if body.project_state is not None and body.project_state.id != project_id:
+        raise HTTPException(422, "Нельзя записать рукопись другого проекта")
+    return _publication_call(save_publication_checkpoint, project_id, branch_id,
+                             body.label, body.expected_head,
+                             manifest=body.manifest,
+                             project_state=(body.project_state.model_dump(mode="json")
+                                            if body.project_state is not None else None))
+
+
+@api.get("/projects/{project_id}/publication/checkpoints/{checkpoint_id}")
+def publication_read_checkpoint_api(project_id: str, checkpoint_id: str):
+    return _publication_call(read_publication_checkpoint, project_id, checkpoint_id)
+
+
+@api.get("/projects/{project_id}/publication/editions")
+def publication_editions_api(project_id: str):
+    return _publication_call(list_publication_editions, project_id)
+
+
+@api.post("/projects/{project_id}/publication/editions", status_code=201)
+def publication_seal_edition_api(project_id: str, body: PublicationEditionCreate):
+    # Freezes the checkpoint reference; does not upload/distribute a book.
+    return _publication_call(seal_publication_edition, project_id, body.checkpoint_id,
+                             body.label, medium=body.medium)
 
 
 @api.get("/projects")
