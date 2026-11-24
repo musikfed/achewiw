@@ -691,19 +691,24 @@ function renderFullBookJob(job){
  if(bookDraftMode && (changedJob||bookDraftWords!==b.generated_words))refreshBookDraft();
  $('#fullBookChapters').replaceChildren(...chapters.map(c=>{
    const item=document.createElement('div');
-   item.className='chapter-plan-card';
+   item.className='chapter-plan-card book-generated-chapter';
    const p=document.createElement('p');
    p.textContent=(c.scene_index+1)+'. '+c.title+': '+c.word_count+' / '+c.target_words+
       ' слов · '+(c.accepted_at?'принято':c.complete?'готово':'черновик, '+c.attempts+' фрагментов');
    item.append(p);
    if(['interrupted','error'].includes(job.status)&&!c.complete&&!c.accepted_at){
-     const note=document.createElement('small');
-     note.textContent='Текущая задача главы: '+(c.editorial_goal||'не задана')+
-       ' · напряжение '+c.tension+' · раскрытие '+c.reveal_level;
+     const note=document.createElement('p');
+     note.className='book-generated-guidance';
+     note.textContent='Текущая задача главы: '+(c.editorial_goal||'не задана');
      item.append(note);
+     const meta=document.createElement('p');
+     meta.className='book-generated-guidance-meta';
+     meta.textContent='Напряжение '+c.tension+' · раскрытие '+c.reveal_level;
+     item.append(meta);
      const edit=document.createElement('button');
      edit.type='button';
-     edit.textContent='✎ Уточнить главу перед продолжением';
+     edit.className='book-generated-edit';
+     edit.textContent='✎ Уточнить задачу';
      edit.addEventListener('click',async()=>{
        if(bookJobId!==job.id || !project || project.id!==job.project_id)return;
        const next=window.prompt(
