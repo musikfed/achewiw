@@ -28,7 +28,8 @@ from conveyor_api import install as install_production_conveyor
 from monitoring_core import load_snapshot, summarize_ollama_running
 from illustrations_core import initialize as init_illustrations, save as save_illustration, listing as list_illustrations, checked_path as illustration_path, asset_for_export as export_illustrations
 from image_engine import status as illustration_engine_status, generate as generate_illustration_image
-from prose_quality import (check_quality, streaming_loop, prompt_tail, first_cycle, ProseDegeneration)
+from prose_quality import (check_quality, check_repeated_dialogue, streaming_loop,
+                           prompt_tail, first_cycle, ProseDegeneration)
 from narrative_direction import scene_contract, reject_vacant_dialogue
 from reader_engagement import map_chapters as map_reader_engagement, fragment_contract as reader_fragment_contract
 from publishing_exports import manuscript_pdf, manuscript_docx, manuscript_fb2
@@ -1972,6 +1973,8 @@ async def execute_book(job_id: str) -> None:
                         check_new_prose(text,recovered)
                         check_quality(recovered,previous_chapters=earlier_chapters)
                         if project.work_type=="fiction":
+                            check_repeated_dialogue(recovered,same_chapter=text,
+                                                    earlier_chapters=earlier_chapters)
                             reject_vacant_dialogue(recovered)
                     except ValueError:
                         # Invalid/repeated stream is NOT promoted to draft.
@@ -2111,6 +2114,8 @@ async def execute_book(job_id: str) -> None:
                         check_new_prose(text, candidate)
                         check_quality(candidate, previous_chapters=earlier_chapters)
                         if project.work_type=="fiction":
+                            check_repeated_dialogue(candidate,same_chapter=text,
+                                                    earlier_chapters=earlier_chapters)
                             reject_vacant_dialogue(candidate)
                     except ValueError as exc:
                         with db() as connection:
