@@ -8,6 +8,7 @@ No claim of 'complete publication snapshot': sources might still be missing.
 from __future__ import annotations
 
 import argparse
+import re
 from hashlib import sha256
 import json
 import os
@@ -34,11 +35,15 @@ def selected_files(entries, source_archive: Path, output: Path):
         raise ValueError("Укажи хотя бы одну папку/файл через --include NAME=PATH")
     found = []
     seen = set()
+    scope_names = set()
     total = 0
     for item in entries:
         name, sep, raw = item.partition("=")
-        if not sep or not name or not name.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Формат --include: short-name=/absolute/path")
+        if not sep or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name):
+            raise ValueError("Формат --include: ASCII-short-name=/absolute/path")
+        if name in scope_names:
+            raise ValueError("Один scope нельзя передать повторно: " + name)
+        scope_names.add(name)
         path = Path(raw)
         if not path.is_absolute() or not path.exists() or path.is_symlink():
             raise ValueError("Источник отсутствует, относителен или является ссылкой")
@@ -59,6 +64,8 @@ def selected_files(entries, source_archive: Path, output: Path):
                 raise ValueError("Повтор имени внутри архива: "+archive_name)
             seen.add(archive_name)
             size = p.stat().st_size
+            if size > MAX_BYTES:
+                raise ValueError("Один файл превышает лимит 8 GiB")
             total += size
             if total > MAX_BYTES or len(found) >= MAX_FILES:
                 raise ValueError("Превышен лимит файлов/объёма внешнего архива")
@@ -82,6 +89,8 @@ def create_extended_archive(source: Path, target: Path, entries: list[str]):
         if not required.issubset(z.namelist()) or z.testzip() is not None:
             raise ValueError("Входной rescue ZIP не прошёл проверку")
         report = json.loads(z.read("report/job-rescue-report.json"))
+        if report.get("publication_snapshot_complete") is True:
+            raise ValueError("Ожидался базовый rescue ZIP, а не полный snapshot")
         with z.open("database/achewiw-consistent.sqlite3") as handle:
             db_hash, _ = digest_stream(handle)
         if db_hash != report["sqlite_sha256"]:
@@ -142,9 +151,10 @@ def create_extended_archive(source: Path, target: Path, entries: list[str]):
                     checksum, byte_count = digest_stream(stream)
                 if checksum != row["sha256"] or byte_count != row["size_bytes"]:
                     raise ValueError("Ошибка SHA256 включённого файла")
+        with target.open("rb") as fd:
+            archive_hash, archive_size = digest_stream(fd)
         return {"archive": str(target), "assets": len(files),
-                "sha256": sha256(target.read_bytes()).hexdigest()
-                if target.stat().st_size <= 64 * 1024 * 1024 else None,
+                "sha256": archive_hash, "archive_bytes": archive_size,
                 "publication_snapshot_complete": False}
     except Exception:
         if created and target.exists():
