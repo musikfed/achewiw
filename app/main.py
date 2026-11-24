@@ -70,6 +70,8 @@ from visual_puzzles import (initialize as init_visual_puzzles,
     delete as delete_visual_puzzle)
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
 from book_chapter_intervention import (apply_paused_guidance, InterventionConflict)
+from book_pause_control import (init_pause_controls, request_pause, acknowledge_pause,
+                                pause_requested, clear_pause, PauseConflict)
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter,
@@ -157,6 +159,7 @@ def init_db() -> None:
         )
         init_jobs(connection)
         init_book_tables(connection)
+        init_pause_controls(connection)
         init_plan_tables(connection)
         init_memory(connection)
         init_editorial_schema(connection)
@@ -1823,6 +1826,7 @@ def _book_record(connection: sqlite3.Connection, job_id: str) -> dict:
         WHERE job_id=? ORDER BY updated_at DESC LIMIT 1""",(job_id,)).fetchone()
     record["stream_words"]=book_words(streaming["partial"]) if streaming else 0
     record["stream_updated_at"]=streaming["updated_at"] if streaming else None
+    record["pause_requested"]=pause_requested(connection,job_id)
     # Chapter texts are stored separately, not duplicated into the job result.
     return record
 
@@ -1928,6 +1932,12 @@ def _book_prompt(project: Project, scene: Scene, chapter_index: int,
     return guidance[:max(0, 22000-len(anchor))] + anchor
 
 
+def _pause_book_if_requested(job_id: str) -> bool:
+    """Check at a safe boundary, after a persisted chunk, before the next one."""
+    with db() as connection:
+        return acknowledge_pause(connection,job_id)
+
+
 async def execute_book(job_id: str) -> None:
     """Sequential Ollama calls, a checkpoint after every chunk, no manuscript writes."""
     try:
@@ -1944,6 +1954,8 @@ async def execute_book(job_id: str) -> None:
         tokens_per_word = None
         prompt_tokens = None
         for index, chapter in enumerate(chapters_for_job_from_job(job_id)):
+            if _pause_book_if_requested(job_id):
+                return
             # Earlier generated chapters are reference evidence, not a
             # license to repeat or restart an earlier scene.
             with db() as connection:
@@ -1993,6 +2005,8 @@ async def execute_book(job_id: str) -> None:
                                    output="Незавершённый поток Ollama восстановлен из SQLite.",
                                    percent=min(99,round(book_summary(connection,job_id)["percent_words"])))
             while book_words(text) < chapter["target_words"] and attempts < max_attempts(chapter["target_words"]):
+                if _pause_book_if_requested(job_id):
+                    return
                 remaining = chapter["target_words"] - book_words(text)
                 requested = chunk_size(remaining,last_output_words)
                 # The search query includes the true saved story endpoint,
@@ -2051,6 +2065,8 @@ async def execute_book(job_id: str) -> None:
                 # scene beat and a different seed. Each failure is bounded.
                 last_failure = ""
                 for retry in range(6):
+                    if _pause_book_if_requested(job_id):
+                        return
                     payload["options"]["temperature"] = min(0.93, 0.72 + retry * 0.035)
                     payload["options"]["seed"] = (
                         int(job_id[:8], 16) + (index+1)*101 +
@@ -2173,6 +2189,8 @@ async def execute_book(job_id: str) -> None:
                 raise ValueError(f"Глава {index+1} не достигла объёма: {book_words(text)}/{chapter['target_words']} слов. "
                                  "Результат сохранён. Продолжи задание после проверки качества.")
             previous = text[-1500:]
+        if _pause_book_if_requested(job_id):
+            return
         with db() as connection:
             summary = book_summary(connection, job_id)
             update_job(connection, job_id,
@@ -2433,6 +2451,18 @@ def edit_paused_book_chapter(job_id: str, request: ChapterIntervention):
             raise HTTPException(422, str(exc)) from exc
 
 
+@api.post("/books/jobs/{job_id}/pause", status_code=202)
+def pause_full_book(job_id: str):
+    """Request safe boundary pause; no cancellation of in-flight Ollama request."""
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            result=request_pause(connection,job_id)
+        except PauseConflict as exc:
+            raise HTTPException(409,str(exc)) from exc
+    return result
+
+
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
 async def resume_full_book(job_id: str):
     with db() as connection:
@@ -2463,6 +2493,7 @@ async def resume_full_book(job_id: str):
             "UPDATE ai_book_chapters SET retry_epoch=retry_epoch+1,updated_at=? "
             "WHERE job_id=? AND complete=0 AND accepted_at IS NULL",
             (utc_now(), job_id))
+        clear_pause(connection,job_id)
         connection.execute(
             "UPDATE ai_jobs SET status='queued',stage='Возобновление',error=NULL,updated_at=? WHERE id=?",
             (utc_now(), job_id))
