@@ -201,8 +201,28 @@ def main():
                        ctype="application/json",timeout=145)
         elapsed=round(time.monotonic()-started,2)
         if code!=200:
+            # Report only allowlisted server error categories; no tokens or model text.
+            try:
+                error=json.loads(data)
+                detail=error.get("detail","")
+                if not isinstance(detail,str):
+                    detail="Other server validation error"
+                if detail not in (
+                    "Модель не вернула проверяемую структуру схемы",
+                    "Модель не установлена в локальной Ollama",
+                    "Выбери установленную vision-модель",
+                    "Нельзя прочитать исходный рисунок",
+                    "Распознавание поддерживает только рисунки DOCX",
+                    "Локальная Ollama Vision не ответила корректно",
+                    "Размер рисунка изменился — обнови страницу",
+                    "Рисунок слишком большой для безопасного запуска Vision",
+                ):
+                    detail="Other server validation error"
+            except (ValueError, TypeError, AttributeError):
+                detail="Server returned a non-JSON error"
             raise RuntimeError("Vision analysis rejected (HTTP "+str(code)+
-                               "). No model output was accepted.")
+                               ", "+detail+", duration="+str(elapsed)+"s). "+
+                               "No model output was accepted.")
         result=json.loads(data)
         if result.get("status")!="unverified" or result.get("autoApply") is not False:
             raise RuntimeError("Fail-closed: unverified result contract not respected")
