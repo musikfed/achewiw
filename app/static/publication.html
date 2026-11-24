@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACHEWIW — Проект, редакции и издания</title>
+<style>
+:root{font:16px system-ui,Segoe UI,sans-serif;color-scheme:dark;background:#101821;color:#e9f0f5}
+*{box-sizing:border-box}
+body{margin:0 auto;max-width:1050px;padding:24px 18px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+a{color:#9fcbea}
+h1{font-size:1.7rem;margin:10px 0}h2{font-size:1.15rem}
+article{background:#182432;border:1px solid #3a4a58;border-radius:12px;padding:18px;margin:14px 0}
+select,input,button{background:#1c3040;border:1px solid #526b7e;color:inherit;border-radius:7px;padding:9px;max-width:100%;font:inherit}
+button{cursor:pointer}button:hover{background:#28465d}button:disabled{cursor:not-allowed;opacity:.5}
+label{display:grid;gap:5px;min-width:190px}form,.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.muted,small{color:#afbdc7}#status{white-space:pre-wrap;margin:15px 0}
+#status[data-error=true]{color:#ff9e97}
+.entry{border-top:1px solid #3a4a58;padding:12px 0}
+.entry strong{display:block}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow-y:auto;background:#0e1822;padding:12px;border-radius:7px}
+</style>
+<script src="/static/publication.js" defer></script>
+</head>
+<body>
+<header><h1>ACHEWIW · Проект → Редакции → Издания</h1><a href="/">Вернуться в Studio</a></header>
+<p class="muted">Контрольные точки не перезаписывают рукопись. Восстановление — только через просмотр или новую ветку. Публикация/экспорт и резервное копирование изображений остаются отдельными операциями.</p>
+<article>
+<h2>Произведение</h2>
+<label>Выбрать проект
+<select id="project"><option value="">Загрузка проектов...</option></select></label>
+<p id="projectInfo" class="muted"></p>
+</article>
+<article>
+<h2>Создать ветку редакции</h2>
+<form id="newBranch">
+<label>Название<input id="branchName" maxlength="120" placeholder="Авторская редакция" required></label>
+<label>Тип<select id="medium"><option value="book">Книга</option><option value="comic">Комикс</option><option value="illustrated_book">Иллюстрированная книга</option><option value="other">Другое</option></select></label>
+<button type="submit">Создать ветку</button>
+</form>
+<p class="muted">Начальная точка создаётся из текущего состояния проекта.</p>
+</article>
+<article>
+<h2>Редакционная ветка</h2>
+<label>Ветка<select id="branch"><option value="">Сначала выберите проект</option></select></label>
+<div class="actions">
+<label>Название контрольной точки<input id="checkpointLabel" maxlength="120" value="Редактура"></label>
+<button id="checkpoint" type="button">Снять копию текущей рукописи</button>
+</div>
+<p class="muted">Команда читает текущую рукопись из Studio и сохраняет её как отдельную контрольную точку ветки. Пока это не отдельный текстовый редактор ветки.</p>
+<div id="checkpoints"></div>
+</article>
+<article>
+<h2>Зафиксированные издания</h2>
+<p class="muted">Издание закрепляет выбранную редакцию; это ещё не готовый для печати PDF/EPUB или архив иллюстраций.</p>
+<div id="editions"></div>
+</article>
+<article>
+<h2>Просмотр сохранённой редакции</h2>
+<p id="pointInfo" class="muted">Выберите контрольную точку.</p>
+<pre id="pointPreview"></pre>
+</article>
+<p id="status" role="status"></p>
+</body>
+</html>
