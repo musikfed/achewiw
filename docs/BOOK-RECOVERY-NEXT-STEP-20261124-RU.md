@@ -2,29 +2,43 @@
 
 **Не повторяем** 27/27 smoke DOCWORK, 28/28 геометрию, ручной CorelDRAW PowerTRACE (63 curves), Vision HTTP 422/503 и аппаратный probe. Главная цель — **сначала уберечь фактически созданную книгу, затем безопасно продолжить генерацию**.
 
+## Подтверждённые пути ACHEWIW — НЕ использовать абстрактные шаблоны
+
+Проверено по **`compose.yaml`** репозитория (24.11.2026): `org.achewiw.workspace: "/1tbdisk/achewiw"`, volume `./data:/data`, переменная `ACHEWIW_DATA_DIR=/data`, приложение устанавливает `DB_PATH=DATA_DIR / "achewiw.sqlite3"`. Значит, при запуске Compose из штатного проекта:
+
+- Linux host: **`/1tbdisk/achewiw/data/achewiw.sqlite3`**.
+- Container `achewiw-studio`: **`/data/achewiw.sqlite3`**.
+- Скрипты в Git checkout: **`/1tbdisk/achewiw/scripts/`**, когда соответствующий PR доставлен на хост.
+- Архивы рекомендуется хранить **`/1tbdisk/achewiw/data/backups/book-rescue/`** (новый подкаталог, создаётся явным действием; не выдавать за существующий).
+- НЕ считать подключённую на Windows папку `F:\\achewiw` автоматически видимой Linux-серверу.
+
+### A1.5 — точные команды (после доставки скриптов на Linux)
+
+```bash
+cd /1tbdisk/achewiw
+DB=/1tbdisk/achewiw/data/achewiw.sqlite3
+test -f "$DB" && python3 scripts/backup-book-job.py --db "$DB" --list
+
+# Затем подставить фактический ID нужного задания из --list:
+JOB_ID=ACTUAL_JOB_ID_FROM_LIST
+mkdir -p /1tbdisk/achewiw/data/backups/book-rescue
+python3 scripts/backup-book-job.py --db "$DB" --job-id "$JOB_ID" \\
+ --out "/1tbdisk/achewiw/data/backups/book-rescue/book-${JOB_ID}-20261124-sqlite.zip"
+python3 scripts/verify-book-rescue.py \\
+ --archive "/1tbdisk/achewiw/data/backups/book-rescue/book-${JOB_ID}-20261124-sqlite.zip"
+```
+
+**Не выполнялось на Huananzhi этим GitHub-инструментом.** Реальный `job_id` и факт создания архива пока не подтверждены. Эти команды ничего не перезаписывают, но содержимое архива приватно.
+
 ## Что добавлено в этой ветке
 
 `scripts/backup-book-job.py` — самостоятельный Python 3.12 инструмент без зависимостей кроме стандартной библиотеки. **Он не запускает Ollama, не перезапускает Docker и не изменяет базу источника.** `sqlite3.Connection.backup()` делает согласованную онлайн-копию **всей** ACHEWIW SQLite, включая WAL, если сервис продолжает работать. По выбранному `job_id` считает главы, слова, флаги complete/accepted и сохранённые части потока из `ai_book_stream_buffers`. Тексты не печатаются на экран: находятся внутри сохранённой SQLite. Архив ZIP проверяется CRC и SHA256, оригинальная БД открывается только в read-only.
 
 `--list` ничего не создаёт и возвращает последние задания книг: job_id, project_id, статус, фактические сохранённые слова/главы. Это безопасная команда **для идентификации** книги на 67%. Показатель 67% пока не повторён на настоящей БД.
 
-### Выполнение на Huananzhi (ТОЛЬКО после появления скрипта локально)
+### Путь к SQLite и команды
 
-Узнать реальный путь БД: сервер `/1tbdisk/achewiw`, сервис обычно в Docker с `ACHEWIW_DATA_DIR=/data` и `DB_PATH=/data/achewiw.sqlite3`. **Сначала выяснить host bind mount**, не угадывать путь. Затем на Linux-хосте, где доступен реальный db-файл:
-
-```bash
-# УКАЖИ ФАКТИЧЕСКИЙ host-путь, полученный из docker compose или mount:
-DB=/actual/host/path/achewiw.sqlite3
-python3 scripts/backup-book-job.py --db "$DB" --list
-
-# Скопируй ID нужной книги из --list. Сохранение В НОВЫЙ файл:
-JOB_ID=<actual-job-id>
-mkdir -p /safe/private/achewiw-backups
-python3 scripts/backup-book-job.py --db "$DB" --job-id "$JOB_ID" \
-  --out "/safe/private/achewiw-backups/book-job-${JOB_ID}-20261124.zip"
-```
-
-**ВНИМАНИЕ:** SQLite включает рукописи и другие проекты. Архив содержит секреты/личный контент проекта, НИКОГДА не коммитить в GitHub. Для резервного диска проверить место; архив исходную БД не удаляет и по существующему пути не перезаписывает.
+Используй **подтверждённую секцию A1.5 выше**: `/1tbdisk/achewiw/data/achewiw.sqlite3` и каталог `/1tbdisk/achewiw/data/backups/book-rescue/`. Путь уже найден по `compose.yaml`; повторная разведка пути не требуется. Для идентификации целевой книги команда `--list` обязательна.
 
 ### Полученный результат
 
