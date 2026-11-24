@@ -490,6 +490,9 @@ class PublicationBranchCreate(BaseModel):
 class PublicationCheckpointCreate(BaseModel):
     label: str = Field(min_length=1, max_length=120)
     expected_head: str
+    note: str = Field(default="", max_length=1200)
+    important: bool = False
+    page_label: str = Field(default="", max_length=100)
     project_state: Project | None = None
     manifest: dict | None = None
 
@@ -535,7 +538,9 @@ def publication_checkpoint_api(project_id: str, branch_id: str,
                              body.label, body.expected_head,
                              manifest=body.manifest,
                              project_state=(body.project_state.model_dump(mode="json")
-                                            if body.project_state is not None else None))
+                                            if body.project_state is not None else None),
+                             note=body.note,important=body.important,
+                             page_label=body.page_label)
 
 
 @api.get("/projects/{project_id}/publication/checkpoints/{checkpoint_id}")
