@@ -613,6 +613,8 @@ function canvasFigure(item) {
   img.className='canvasFigurePhoto';img.dataset.imageIndex=key;
   img.alt='Рисунок №'+(item.index+1);
   img.style.width=style.width_percent+'%';
+  img.style.transform='scale('+(style.flip_horizontal===true?-1:1)+','+
+    (style.flip_vertical===true?-1:1)+')';
   img.addEventListener('load',()=>cornerPixelRadius(img,style.corner_percent));
   const thumbnail=imageThumbUrls.get(item.index);
   if(thumbnail)img.src=thumbnail;
@@ -815,6 +817,8 @@ function selectImage(index) {
   };
   $('imageWidth').value=String(saved.width_percent);
   $('imageAlign').value=saved.align;
+  $('imageFlipHorizontal').checked=saved.flip_horizontal===true;
+  $('imageFlipVertical').checked=saved.flip_vertical===true;
   const cap=radiusLimit(item);
   $('imageCorners').max=String(cap);
   $('imageCornersNumber').max=String(cap);
@@ -823,7 +827,7 @@ function selectImage(index) {
   $('imageCornersNumber').value=String(safeRadius);
   $('imageEditTitle').textContent='Рисунок №'+(index+1)+' · '+item.width_px+'×'+item.height_px;
   for(const id of ['imageWidth','imageAlign','imageCorners','imageCornersNumber',
-    'applyImageEdit','resetImageEdit'])$(id).disabled=!item.editable;
+    'imageFlipHorizontal','imageFlipVertical','applyImageEdit','resetImageEdit'])$(id).disabled=!item.editable;
   $('imageEditHint').textContent=item.editable ?
     'Редактируется только эта иллюстрация в новой копии DOCX/PDF. Текст и пропорции сохраняются.' :
     'Рисунок защищён: находится внутри таблицы или сложного элемента. '
@@ -856,6 +860,8 @@ function updateImageLivePreview() {
     +(item?.ratio>1.5?'широкая/высокая схема — мягкие углы':'пропорции соблюдены')
     +'; предел для этой картинки: '+radiusLimit(item)+'%';
   cornerPixelRadius(image,radius);
+  image.style.transform='scale('+($('imageFlipHorizontal').checked?-1:1)+','+
+    ($('imageFlipVertical').checked?-1:1)+')';
   $('imagePreview').parentNode.style.justifyContent=
       align==='left'?'flex-start':align==='right'?'flex-end':'center';
 }
@@ -1190,13 +1196,18 @@ $('imageCornersNumber').addEventListener('input',()=>{
   $('imageCornersNumber').value=String(pct);
   updateImageLivePreview();
 });
+for (const id of ['imageFlipHorizontal','imageFlipVertical']) {
+  $(id).addEventListener('change',updateImageLivePreview);
+}
 $('applyImageEdit').addEventListener('click',()=>{
   if (selectedImage===null) return;
   editWithUndo('picture-style:'+selectedImage,()=>{
     imageEdits[String(selectedImage)]={
       width_percent:Number($('imageWidth').value),
       align:$('imageAlign').value,
-      corner_percent:Number($('imageCorners').value)
+      corner_percent:Number($('imageCorners').value),
+      flip_horizontal:$('imageFlipHorizontal').checked,
+      flip_vertical:$('imageFlipVertical').checked
     };
   });
   renderDocumentCanvas();
