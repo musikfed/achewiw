@@ -625,6 +625,12 @@ function updateBookProduction(job){
  const active=['queued','running'].includes(job.status);
  $('#bookGenerate').hidden=active || (!accepted&&['ready','interrupted','error'].includes(job.status));
  $('#bookResume').hidden=!['interrupted','error'].includes(job.status);
+ const pauseControl=$('#bookPause');
+ pauseControl.hidden=!active;
+ pauseControl.disabled=!!job.pause_requested;
+ pauseControl.textContent=job.pause_requested?
+   '⏳ Пауза запрошена, ожидаем сохранения фрагмента':
+   '⏸ После фрагмента — пауза';
  $('#bookAccept').hidden=job.status!=='ready'||accepted;
  $('#bookGenerationProgress').value=Math.min(100,summary.percent_words||0);
  $('#bookGenerationStatus').textContent=(job.stage||job.status)+' · написано '+
@@ -1352,6 +1358,20 @@ async function startFullBook(){
    await restoreLatestBook().catch(()=>{});
  }
 }
+async function pauseFullBook(){
+ if(!bookJobId||!project)return;
+ const control=$('#bookPause');
+ control.disabled=true;
+ try{
+   await api('/books/jobs/'+encodeURIComponent(bookJobId)+'/pause',
+     {method:'POST',body:'{}'});
+   toast('Пауза запрошена: текущий ответ сохранится до остановки.');
+   await refreshFullBook();
+ }catch(e){
+   toast('Пауза не запрошена: '+e.message);
+   control.disabled=false;
+ }
+}
 async function resumeFullBook(){
  if(!bookJobId)return;
  try{
@@ -1489,7 +1509,7 @@ $('#buildOutline').onclick=$('#buildOutline2').onclick=()=>ai('outline');
  $('#versionFirst').onchange=syncVersionProofLink;
  $('#balanceChapterPlan').onclick=balanceChapterPlan;
  $('#saveChapterPlan').onclick=async()=>{try{await save();await saveChapterPlan()}catch(e){toast(e.message)}};
- $('#bookResume').onclick=resumeFullBook;
+ $('#bookPause').onclick=pauseFullBook; $('#bookResume').onclick=resumeFullBook;
  $('#bookLiveJump').onclick=()=>{showTab('book');$('#bookProduction').scrollIntoView({behavior:'smooth',block:'center'})};
  $('#bookLiveDraft').onclick=()=>{showTab('book');setBookReaderMode(true);$('#bookDraftPreview').scrollIntoView({behavior:'smooth',block:'start'})};
  $('#bookLiveResume').onclick=resumeFullBook;
