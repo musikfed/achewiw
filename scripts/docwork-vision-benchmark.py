@@ -99,6 +99,15 @@ def iou(a,b):
     return round(area/union,3) if union>0 else 0.0
 
 
+def edge_distance(a,b):
+    """Sum of start/end endpoint errors, in pixels (direction matters)."""
+    import math
+    start=math.hypot(a["x"]-b["x"],a["y"]-b["y"])
+    end=math.hypot(a["x"]+a["w"]-b["x"]-b["w"],
+                   a["y"]+a["h"]-b["y"]-b["h"])
+    return round((start+end)/2,2)
+
+
 def evaluate(proposals):
     matches=[]
     remaining=set(range(len(proposals)))
@@ -113,6 +122,12 @@ def evaluate(proposals):
             metric={"kind":"text","expected":expected["text"],
                     "recognized":proposals[best].get("text","") if best is not None else None,
                     "exact":correct}
+        elif expected["type"] in ("arrow","line"):
+            best=min(candidate_ids,key=lambda i:edge_distance(expected,proposals[i]),
+                     default=None)
+            metric={"kind":expected["type"],"endpoint_error_px":
+                    edge_distance(expected,proposals[best]) if best is not None else None}
+            correct=best is not None and metric["endpoint_error_px"]<=25
         else:
             best=max(candidate_ids,key=lambda i:iou(expected,proposals[i]),default=None)
             metric={"kind":expected["type"],"best_iou":
