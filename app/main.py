@@ -2386,6 +2386,63 @@ def book_summary_for_preview(chapters: list[dict]) -> dict:
             "target_words":sum(c["target_words"] for c in chapters)}
 
 
+class ChapterIntervention(BaseModel):
+    """Scoped change for one NOT-YET-COMPLETE generated chapter."""
+    scene_id: str
+    expected_goal: str = Field(max_length=500)
+    expected_tension: int = Field(ge=0, le=5)
+    expected_reveal: Literal["none", "hint", "partial", "full", "aftermath"]
+    editorial_goal: str = Field(min_length=1, max_length=500)
+    tension: int = Field(ge=0, le=5)
+    reveal_level: Literal["none", "hint", "partial", "full", "aftermath"]
+
+
+@api.put("/books/jobs/{job_id}/chapters/intervention")
+def edit_paused_book_chapter(job_id: str, request: ChapterIntervention):
+    """Author changes NEXT directions only, never saves over existing prose.
+
+    No live job mutation: a paused/error job must be explicitly resumed
+    afterward by the existing resume endpoint. Concurrency is optimistic.
+    """
+    if not request.editorial_goal.strip():
+        raise HTTPException(422, "Задача главы не может быть пустой")
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        job = _book_record(connection, job_id)
+        if job["status"] not in ("interrupted", "error"):
+            raise HTTPException(409, "Уточнять главу можно только после остановки генерации")
+        chapter = connection.execute(
+            "SELECT scene_id,scene_index,complete,accepted_at,editorial_goal,"
+            "tension,reveal_level FROM ai_book_chapters WHERE job_id=? AND scene_id=?",
+            (job_id, request.scene_id)
+        ).fetchone()
+        if chapter is None:
+            raise HTTPException(404, "Глава не принадлежит этому заданию")
+        if chapter["complete"] or chapter["accepted_at"] is not None:
+            raise HTTPException(409, "Завершённую или принятую главу нельзя изменить здесь")
+        project = get_project(job["project_id"])
+        if request.scene_id not in {scene.id for scene in project.scenes}:
+            raise HTTPException(409, "Каркас проекта изменён")
+        if (chapter["editorial_goal"] != request.expected_goal or
+                chapter["tension"] != request.expected_tension or
+                chapter["reveal_level"] != request.expected_reveal):
+            raise HTTPException(409, "Настройки главы изменились в другой вкладке; обнови состояние")
+        connection.execute(
+            "UPDATE ai_book_chapters SET editorial_goal=?,tension=?,reveal_level=?,"
+            "updated_at=? WHERE job_id=? AND scene_id=? AND complete=0 "
+            "AND accepted_at IS NULL",
+            (request.editorial_goal.strip(),request.tension,request.reveal_level,
+             utc_now(),job_id,request.scene_id)
+        )
+        if connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise HTTPException(409, "Глава была изменена до сохранения")
+        return {"status":"saved_for_next_resume","job_id":job_id,
+                "scene_id":request.scene_id,
+                "editorial_goal":request.editorial_goal.strip(),
+                "tension":request.tension,"reveal_level":request.reveal_level,
+                "generated_prose_changed":False}
+
+
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
 async def resume_full_book(job_id: str):
     with db() as connection:
