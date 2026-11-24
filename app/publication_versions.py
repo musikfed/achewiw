@@ -216,12 +216,15 @@ def create_branch(conn, project_id, name, medium="book", from_checkpoint=None):
 def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None, project_state=None):
     label = validate_label(label)
     validate_id(expected_head)
-    manifest_data=validate_manifest(manifest)
     with conn:
         conn.execute("BEGIN IMMEDIATE")
         branch=_branch(conn,project_id,branch_id)
         if branch["current_checkpoint_id"] != expected_head:
             raise EditionError(409, "Ветка изменилась в другой вкладке. Обнови историю.")
+        previous = _checkpoint(conn, project_id, expected_head)
+        # If author edits only prose, retain the prior artwork/edition manifest.
+        manifest_data = (previous["manifest_json"] if manifest is None
+                         else validate_manifest(manifest))
         count=conn.execute(
             "SELECT COUNT(*) FROM publication_checkpoints WHERE branch_id=?",
             (branch_id,)
