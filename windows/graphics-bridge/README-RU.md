@@ -1,3 +1,12 @@
+## Проверено на Acer: Windows capability probe (24.11.2026)
+
+Пользователь действительно выполнил `Probe-GraphicsEditors.ps1` в PowerShell 5.1. Зафиксированы только технические сведения, **без имени компьютера и путей пользователя**:
+
+- CorelDRAW Technical Suite 2026 **27.0.0.121**, компонент **VBA (x64)** установлен, ProgID `CorelDRAW.Application`, `CorelDRAW.Application.27`.
+- Adobe Photoshop 2026 **27.1.0.17**, ProgID `Photoshop.Application`, `Photoshop.Application.200`, `Photoshop.Application.200.1`.
+- PowerShell 5.1; read-only probe выполнился, работа COM automation ещё **не подтверждена**.
+- CorelDRAW VBA sandbox и тест PowerTRACE — **следующий этап**; Windows Graphics Agent, сетевой bridge, Photoshop UXP и возвращение в DOCX ещё **не реализованы**.
+
 # Windows Graphics Bridge — первая практическая ступень
 
 **СТАТУС:** файлы созданы в GitHub; **не испытывались на локальной Windows**. До первого отчёта Windows нельзя утверждать, что CorelDRAW/Photoshop интегрированы с сервером.
