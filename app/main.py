@@ -90,7 +90,8 @@ from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
-                             LIMIT, MAX_OUTPUT, authored_revisions, revision_detail)
+                             LIMIT, MAX_OUTPUT, authored_revisions, revision_detail,
+                             utc_now)
 
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
