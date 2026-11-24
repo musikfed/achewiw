@@ -132,6 +132,7 @@ def evaluate(proposals):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output",default="/tmp/achewiw-vision-bench-r38")
+    p.add_argument("--fixture-only",action="store_true",help="Generate fixture without contacting Studio")
     p.add_argument("--model",help="Explicit local Ollama vision model name")
     p.add_argument("--confirm-gpu",action="store_true",
                    help="I approve one synthetic image inference on the shared GPU")
@@ -147,6 +148,9 @@ def main():
         {"canvas":{"width":WIDTH,"height":HEIGHT},"objects":TRUTH},
         ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print("Fixture:",output/"synthetic-scheme.docx",flush=True)
+    if args.fixture_only:
+        print("FIXTURE PASS; no API or GPU use.")
+        return 0
     code,_=call("GET","/api/health")
     if code!=200:
         raise RuntimeError("Studio health is not HTTP 200")
