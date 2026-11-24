@@ -1083,3 +1083,38 @@ header{
 #fullBookChapters .book-generated-edit:disabled{
  opacity:.65;cursor:wait;
 }
+
+
+/* Subtle, readable book-production controls: retain the paper editorial
+   aesthetic, but distinguish primary actions from secondary actions. */
+#fullBookPanel .chapter-plan-top .actions button,
+#bookProduction .actions button:not(.primary),
+#bookSavedToolbar .actions button,
+#bookEditionStatus+button{
+  border:1px solid #bba78f;
+  background:#f8f2e9;color:#473a2e;
+  font-weight:500;line-height:1.4;
+  box-shadow:none;
+}
+#fullBookPanel .chapter-plan-top .actions button:hover,
+#bookProduction .actions button:not(.primary):hover,
+#bookSavedToolbar .actions button:hover,
+#bookEditionStatus+button:hover{
+  background:#efe2d0;border-color:#947454;color:#30261d;
+}
+#fullBookPanel .chapter-plan-top .actions button:focus-visible,
+#bookProduction .actions button:focus-visible,
+#bookSavedToolbar .actions button:focus-visible,
+#bookSavedToolbar .export-format:focus-visible{
+  outline:2px solid #916940;outline-offset:3px;
+}
+#bookSavedToolbar .export-format{
+  background:#faf7f1;border-color:#d5c3ac;color:#493b2e;
+  font-size:13px;font-weight:600;transition:background-color .12s,border-color .12s;
+}
+#bookSavedToolbar .export-format:hover{
+  background:#eee2d2;border-color:#ad8b67;
+}
+@media (prefers-reduced-motion:reduce){
+  #bookSavedToolbar .export-format{transition:none}
+}
