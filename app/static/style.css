@@ -1050,3 +1050,36 @@ header{
 .projectEntry:hover .projectRemove,.projectRemove:focus-visible{opacity:1;background:#fbe4df!important}
 .projectRemove:focus-visible{outline:2px solid #9c4538;outline-offset:2px}
 @media(hover:hover){.projectEntry:not(:hover):not(:focus-within) .projectRemove{opacity:.45}}
+
+
+/* Saved book chapter actions: keep editorial directions readable and buttons
+   below the paragraph, not inline with long wrapped text. */
+#fullBookChapters .book-generated-chapter{
+ display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;
+ padding:14px 16px;
+}
+#fullBookChapters .book-generated-chapter>p{margin:0;overflow-wrap:anywhere}
+#fullBookChapters .book-generated-guidance{
+ font-size:13px;line-height:1.65;color:#382f27;white-space:normal;
+}
+#fullBookChapters .book-generated-guidance-meta{
+ font-size:12px;line-height:1.5;color:#725b46;
+}
+#fullBookChapters .book-generated-edit{
+ display:inline-flex;align-items:center;justify-content:center;
+ align-self:flex-start;flex:0 0 auto;width:auto;max-width:100%;
+ min-height:38px;margin:3px 0 0;padding:7px 13px;
+ border:1px solid #98704d;border-radius:7px;
+ background:#f1e2d0;color:#51351d;
+ font-size:13px;font-weight:600;line-height:1.25;
+ white-space:normal;text-align:center;cursor:pointer;
+}
+#fullBookChapters .book-generated-edit:hover{
+ background:#e5cfb7;border-color:#77502d;
+}
+#fullBookChapters .book-generated-edit:focus-visible{
+ outline:3px solid #8e5f32;outline-offset:2px;
+}
+#fullBookChapters .book-generated-edit:disabled{
+ opacity:.65;cursor:wait;
+}
