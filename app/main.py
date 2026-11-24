@@ -68,6 +68,7 @@ from visual_puzzles import (initialize as init_visual_puzzles,
     list_puzzles as visual_puzzle_list, add as add_visual_puzzle,
     delete as delete_visual_puzzle)
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
+from book_chapter_intervention import (apply_paused_guidance, InterventionConflict)
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter,
@@ -2405,43 +2406,26 @@ def edit_paused_book_chapter(job_id: str, request: ChapterIntervention):
     No live job mutation: a paused/error job must be explicitly resumed
     afterward by the existing resume endpoint. Concurrency is optimistic.
     """
-    if not request.editorial_goal.strip():
-        raise HTTPException(422, "Задача главы не может быть пустой")
     with db() as connection:
         connection.execute("BEGIN IMMEDIATE")
         job = _book_record(connection, job_id)
-        if job["status"] not in ("interrupted", "error"):
-            raise HTTPException(409, "Уточнять главу можно только после остановки генерации")
-        chapter = connection.execute(
-            "SELECT scene_id,scene_index,complete,accepted_at,editorial_goal,"
-            "tension,reveal_level FROM ai_book_chapters WHERE job_id=? AND scene_id=?",
-            (job_id, request.scene_id)
-        ).fetchone()
-        if chapter is None:
-            raise HTTPException(404, "Глава не принадлежит этому заданию")
-        if chapter["complete"] or chapter["accepted_at"] is not None:
-            raise HTTPException(409, "Завершённую или принятую главу нельзя изменить здесь")
+        # The current project's outline must still own the target scene.
         project = get_project(job["project_id"])
         if request.scene_id not in {scene.id for scene in project.scenes}:
             raise HTTPException(409, "Каркас проекта изменён")
-        if (chapter["editorial_goal"] != request.expected_goal or
-                chapter["tension"] != request.expected_tension or
-                chapter["reveal_level"] != request.expected_reveal):
-            raise HTTPException(409, "Настройки главы изменились в другой вкладке; обнови состояние")
-        connection.execute(
-            "UPDATE ai_book_chapters SET editorial_goal=?,tension=?,reveal_level=?,"
-            "updated_at=? WHERE job_id=? AND scene_id=? AND complete=0 "
-            "AND accepted_at IS NULL",
-            (request.editorial_goal.strip(),request.tension,request.reveal_level,
-             utc_now(),job_id,request.scene_id)
-        )
-        if connection.execute("SELECT changes()").fetchone()[0] != 1:
-            raise HTTPException(409, "Глава была изменена до сохранения")
-        return {"status":"saved_for_next_resume","job_id":job_id,
-                "scene_id":request.scene_id,
-                "editorial_goal":request.editorial_goal.strip(),
-                "tension":request.tension,"reveal_level":request.reveal_level,
-                "generated_prose_changed":False}
+        try:
+            return apply_paused_guidance(
+                connection, job_id=job_id, scene_id=request.scene_id,
+                expected_goal=request.expected_goal,
+                expected_tension=request.expected_tension,
+                expected_reveal=request.expected_reveal,
+                goal=request.editorial_goal, tension=request.tension,
+                reveal=request.reveal_level,
+            )
+        except InterventionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
 
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
