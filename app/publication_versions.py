@@ -104,6 +104,19 @@ def initialize(conn):
     )""")
 
 
+def canonical_project(value, project_id):
+    if not isinstance(value, dict) or value.get("id") != project_id:
+        raise EditionError(422, "Проект в редакции не соответствует выбранному произведению")
+    try:
+        encoded = json.dumps(value, sort_keys=True, ensure_ascii=False,
+                             separators=(",", ":"), allow_nan=False)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise EditionError(422, "Некорректные данные рукописи") from exc
+    if len(encoded.encode("utf-8")) > MAX_SOURCE:
+        raise EditionError(413, "Слишком большой проект для контрольной точки")
+    return encoded
+
+
 def _project(conn, project_id):
     validate_id(project_id)
     row = conn.execute("SELECT data FROM projects WHERE id=?", (project_id,)).fetchone()
@@ -116,11 +129,8 @@ def _project(conn, project_id):
         value = json.loads(data)
     except ValueError as exc:
         raise EditionError(409, "Исходная структура проекта повреждена") from exc
-    if not isinstance(value, dict) or value.get("id") != project_id:
-        raise EditionError(409, "Идентификатор проекта не соответствует источнику")
     # Deterministic canonical form: source is copied; no mutation of projects.
-    return json.dumps(value, sort_keys=True, ensure_ascii=False,
-                      separators=(",", ":"), allow_nan=False)
+    return canonical_project(value,project_id)
 
 
 def _branch(conn, project_id, branch_id):
@@ -203,7 +213,7 @@ def create_branch(conn, project_id, name, medium="book", from_checkpoint=None):
             "head":point,"created_at":now}
 
 
-def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None):
+def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None, project_state=None):
     label = validate_label(label)
     validate_id(expected_head)
     manifest_data=validate_manifest(manifest)
@@ -218,7 +228,9 @@ def checkpoint(conn, project_id, branch_id, label, expected_head, manifest=None)
         ).fetchone()[0]
         if count>=MAX_POINTS:
             raise EditionError(409, "Лимит сохранённых редакций в ветке")
-        data=_project(conn,project_id)
+        _project(conn,project_id)  # Scope still belongs to an existing project.
+        data = (canonical_project(project_state,project_id)
+                if project_state is not None else _checkpoint(conn,project_id,expected_head)["project_json"])
         return _make_checkpoint(conn,project_id,branch_id,expected_head,
                                 label,data,manifest_data)
 
