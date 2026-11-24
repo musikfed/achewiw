@@ -18,13 +18,13 @@ label{display:grid;gap:5px;min-width:190px}form,.actions{display:flex;gap:10px;f
 .muted,small{color:#afbdc7}#status{white-space:pre-wrap;margin:15px 0}
 #status[data-error=true]{color:#ff9e97}
 .entry{border-top:1px solid #3a4a58;padding:12px 0}
-.entry strong{display:block}
+.entry strong{display:block}.key-change{border-left:3px solid #d76557;padding-left:11px}.snapshot-note{white-space:pre-wrap}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow-y:auto;background:#0e1822;padding:12px;border-radius:7px}
 </style>
 <script src="/static/publication.js" defer></script>
 </head>
 <body>
-<header><h1>ACHEWIW · Проект → Редакции → Издания</h1><a href="/">Вернуться в Studio</a></header>
+<header><h1>ACHEWIW · История произведения</h1><a href="/">Вернуться в Studio</a></header>
 <p class="muted">Контрольные точки не перезаписывают рукопись. Восстановление — только через просмотр или новую ветку. Публикация/экспорт и резервное копирование изображений остаются отдельными операциями.</p>
 <article>
 <h2>Произведение</h2>
@@ -33,22 +33,25 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow-y:auto
 <p id="projectInfo" class="muted"></p>
 </article>
 <article>
-<h2>Создать ветку редакции</h2>
+<h2>Альтернативная редакция</h2>
 <form id="newBranch">
 <label>Название<input id="branchName" maxlength="120" placeholder="Авторская редакция" required></label>
 <label>Тип<select id="medium"><option value="book">Книга</option><option value="comic">Комикс</option><option value="illustrated_book">Иллюстрированная книга</option><option value="other">Другое</option></select></label>
 <button type="submit">Создать ветку</button>
 </form>
-<p class="muted">Начальная точка создаётся из текущего состояния проекта.</p>
+<p class="muted">Для одного автора достаточно основной редакции. Дополнительную ветку создавай только для альтернативной версии книги, комикса или перевода.</p>
 </article>
 <article>
-<h2>Редакционная ветка</h2>
+<h2>История и контрольные снимки</h2>
 <label>Ветка<select id="branch"><option value="">Сначала выберите проект</option></select></label>
 <div class="actions">
-<label>Название контрольной точки<input id="checkpointLabel" maxlength="120" value="Редактура"></label>
-<button id="checkpoint" type="button">Снять копию текущей рукописи</button>
+<label>Название снимка<input id="checkpointLabel" maxlength="120" value="Редактура"></label>
+<label>Глава / страница<input id="checkpointPage" maxlength="100" placeholder="Глава 5 · стр. 72"></label>
+<label>Заметка об изменениях<input id="checkpointNote" maxlength="1200" placeholder="Что изменил и почему"></label>
+<label><input id="checkpointImportant" type="checkbox"> Ключевое изменение</label>
+<button id="checkpoint" type="button">Создать снимок текущего проекта</button>
 </div>
-<p class="muted">Команда читает текущую рукопись из Studio и сохраняет её как отдельную контрольную точку ветки. Пока это не отдельный текстовый редактор ветки.</p>
+<p class="muted">Сейчас сохраняется структура Project JSON. Снимки глав отдельной задачи генерации, DOCWORK и бинарных рисунков пока не входят в полный архив. Автоснимки на важных этапах запланированы, но ещё не включены.</p>
 <div id="checkpoints"></div>
 </article>
 <article>
