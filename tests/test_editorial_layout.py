@@ -63,11 +63,11 @@ class EditorialLayoutTests(unittest.TestCase):
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
         expected = {
-            "/static/style.css?v=20261105-editorial-v19",
-            "/static/monitor.js?v=20261105-editorial-v19",
-            "/static/app.js?v=20261105-editorial-v19",
-            "/static/writing_blocks.js?v=20261105-editorial-v19",
-            "/static/illustrations.js?v=20261105-editorial-v19",
+            "/static/style.css?v=20261124-editorial-v20",
+            "/static/monitor.js?v=20261124-editorial-v20",
+            "/static/app.js?v=20261124-editorial-v20",
+            "/static/writing_blocks.js?v=20261124-editorial-v20",
+            "/static/illustrations.js?v=20261124-editorial-v20",
             "/static/conveyor.js?v=20261105-conveyor-v1",
             "/static/author_dictation.js?v=20261124-v1",
         }
