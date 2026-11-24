@@ -4,6 +4,9 @@ on:
     paths:
       - "app/publication_versions.py"
       - "app/main.py"
+      - "app/static/index.html"
+      - "app/static/publication.html"
+      - "app/static/publication.js"
       - "tests/test_publication_versions.py"
       - ".github/workflows/publication-versions.yml"
   workflow_dispatch:
@@ -23,6 +26,11 @@ jobs:
       - name: Validate Python syntax
         run: |
           python -W error::SyntaxWarning -m py_compile app/publication_versions.py app/main.py tests/test_publication_versions.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check publication manager JavaScript
+        run: node --check app/static/publication.js
       - name: In-memory editorial branch and edition tests
         env:
           PYTHONPATH: app
