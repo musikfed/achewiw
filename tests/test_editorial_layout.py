@@ -62,10 +62,19 @@ class EditorialLayoutTests(unittest.TestCase):
         parser = Structure()
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
-        self.assertEqual(len(urls), 6)
-        self.assertTrue(all(("v=20261105-editorial-v19" in u or "v=20261105-conveyor-v1" in u) for u in urls))
-        self.assertTrue(all(u.startswith("/static/") for u in urls))
-        self.assertTrue(any("conveyor.js" in u for u in urls))
+        expected = {
+            "/static/style.css?v=20261105-editorial-v19",
+            "/static/monitor.js?v=20261105-editorial-v19",
+            "/static/app.js?v=20261105-editorial-v19",
+            "/static/writing_blocks.js?v=20261105-editorial-v19",
+            "/static/illustrations.js?v=20261105-editorial-v19",
+            "/static/conveyor.js?v=20261105-conveyor-v1",
+            "/static/author_dictation.js?v=20261124-v1",
+        }
+        # Guard the exact release inventory: reject duplicates, missing or
+        # unexpected scripts rather than simply raising the expected count.
+        self.assertEqual(len(urls), len(expected))
+        self.assertEqual(set(urls), expected)
 
     def test_typography_and_responsive_layout_rules(self):
         self.assertIn('grid-template-columns:var(--nav-width) minmax(0,1fr)', CSS)
