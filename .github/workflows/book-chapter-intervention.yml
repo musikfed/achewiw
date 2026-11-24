@@ -1,0 +1,30 @@
+name: ACHEWIW chapter intervention only
+on:
+  pull_request:
+    paths:
+      - "app/book_chapter_intervention.py"
+      - "app/main.py"
+      - "app/static/app.js"
+      - "tests/test_book_chapter_intervention.py"
+      - ".github/workflows/book-chapter-intervention.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paused-chapter-author-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax checks (only changed code)
+        run: |
+          python -m py_compile app/book_chapter_intervention.py app/main.py tests/test_book_chapter_intervention.py
+          node --check app/static/app.js
+      - name: Paused chapter safety regression
+        run: python -m unittest discover -s tests -p test_book_chapter_intervention.py -v
