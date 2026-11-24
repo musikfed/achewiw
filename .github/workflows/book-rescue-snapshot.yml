@@ -1,0 +1,31 @@
+name: ACHEWIW book rescue smoke
+on:
+  pull_request:
+    paths:
+      - "scripts/backup-book-job.py"
+      - "scripts/archive-book-external.py"
+      - "scripts/verify-book-rescue.py"
+      - "tests/test_book_rescue_snapshot.py"
+      - "tests/test_book_external_archive.py"
+      - "tests/test_book_rescue_verifier.py"
+      - ".github/workflows/book-rescue-snapshot.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-mutation-rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax validation
+        run: python -W error::SyntaxWarning -m py_compile scripts/backup-book-job.py scripts/archive-book-external.py scripts/verify-book-rescue.py tests/test_book_rescue_snapshot.py tests/test_book_external_archive.py tests/test_book_rescue_verifier.py
+      - name: Isolated synthetic database snapshot test
+        run: python -m unittest discover -s tests -p test_book_rescue_snapshot.py -v
+      - name: Validate external archive without rerunning other suites
+        run: python -m unittest discover -s tests -p test_book_external_archive.py -v
+      - name: A1.4 independent archive verification tests
+        run: python -m unittest discover -s tests -p test_book_rescue_verifier.py -v
