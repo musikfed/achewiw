@@ -1,4 +1,3 @@
-Attribute VB_Name = "AchewiwCorelTrace"
 Option Explicit
 
 ' ACHEWIW Graphics Bridge / experimental CorelDRAW 2026 macro.
