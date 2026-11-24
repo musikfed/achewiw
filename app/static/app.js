@@ -684,10 +684,47 @@ function renderFullBookJob(job){
  updateBookProduction(job);
  if(bookDraftMode && (changedJob||bookDraftWords!==b.generated_words))refreshBookDraft();
  $('#fullBookChapters').replaceChildren(...chapters.map(c=>{
+   const item=document.createElement('div');
+   item.className='chapter-plan-card';
    const p=document.createElement('p');
    p.textContent=(c.scene_index+1)+'. '+c.title+': '+c.word_count+' / '+c.target_words+
       ' слов · '+(c.accepted_at?'принято':c.complete?'готово':'черновик, '+c.attempts+' фрагментов');
-   return p;
+   item.append(p);
+   if(['interrupted','error'].includes(job.status)&&!c.complete&&!c.accepted_at){
+     const note=document.createElement('small');
+     note.textContent='Текущая задача главы: '+(c.editorial_goal||'не задана')+
+       ' · напряжение '+c.tension+' · раскрытие '+c.reveal_level;
+     item.append(note);
+     const edit=document.createElement('button');
+     edit.type='button';
+     edit.textContent='✎ Уточнить главу перед продолжением';
+     edit.addEventListener('click',async()=>{
+       if(bookJobId!==job.id || !project || project.id!==job.project_id)return;
+       const next=window.prompt(
+         'Задача для следующего фрагмента главы '+(c.scene_index+1)+
+         '. Уже написанные абзацы НЕ изменятся.',c.editorial_goal||'');
+       if(next===null)return;
+       if(!next.trim()||next.length>500){
+         toast('Задача главы должна содержать 1–500 символов.');return;
+       }
+       edit.disabled=true;
+       try{
+         await api('/books/jobs/'+encodeURIComponent(job.id)+'/chapters/intervention',{
+           method:'PUT',body:JSON.stringify({
+             scene_id:c.scene_id,expected_goal:c.editorial_goal||'',
+             expected_tension:c.tension,expected_reveal:c.reveal_level,
+             editorial_goal:next.trim(),tension:c.tension,
+             reveal_level:c.reveal_level
+           })
+         });
+         toast('Задача главы сохранена. Нажми «Продолжить написание».');
+         await refreshFullBook();
+       }catch(e){toast('Не удалось сохранить задачу главы: '+e.message)}
+       finally{edit.disabled=false}
+     });
+     item.append(edit);
+   }
+   return item;
  }));
 }
 async function refreshFullBook(){

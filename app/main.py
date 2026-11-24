@@ -68,6 +68,7 @@ from visual_puzzles import (initialize as init_visual_puzzles,
     list_puzzles as visual_puzzle_list, add as add_visual_puzzle,
     delete as delete_visual_puzzle)
 from manuscript_core import chapter_listing, manuscript_markdown, manuscript_epub
+from book_chapter_intervention import (apply_paused_guidance, InterventionConflict)
 from book_generation_core import (target_words as parse_book_target, distribute_words,
     chunk_size, predict_output_tokens, max_attempts, count_words as book_words, init_book_tables,
     create_book_chapters, chapters_for_job, book_summary, save_chapter,
@@ -90,7 +91,8 @@ from book_layout_core import APP_VERSION, COVER_SCENE_ID, info as edition_info
 from writing_blocks_core import fingerprint, words, editorial_lint, preflight as story_preflight, block_prompt, review_prompt
 from generation_core import (init_jobs, mark_interrupted, create_job, update_job,
                              recent_jobs, get_job, active_job, estimate_progress, save_audit_decision,
-                             LIMIT, MAX_OUTPUT, authored_revisions, revision_detail)
+                             LIMIT, MAX_OUTPUT, authored_revisions, revision_detail,
+                             utc_now)
 
 DATA_DIR = Path(os.getenv("ACHEWIW_DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "achewiw.sqlite3"
@@ -2384,6 +2386,46 @@ def download_book_draft_pdf(job_id: str):
 def book_summary_for_preview(chapters: list[dict]) -> dict:
     return {"generated_words":sum(c["word_count"] for c in chapters),
             "target_words":sum(c["target_words"] for c in chapters)}
+
+
+class ChapterIntervention(BaseModel):
+    """Scoped change for one NOT-YET-COMPLETE generated chapter."""
+    scene_id: str
+    expected_goal: str = Field(max_length=500)
+    expected_tension: int = Field(ge=0, le=5)
+    expected_reveal: Literal["none", "hint", "partial", "full", "aftermath"]
+    editorial_goal: str = Field(min_length=1, max_length=500)
+    tension: int = Field(ge=0, le=5)
+    reveal_level: Literal["none", "hint", "partial", "full", "aftermath"]
+
+
+@api.put("/books/jobs/{job_id}/chapters/intervention")
+def edit_paused_book_chapter(job_id: str, request: ChapterIntervention):
+    """Author changes NEXT directions only, never saves over existing prose.
+
+    No live job mutation: a paused/error job must be explicitly resumed
+    afterward by the existing resume endpoint. Concurrency is optimistic.
+    """
+    with db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        job = _book_record(connection, job_id)
+        # The current project's outline must still own the target scene.
+        project = get_project(job["project_id"])
+        if request.scene_id not in {scene.id for scene in project.scenes}:
+            raise HTTPException(409, "Каркас проекта изменён")
+        try:
+            return apply_paused_guidance(
+                connection, job_id=job_id, scene_id=request.scene_id,
+                expected_goal=request.expected_goal,
+                expected_tension=request.expected_tension,
+                expected_reveal=request.expected_reveal,
+                goal=request.editorial_goal, tension=request.tension,
+                reveal=request.reveal_level,
+            )
+        except InterventionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
 
 @api.post("/books/jobs/{job_id}/resume", status_code=202)
