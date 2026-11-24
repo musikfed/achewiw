@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - "scripts/backup-book-job.py"
+      - "scripts/archive-book-external.py"
       - "tests/test_book_rescue_snapshot.py"
+      - "tests/test_book_external_archive.py"
       - ".github/workflows/book-rescue-snapshot.yml"
   workflow_dispatch:
 permissions:
@@ -18,6 +20,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Syntax validation
-        run: python -W error::SyntaxWarning -m py_compile scripts/backup-book-job.py tests/test_book_rescue_snapshot.py
+        run: python -W error::SyntaxWarning -m py_compile scripts/backup-book-job.py scripts/archive-book-external.py tests/test_book_rescue_snapshot.py tests/test_book_external_archive.py
       - name: Isolated synthetic database snapshot test
         run: python -m unittest discover -s tests -p test_book_rescue_snapshot.py -v
+      - name: Validate external archive without rerunning other suites
+        run: python -m unittest discover -s tests -p test_book_external_archive.py -v
