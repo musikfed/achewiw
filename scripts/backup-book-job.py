@@ -124,8 +124,10 @@ def create_archive(source_path: Path, target: Path, job_id: str) -> dict:
         # Allowed but not recommended; won't overwrite the original.
         pass
     target_fd = None
+    created_output = False
     try:
         target_fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        created_output = True
         with tempfile.TemporaryDirectory(prefix="achewiw-rescue-") as work:
             copied = Path(work) / "achewiw-consistent.sqlite3"
             # SQLite read-only connection, including consistent live WAL backup.
@@ -188,20 +190,56 @@ def create_archive(source_path: Path, target: Path, job_id: str) -> dict:
         if target_fd is not None:
             os.close(target_fd)
         # Only delete our own newly-created INVALID output (never source).
-        if target.exists():
+        if created_output and target.exists():
             target.unlink()
         raise
+
+
+def list_book_jobs(source_path: Path) -> list[dict]:
+    """No writes and no chapter text; determine the right resume target."""
+    if not source_path.is_file():
+        raise FileNotFoundError(source_path)
+    db = sqlite3.connect(source_path.resolve().as_uri()+"?mode=ro",
+                         uri=True, timeout=10)
+    db.row_factory = sqlite3.Row
+    try:
+        if not {"ai_jobs", "ai_book_chapters"}.issubset(available(db)):
+            raise ValueError("Таблицы генератора не обнаружены")
+        return [dict(x) for x in db.execute("""
+            SELECT j.id AS job_id, j.project_id, j.status, j.stage,
+                   j.updated_at, COUNT(c.scene_id) AS chapters,
+                   COALESCE(SUM(c.word_count),0) AS words,
+                   COALESCE(SUM(c.target_words),0) AS target_words,
+                   SUM(CASE WHEN c.complete=1 THEN 1 ELSE 0 END) AS complete
+            FROM ai_jobs j
+            JOIN ai_book_chapters c ON c.job_id=j.id
+            WHERE j.mode='book'
+            GROUP BY j.id ORDER BY j.updated_at DESC LIMIT 20
+        """)]
+    finally:
+        db.close()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True,
                         help="Existing /data/achewiw.sqlite3 (read-only)")
-    parser.add_argument("--job-id", required=True,
+    parser.add_argument("--list", action="store_true",
+                        help="Read-only list of existing book jobs; creates no files")
+    parser.add_argument("--job-id",
                         help="Exact existing book ai_jobs.id")
-    parser.add_argument("--out", type=Path, required=True,
+    parser.add_argument("--out", type=Path,
                         help="NEW output ZIP. Existing output is never overwritten.")
     args = parser.parse_args()
+    if args.list:
+        try:
+            jobs = list_book_jobs(args.db)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            parser.exit(2, "Невозможно прочитать задания: " + str(error) + "\\n")
+        print(json.dumps(jobs, ensure_ascii=False, indent=2))
+        return 0
+    if not args.job_id or not args.out:
+        parser.error("Для резервной копии нужны --job-id и --out (либо --list)")
     try:
         result = create_archive(args.db, args.out, args.job_id)
     except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as error:
