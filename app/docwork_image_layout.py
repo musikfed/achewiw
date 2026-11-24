@@ -17,7 +17,7 @@ from docx.enum.shape import WD_INLINE_SHAPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
-from PIL import Image, ImageChops, ImageDraw, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageDraw, ImageOps, UnidentifiedImageError
 
 MAX_IMAGES = 100
 MAX_IMAGE_PIXELS = 16_000_000
@@ -191,7 +191,7 @@ def _check_changes(changes):
         if not isinstance(raw_index, str) or not raw_index.isdecimal():
             raise IllustrationLayoutError("Неверный номер изображения")
         if not isinstance(setting, dict) or not set(setting).issubset(
-            {"width_percent", "align", "corner_percent"}
+            {"width_percent", "align", "corner_percent", "flip_horizontal", "flip_vertical"}
         ):
             raise IllustrationLayoutError("Неверные параметры изображения")
         percent = setting.get("width_percent", 70)
@@ -199,6 +199,9 @@ def _check_changes(changes):
             raise IllustrationLayoutError("Размер рисунка должен быть 25–100% текстовой области")
         if setting.get("align", "center") not in ALIGNS:
             raise IllustrationLayoutError("Неизвестное выравнивание рисунка")
+        for flag in ("flip_horizontal", "flip_vertical"):
+            if type(setting.get(flag, False)) is not bool:
+                raise IllustrationLayoutError("Отражение должно быть true или false")
         corner = setting.get("corner_percent", 0)
         if (type(corner) not in (int, float) or not 0 <= corner <= MAX_RADIUS_PERCENT
                 or corner * 2 != int(corner * 2)):
@@ -256,10 +259,25 @@ def apply_image_layout(doc, changes: dict):
                 paragraph.paragraph_format.keep_with_next = True
 
         radius = setting.get("corner_percent", 0)
-        if radius:
-            # Register a distinct PNG and rebind only the current picture's
-            # blip. Shared image parts elsewhere remain untouched.
-            new_rid, _ = doc.part.get_or_add_image(_rounded_image(original, radius))
+        flip_h = setting.get("flip_horizontal", False)
+        flip_v = setting.get("flip_vertical", False)
+        if radius or flip_h or flip_v:
+            # Raster transformations are baked into a NEW embedded PNG, not
+            # into CSS or the source document. No other shared blip is touched.
+            raw = original
+            if flip_h or flip_v:
+                with Image.open(BytesIO(raw)) as source:
+                    source.load()
+                    bitmap = source.convert("RGBA")
+                    if flip_h:
+                        bitmap = ImageOps.mirror(bitmap)
+                    if flip_v:
+                        bitmap = ImageOps.flip(bitmap)
+                    output = BytesIO()
+                    bitmap.save(output, format="PNG")
+                    raw = output.getvalue()
+            transformed = _rounded_image(raw, radius) if radius else BytesIO(raw)
+            new_rid, _ = doc.part.get_or_add_image(transformed)
             shape._inline.xpath(".//a:blip")[0].set(qn("r:embed"), new_rid)
 
 
