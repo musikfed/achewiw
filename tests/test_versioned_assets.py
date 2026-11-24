@@ -22,7 +22,7 @@ class AssetVerifierTests(unittest.TestCase):
         for asset in sorted(module.EXPECTED):
             file_name = asset.removeprefix("/static/")
             (static / file_name).write_text("/* test */", encoding="utf-8")
-            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else "20261105-editorial-v19")
+            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else ("20261124-v1" if file_name == "author_dictation.js" else "20261105-editorial-v19"))
             src = asset + "?v=" + ver
             if file_name.endswith(".css"):
                 tags.append(f'<link rel="stylesheet" href="{src}">')
@@ -38,8 +38,9 @@ class AssetVerifierTests(unittest.TestCase):
             [sys.executable, str(SCRIPT)], cwd=ROOT, capture_output=True, text=True
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("6 CSS/JS", result.stdout)
+        self.assertIn("7 CSS/JS", result.stdout)
         self.assertIn("конвейер=", result.stdout)
+        self.assertIn("диктовка=", result.stdout)
 
     def test_different_conveyor_version_is_allowed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -47,6 +48,7 @@ class AssetVerifierTests(unittest.TestCase):
             shared, versions = module.check_assets(index, static)
             self.assertEqual(shared, "20261105-editorial-v19")
             self.assertEqual(versions["/static/conveyor.js"], "20261105-conveyor-v1")
+            self.assertEqual(versions["/static/author_dictation.js"], "20261124-v1")
 
     def test_divergent_editorial_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -61,10 +63,10 @@ class AssetVerifierTests(unittest.TestCase):
             index, static = self.make_fixture(Path(tmp))
             source = index.read_text(encoding="utf-8")
             index.write_text(source.replace('<script src="/static/conveyor.js?v=20261105-conveyor-v1"></script>', ""), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Ожидалось 6"):
+            with self.assertRaisesRegex(ValueError, "Ожидалось 7"):
                 module.check_assets(index, static)
             index.write_text(source + '<script src="/static/conveyor.js?v=extra"></script>', encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Ожидалось 6"):
+            with self.assertRaisesRegex(ValueError, "Ожидалось 7"):
                 module.check_assets(index, static)
 
 

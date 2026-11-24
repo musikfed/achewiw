@@ -1,0 +1,31 @@
+name: ACHEWIW author voice entry and book cycle
+on:
+  pull_request:
+    paths:
+      - "app/static/author_dictation.js"
+      - "app/static/index.html"
+      - "app/static/docwork.html"
+      - "app/main.py"
+      - "tests/test_book_author_cycle.py"
+      - ".github/workflows/author-voice-book-cycle.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  author-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Only new code syntax
+        run: |
+          python -m py_compile app/main.py tests/test_book_author_cycle.py
+          node --check app/static/author_dictation.js
+      - name: One pause-edit-resume author cycle on temporary SQLite
+        run: python -m unittest discover -s tests -p test_book_author_cycle.py -v
