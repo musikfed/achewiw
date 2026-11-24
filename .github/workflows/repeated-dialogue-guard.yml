@@ -1,0 +1,24 @@
+name: ACHEWIW dialogue repetition gate
+on:
+  pull_request:
+    paths:
+      - "app/prose_quality.py"
+      - "app/main.py"
+      - "tests/test_repeated_dialogue_guard.py"
+      - ".github/workflows/repeated-dialogue-guard.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  targeted-quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile changed Python
+        run: python -m py_compile app/prose_quality.py app/main.py tests/test_repeated_dialogue_guard.py
+      - name: CPU-only dialogue repetition regression
+        run: python -m unittest discover -s tests -p test_repeated_dialogue_guard.py -v

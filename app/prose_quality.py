@@ -110,6 +110,51 @@ def check_quality(text: str, *, previous_chapters: str = "") -> None:
         raise ProseDegeneration("Повтор внутри ответа ИИ: "+findings[0]["detail"])
 
 
+
+def repeated_dialogue_warning(new_text: str, *, same_chapter: str = "",
+                              earlier_chapters: str = "") -> dict | None:
+    """Reject strong VERBATIM repeated dialogue, not semantic similarities.
+
+    Only examine actual long dialogue turns (em dash/hyphen at start of line).
+    A single short catchphrase is intentionally allowed. Two independent
+    matching turns of >= 10 words across saved context, or one matching
+    long turn of >= 30 words, indicate probable model echo. In the new
+    response, one long turn repeated 3x is a self-loop.
+    """
+    def turns(text):
+        result=[]
+        for line in text.splitlines():
+            candidate=line.strip()
+            if not candidate.startswith(("— ", "– ", "- ")):
+                continue
+            words,_=_tokens(candidate[2:])
+            if len(words)>=10:
+                result.append(tuple(words))
+        return result
+
+    new=turns(new_text)
+    if not new:
+        return None
+    past=set(turns(same_chapter)) | set(turns(earlier_chapters))
+    matches={t for t in new if t in past}
+    if any(len(t)>=30 for t in matches) or len(matches)>=2:
+        return {"kind":"repeated_dialogue",
+                "detail":"Новые реплики дословно повторяют диалог сохранённых глав"}
+    counts=Counter(new)
+    if any(count>=3 for count in counts.values()):
+        return {"kind":"repeated_dialogue",
+                "detail":"Одна длинная реплика дословно повторена трижды в ответе"}
+    return None
+
+
+def check_repeated_dialogue(new_text: str, *, same_chapter: str = "",
+                            earlier_chapters: str = "") -> None:
+    warning=repeated_dialogue_warning(new_text,same_chapter=same_chapter,
+                                      earlier_chapters=earlier_chapters)
+    if warning:
+        raise ProseDegeneration("Повтор диалога: "+warning["detail"])
+
+
 def prompt_tail(text: str, max_chars: int = 2200) -> str:
     """Exclude pathological loop from the MODEL prompt, not from the database."""
     if not text:return ""
