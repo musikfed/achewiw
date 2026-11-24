@@ -31,7 +31,13 @@ class ProjectEditionTests(unittest.TestCase):
         modified["scenes"][0]["text"] = "My alternate version"
         next_point = p.checkpoint(self.conn, self.pid, main["id"], "Исправление",
                                   starting, {"pages": [{"number": 1,
-                                  "sha256": "abc"}]}, modified)
+                                  "sha256": "abc"}]}, modified,
+                                  note="Изменил вступление", important=True,
+                                  page_label="Глава 1 · страница 3")
+        annotation=p.read_checkpoint(self.conn,self.pid,next_point["id"])
+        self.assertEqual(annotation["note"],"Изменил вступление")
+        self.assertTrue(annotation["important"])
+        self.assertEqual(annotation["page_label"],"Глава 1 · страница 3")
         self.assertEqual(p.read_checkpoint(self.conn, self.pid, starting)[
                          "project"]["scenes"][0]["text"], "Original text")
         self.assertEqual(p.read_checkpoint(self.conn, self.pid, next_point["id"])[
@@ -89,6 +95,21 @@ class ProjectEditionTests(unittest.TestCase):
                          branch["head"]["id"],
                          project_state={"id":uuid.uuid4().hex})
         self.assertEqual(len(p.list_checkpoints(self.conn,self.pid,branch["id"])),1)
+
+    def test_milestone_metadata_validation_and_history(self):
+        branch=p.create_branch(self.conn,self.pid,"Авторская")
+        old=branch["head"]["id"]
+        point=p.checkpoint(self.conn,self.pid,branch["id"],"Глава 5",old,
+                           note="Решил изменить финал",important=True,
+                           page_label="Глава 5")
+        listed=p.list_checkpoints(self.conn,self.pid,branch["id"])
+        self.assertEqual(listed[0]["note"],"Решил изменить финал")
+        self.assertEqual(listed[0]["important"],1)
+        self.assertEqual(listed[0]["page_label"],"Глава 5")
+        with self.assertRaises(p.EditionError):
+            p.checkpoint(self.conn,self.pid,branch["id"],"Bad",point["id"],
+                         important=1)
+        self.assertEqual(len(p.list_checkpoints(self.conn,self.pid,branch["id"])),2)
 
     def test_checkpoint_checksum_detects_tampering(self):
         branch=p.create_branch(self.conn,self.pid,"Edit")
