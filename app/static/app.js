@@ -11,6 +11,19 @@ let activeKind='all';
 const safeGet=(storage,key)=>{try{return storage.getItem(key)}catch{return null}};
 const safeSet=(storage,key,value)=>{try{storage.setItem(key,value)}catch{}};
 const uiKey=(name,id)=>'achewiw.v8.'+name+'.'+(id||project?.id||'none');
+
+/* The paper tone is a browser preference, not manuscript or publication data.
+   White is the default; the previous warm look remains available. */
+const PAPER_PREF_KEY='achewiw.ui.paperBackground.v1';
+function setPaperBackground(choice){
+  const mode=choice==='warm'?'warm':'white';
+  document.documentElement.dataset.paper=mode;
+  const picker=$('#paperBackground');
+  if(picker)picker.value=mode;
+  safeSet(localStorage,PAPER_PREF_KEY,mode);
+}
+setPaperBackground(safeGet(localStorage,PAPER_PREF_KEY));
+
 // A full library wipe changes a server-side epoch. Invalidate ONLY this
 // application's stale drafts/tabs/projects on the next client visit.
 // Preserve ComfyUI control-job tracking (it is not part of the book library).
@@ -1542,6 +1555,7 @@ $('#bookGoEdition').onclick=()=>gotoTab('brief');
 $('#closeAI').onclick=()=>$('#aiPanel').hidden=true;
 $('#copyAI').onclick=()=>navigator.clipboard.writeText(pending?.result||$('#aiOutput').textContent).then(()=>toast('Скопировано')).catch(()=>toast('Не удалось скопировать'));
 $('#model').onchange=e=>{model=e.target.value;safeSet(localStorage,'achewiw.v8.selectedModel',model)};
+$('#paperBackground').addEventListener('change',event=>setPaperBackground(event.target.value));
 $('#unloadModel').onclick=releaseSelectedModel;
 setInterval(()=>{if(!document.hidden){refreshGeneration();refreshFullBook()}},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshGeneration();refreshFullBook()}});

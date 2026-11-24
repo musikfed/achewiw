@@ -1118,3 +1118,37 @@ header{
 @media (prefers-reduced-motion:reduce){
   #bookSavedToolbar .export-format{transition:none}
 }
+
+
+/* Studio paper preference. White is the default; the old softly tinted look
+   remains a conscious user choice. This changes SCREEN ONLY, never PDF/EPUB. */
+:root,:root[data-paper="white"]{background:#fff}
+:root[data-paper="warm"]{background:#f8f7f5}
+:root[data-paper="white"] body,
+:root[data-paper="white"] .workspace,
+:root[data-paper="white"] .workspace>main{background-color:#fff}
+:root[data-paper="warm"] body,
+:root[data-paper="warm"] .workspace,
+:root[data-paper="warm"] .workspace>main{background-color:#f8f7f5}
+:root[data-paper="white"] .book-production,
+:root[data-paper="white"] .chapter-editorial-plan,
+:root[data-paper="white"] .story-memory-panel,
+:root[data-paper="white"] .book-toolbar,
+:root[data-paper="white"] .book-reader,
+:root[data-paper="white"] .book-generated-chapter{background-color:#fff}
+:root[data-paper="white"] .book-toolbar .export-format{background:#fff}
+:root[data-paper="warm"] .book-production,
+:root[data-paper="warm"] .book-toolbar{background-color:#fffefa}
+:root[data-paper="warm"] .chapter-editorial-plan{background:#fdfbf7}
+:root[data-paper="warm"] .story-memory-panel{background:#fffdf9}
+:root[data-paper="warm"] .book-toolbar .export-format{background:#faf7f1}
+header .server{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+header .paper-choice{display:inline-flex;align-items:center;gap:6px;
+ color:#55473c;font-size:12px;letter-spacing:0}
+header .paper-choice select{width:auto;min-width:92px;min-height:32px;
+ padding:5px 26px 5px 9px;border-radius:7px;border:1px solid #cbbb9e;
+ background:#fff;color:#302923;font-size:12px}
+header .paper-choice select:focus-visible{outline:2px solid #9b764a;outline-offset:2px}
+@media(max-width:620px){header .paper-choice>span{display:none}
+ header .paper-choice select{min-width:78px}}
+@media print{:root,:root[data-paper="warm"]{background:#fff!important}}

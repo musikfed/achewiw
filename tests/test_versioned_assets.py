@@ -22,7 +22,7 @@ class AssetVerifierTests(unittest.TestCase):
         for asset in sorted(module.EXPECTED):
             file_name = asset.removeprefix("/static/")
             (static / file_name).write_text("/* test */", encoding="utf-8")
-            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else ("20261124-v1" if file_name == "author_dictation.js" else "20261124-editorial-v20"))
+            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else ("20261124-v1" if file_name == "author_dictation.js" else "20261124-editorial-v21"))
             src = asset + "?v=" + ver
             if file_name.endswith(".css"):
                 tags.append(f'<link rel="stylesheet" href="{src}">')
@@ -46,7 +46,7 @@ class AssetVerifierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             index, static = self.make_fixture(Path(tmp))
             shared, versions = module.check_assets(index, static)
-            self.assertEqual(shared, "20261124-editorial-v20")
+            self.assertEqual(shared, "20261124-editorial-v21")
             self.assertEqual(versions["/static/conveyor.js"], "20261105-conveyor-v1")
             self.assertEqual(versions["/static/author_dictation.js"], "20261124-v1")
 
