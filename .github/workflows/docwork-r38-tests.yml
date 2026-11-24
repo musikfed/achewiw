@@ -11,6 +11,7 @@ on:
       - "tests/vision-proposals.test.cjs"
       - "tests/test_docwork_vision.py"
       - "tests/test_main_editorial_task_syntax.py"
+      - "scripts/docwork-vision-benchmark.py"
       - ".github/workflows/docwork-r38-tests.yml"
   workflow_dispatch:
 
@@ -43,3 +44,10 @@ jobs:
         run: python -m unittest discover -s tests -p test_docwork_vision.py -v
       - name: Editorial task syntax regression
         run: python -m unittest discover -s tests -p test_main_editorial_task_syntax.py -v
+      - name: Check synthetic DOCX fixture generator offline
+        run: |
+          python -W error::SyntaxWarning -m py_compile scripts/docwork-vision-benchmark.py
+          python scripts/docwork-vision-benchmark.py --fixture-only --output /tmp/r38-fixture-ci
+          test -s /tmp/r38-fixture-ci/synthetic-scheme.docx
+          test -s /tmp/r38-fixture-ci/synthetic-scheme.png
+          test -s /tmp/r38-fixture-ci/ground-truth.json
