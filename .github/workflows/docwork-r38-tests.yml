@@ -47,6 +47,7 @@ jobs:
       - name: Check synthetic DOCX fixture generator offline
         run: |
           python -W error::SyntaxWarning -m py_compile scripts/docwork-vision-benchmark.py
+          python -m pip install --disable-pip-version-check pillow python-docx
           python scripts/docwork-vision-benchmark.py --fixture-only --output /tmp/r38-fixture-ci
           test -s /tmp/r38-fixture-ci/synthetic-scheme.docx
           test -s /tmp/r38-fixture-ci/synthetic-scheme.png
