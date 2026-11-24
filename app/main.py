@@ -2697,6 +2697,9 @@ async def document_workshop_vision_analyze(
                 import base64
                 result = await client.post(OLLAMA_BASE_URL + "/api/chat", json={
                     "model": body.model, "stream": False, "keep_alive": "30s",
+                    # Ollama JSON mode constrains output to a JSON object.
+                    # The result is STILL untrusted and parsed/validated below.
+                    "format": "json",
                     "options": {"temperature": 0.0, "num_predict": 1400},
                     "messages": [{"role": "user",
                                   "content": vision_prompt(actual_width, actual_height),
@@ -2711,10 +2714,23 @@ async def document_workshop_vision_analyze(
             proposals = parse_vision_reply(
                 content, width=actual_width, height=actual_height
             )
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError):
             raise HTTPException(
-                422, "Модель не вернула проверяемую структуру схемы"
+                422, "Модель вернула ответ без текстового содержимого"
             ) from None
+        except ValueError as exc:
+            # Only a bounded error category: NEVER expose the raw model output,
+            # uploaded image, token or the local model's free-form content.
+            message = str(exc)
+            if "корректный JSON" in message:
+                reason = "Модель вернула некорректный JSON"
+            elif "proposals" in message:
+                reason = "Модель не вернула массив proposals"
+            elif "пустой" in message:
+                reason = "Модель вернула пустой ответ"
+            else:
+                reason = "Модель не вернула проверяемую структуру схемы"
+            raise HTTPException(422, reason) from None
         return {
             "format": "achewiw-vision-proposal",
             "version": 1, "status": "unverified", "autoApply": False,
