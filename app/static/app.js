@@ -4,6 +4,7 @@ let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=nul
 let draftSaveTimer=null;
 let projectLoad=0, creatingProject=false;
 let bookJobId=null, bookPollBusy=false;
+const bookDraftPdfIds=['bookLivePdf','bookPartialPdf','bookPartialPdfPlan'];
 let chapterPlan=null,storyMemory=null;
 let bookDraftMode=false, bookDraftBusy=false, bookDraftWords=-1, bookDraftFetchedAt=0;
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -371,7 +372,9 @@ async function renderBook(){
   if(!project)return;
   const projectId=project.id;
   const container=$('#bookPreview');
+  const warning=$('#bookWarning');
   container.replaceChildren();
+  warning.textContent='';
   $('#bookSummary').textContent='Читаем сохранённую рукопись…';
   for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=true;
   try{
@@ -382,11 +385,13 @@ async function renderBook(){
     if(project?.id!==projectId)return;
     $('#bookSummary').textContent=data.written_scenes+' из '+data.total_scenes+
       ' частей написано · '+data.total_words+' слов';
-    const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
-    $('#bookWarning').textContent=missing.length?
-      'Ещё не написаны части: '+missing.join(' · ')+
-      '. Открой 03 · Редактор, допиши и сохрани. Экспорт включает только готовые тексты.':
-      'Все части содержат текст. Проверь последовательность и скачай книгу.';
+    if(data.total_scenes){
+      const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
+      warning.textContent=missing.length?
+        'Ещё не написаны части: '+missing.join(' · ')+
+        '. Открой 03 · Редактор, допиши и сохрани. Экспорт включает только готовые тексты.':
+        'Все части содержат текст. Проверь последовательность и скачай книгу.';
+    }
     $('#bookEditionStatus').textContent=
       'Автор: '+(project.author_name||'не указан')+' · год: '+(project.publication_year||'не указан')+
       ' · редакция: '+(project.edition_label||'не указана')+
@@ -469,7 +474,7 @@ async function renderBook(){
   }catch(e){
     if(project?.id!==projectId)return;
     $('#bookSummary').textContent='Не удалось загрузить рукопись';
-    $('#bookWarning').textContent=e.message;
+    warning.textContent=e.message;
   }
 }
 function gotoTab(name){
@@ -754,10 +759,12 @@ function renderFullBookJob(job){
  $('#bookLiveJob').textContent='Задание '+job.id.slice(0,12)+
    ' · '+job.model+' · '+(job.book?.chapters_complete||0)+'/'+(job.book?.chapters||0)+' глав';
  $('#bookLiveResume').hidden=!['error','interrupted'].includes(job.status);
- for(const id of ['bookLivePdf','bookPartialPdf','bookPartialPdfPlan']){
+ const draftPdf=written>0?'/api/books/jobs/'+encodeURIComponent(job.id)+'/draft.pdf':null;
+ for(const id of bookDraftPdfIds){
    const link=$('#'+id);
-   link.hidden=!(written>0);
-   if(written>0)link.href='/api/books/jobs/'+encodeURIComponent(job.id)+'/draft.pdf';
+   link.hidden=!draftPdf;
+   if(draftPdf)link.href=draftPdf;
+   else link.removeAttribute('href');
  }
  const changedJob=bookJobId!==job.id;
  bookJobId=job.id;
@@ -862,9 +869,13 @@ function resetBookView(){
  $('#bookDraftPreview').replaceChildren();
  $('#bookGenerationProgress').value=0;
  for(const id of ['bookLiveBar','fullBookProgress','resumeFullBook','acceptFullBook',
-                 'bookResume','bookAccept','bookPause','bookGenerate',
-                 'bookLivePdf','bookPartialPdf','bookPartialPdfPlan']){
+                 'bookResume','bookAccept','bookPause','bookGenerate']){
    $('#'+id).hidden=true;
+ }
+ for(const id of bookDraftPdfIds){
+   const link=$('#'+id);
+   link.hidden=true;
+   link.removeAttribute('href');
  }
  const generate=$('#generateFullBook');
  generate.disabled=true;

@@ -59,7 +59,7 @@ class StudioUITests(unittest.TestCase):
         self.assertLess(opening.index("resetBookView()"),opening.index("showTab("))
         self.assertLess(opening.index("resetBookView()"),opening.index("await restoreLatestBook()"))
         self.assertIn("bookJobId=null",reset)
-        for item in ("bookPause","bookAccept","bookPartialPdf"):
+        for item in ("bookPause","bookAccept","bookDraftPdfIds"):
             self.assertIn(item,reset)
         self.assertNotIn("/ai/jobs?mode=book",self.appjs)
 

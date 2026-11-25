@@ -51,6 +51,7 @@ jobs:
           node --check app/static/docwork.js
           node --check app/static/docwork_workbench.js
           node tests/test_docwork_undo.js
+          node --test tests/test_storyengine_book_view.js
           node --check app/static/illustrations.js
           node --check app/static/writing_blocks.js
           grep -Fq 'id="aiProgress"' app/static/index.html
