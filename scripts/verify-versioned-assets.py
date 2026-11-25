@@ -15,7 +15,7 @@ EDITORIAL = {
     "/static/style.css", "/static/app.js", "/static/monitor.js",
     "/static/writing_blocks.js", "/static/illustrations.js",
 }
-INDEPENDENT = {"/static/conveyor.js", "/static/author_dictation.js"}
+INDEPENDENT = {"/static/conveyor.js", "/static/author_dictation.js", "/static/chat_studio.js"}
 EXPECTED = EDITORIAL | INDEPENDENT
 
 
@@ -78,5 +78,6 @@ if __name__ == "__main__":
         "ACHEWIW clean-update: проверено "
         f"{len(versions)} CSS/JS ресурсов; "
         f"редактор={primary}; конвейер={versions['/static/conveyor.js']}; "
-        f"диктовка={versions['/static/author_dictation.js']}"
+        f"диктовка={versions['/static/author_dictation.js']}; "
+        f"чаты={versions['/static/chat_studio.js']}"
     )
