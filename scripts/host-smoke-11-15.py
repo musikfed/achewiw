@@ -51,10 +51,12 @@ def main():
         return 1
     check("step12-15 modules load",True)
     try:
-        from main import app
-        paths={getattr(route,"path","") for route in app.routes}
-        print("DEBUG registered print routes:",sorted(path for path in paths if "print" in path or "fit" in path))
-        print("DEBUG total registered routes:",len(paths))
+        from main import app,api
+        # FastAPI >=0.165 uses lazy _IncludedRouter; app.routes is NOT flat.
+        # OpenAPI is the effective public endpoint registry.
+        paths=set(app.openapi()["paths"])
+        protected={getattr(route,"path","") for route in api.routes}
+        print("PUBLIC protected print routes:",sorted(path for path in paths if "print-proof" in path))
         for key in (
             "/api/health",
             "/api/projects/{project_id}/print-proof/preflight",
@@ -62,7 +64,7 @@ def main():
             "/api/projects/{project_id}/print-proof/grounded-fit",
             "/api/projects/{project_id}/print-proof/fit-reviews",
         ):
-            check("route "+key,key in paths)
+            check("route "+key,key in paths and (key=="/api/health" or key in protected))
     except Exception as exc:
         check("real app route registry",False,type(exc).__name__+": "+str(exc))
     @dataclass
