@@ -103,12 +103,38 @@ def manuscript_docx(project, illustrations=None) -> bytes:
         if label:
             p=doc.add_paragraph(label);p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     doc.add_page_break()
-    doc.add_heading("Содержание",level=1)
-    for ch in book["chapters"]:
-        entry=doc.add_paragraph(f"{ch['index']}. {ch['title']}")
-        entry.paragraph_format.left_indent=Cm(0.5)
-    credits_entry=doc.add_paragraph("Выходные сведения")
-    credits_entry.paragraph_format.left_indent=Cm(0.5)
+    # Word field: actual page numbers cannot be inferred before layout.
+    # MS Word/compatible editor updates this dynamic TOC on open/field refresh.
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    toc_heading=doc.add_paragraph("Содержание",style="Title")
+    toc_heading.paragraph_format.keep_with_next=True
+    p=doc.add_paragraph()
+    begin=OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"),"begin")
+    instr=OxmlElement("w:instrText")
+    instr.set(qn("xml:space"),"preserve")
+    instr.text=r' TOC \o "1-2" \h \z \u '
+    sep=OxmlElement("w:fldChar")
+    sep.set(qn("w:fldCharType"),"separate")
+    placeholder=OxmlElement("w:t")
+    placeholder.text="Обновите поле «Содержание» в Word после окончательной верстки."
+    end=OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"),"end")
+    for elem in (begin,instr,sep,placeholder,end):
+        run=OxmlElement("w:r")
+        run.append(elem)
+        p._p.append(run)
+    # Never bake manual page numbers into a DOCX TOC.
+    try:
+        settings=doc.settings.element
+        update=settings.find(qn("w:updateFields"))
+        if update is None:
+            update=OxmlElement("w:updateFields")
+            settings.append(update)
+        update.set(qn("w:val"),"true")
+    except (AttributeError,TypeError):
+        raise RuntimeError("Cannot set updateFields for DOCX TOC")
     doc.add_page_break()
     def put_art(art):
         # Word: image paragraph must stay with its caption on the same page.
@@ -179,7 +205,10 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_noti
     class TocDocument(SimpleDocTemplate):
         def afterFlowable(self,flowable):
             if isinstance(flowable,Paragraph) and getattr(flowable,"_achewiw_chapter",False):
-                self.notify("TOCEntry",(0,flowable.getPlainText(),self.page))
+                chapter_key=getattr(flowable,"_achewiw_key",None)
+                if chapter_key:
+                    self.canv.bookmarkPage(chapter_key)
+                self.notify("TOCEntry",(0,flowable.getPlainText(),self.page,chapter_key))
 
     output=BytesIO()
     doc=TocDocument(output,pagesize=A5,leftMargin=19*mm,rightMargin=19*mm,
@@ -231,6 +260,7 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_noti
         if i:story.append(PageBreak())
         title_para=Paragraph(escape(ch["title"]),chapterstyle)
         title_para._achewiw_chapter=True
+        title_para._achewiw_key="chapter-"+str(i+1)
         story.append(title_para)
         arts=group_images(illustrations,ch["scene_id"])
         for art in before_images(arts):put_art(art)
@@ -242,6 +272,7 @@ def manuscript_pdf(project, *, print_proof=False, illustrations=None, draft_noti
     story.append(PageBreak())
     info_p=Paragraph("Выходные сведения",chapterstyle)
     info_p._achewiw_chapter=True
+    info_p._achewiw_key="colophon"
     story.append(info_p)
     for line in colophon(meta):story.append(Paragraph(escape(line),body))
 

@@ -487,6 +487,92 @@ setInterval(()=>{
     !projectId()||state.generation.busy||!state.generation.threadId)return;
  refreshBookJob().catch(error=>status('generation','Мониторинг: '+error.message));
 },5000);
+// Typographic preflight operates on already-rendered PDF bytes, no manuscript writes.
+const printPanel=document.querySelector('#printProofQA');
+if(printPanel){
+ const statusEl=printPanel.querySelector('[data-print-status]');
+ const reportEl=printPanel.querySelector('[data-print-report]');
+ const previewEl=printPanel.querySelector('[data-print-preview-result]');
+ const sceneEl=printPanel.querySelector('[data-print-scene]');
+ let active=false;
+ const printBusy=value=>{
+  active=value;
+  printPanel.querySelectorAll('button').forEach(button=>button.disabled=value);
+ };
+ const printStatus=message=>{statusEl.textContent=message};
+ const printApi=async(path,body)=>{
+  const response=await fetch('/api'+path,{
+    method:body?'POST':'GET',
+    headers:body?{'Content-Type':'application/json'}:{},
+    body:body?JSON.stringify(body):undefined,
+    cache:'no-store',credentials:'same-origin'});
+  if(!response.ok){
+   let message='HTTP '+response.status;
+   try{const detail=await response.json();message=String(detail.detail||message)}catch{}
+   throw Error(message);
+  }
+  return response.json();
+ };
+ const refreshScenes=()=>{
+  const p=typeof project!=='undefined'?project:null;
+  const old=sceneEl.value;
+  sceneEl.replaceChildren();
+  for(const scene of p?.scenes||[]){
+   if(!scene.text?.trim())continue;
+   const option=document.createElement('option');
+   option.value=scene.id;option.textContent=scene.title;
+   sceneEl.append(option);
+  }
+  if(Array.from(sceneEl.options).some(option=>option.value===old))sceneEl.value=old;
+ };
+ printPanel.querySelector('[data-print-check]').addEventListener('click',async()=>{
+  const pid=projectId();
+  if(!pid||active)return;
+  printBusy(true);printStatus('Создаётся и анализируется реальная PDF-проба…');
+  try{
+   const result=await printApi(prefix(pid)+'/print-proof/preflight');
+   if(projectId()!==pid)return;
+   const lines=[
+     'Страниц PDF: '+result.page_count,
+     'Проверено заголовков: '+result.headings.length,
+     'Замечаний: '+result.findings.length,
+     'Статус: '+(result.ready?'нет блокирующих ошибок':'обнаружены расхождения'),
+     '',
+     ...result.findings.slice(0,70).map(item=>
+       '['+item.severity+'] '+item.code+(item.page?' (стр. '+item.page+')':'')+
+       ' — '+item.message)
+   ];
+   reportEl.textContent=lines.join('\n');reportEl.hidden=false;
+   printStatus('Проверка завершена. Рукопись не изменена.');
+  }catch(error){printStatus('Ошибка: '+error.message)}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-print-preview]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||active)return;
+  const scene=sceneEl.value;
+  const text=printPanel.querySelector('[data-print-insert]').value.trim();
+  if(!scene||!text){printStatus('Выберите главу и введите абзац.');return;}
+  printBusy(true);printStatus('Сравниваю две реальные PDF-пробы, ничего не сохраняю…');
+  try{
+   const result=await printApi(prefix(pid)+'/print-proof/preview-fit',
+     {scene_id:scene,proposed_text:text});
+   if(projectId()!==pid)return;
+   previewEl.textContent=[
+    'До: '+result.before.pages+' страниц; после: '+result.after.pages,
+    'Разница: '+result.page_delta,
+    'Перемещённые заголовки: '+result.moved_headings.length,
+    ...result.moved_headings.map(h=>h.title+': '+h.before+' → '+h.after),
+    'Новая версия книги НЕ сохранена.',
+    'Факты НЕ проверены. Перед окончательной вставкой требуется авторская вычитка.'
+   ].join('\n');previewEl.hidden=false;
+   printStatus('Предпросмотр готов, книга не изменена.');
+  }catch(error){printStatus('Ошибка: '+error.message)}
+  finally{printBusy(false)}
+ });
+ document.addEventListener('achewiw:tab-shown',event=>{
+  if(event.detail?.name==='book')refreshScenes();
+ });
+}
 document.addEventListener('achewiw:tab-shown',event=>{
  const kind=event.detail?.name==='chat-generation'?'generation':
   event.detail?.name==='chat-editorial'?'editorial':null;

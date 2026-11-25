@@ -245,6 +245,22 @@
   <p>Экспортирует только авторский чистовик. PDF A5 — проба для чтения, не PDF/X для печатной машины. Работа RAG и графа не гарантирует художественную безошибочность.</p>
   <p><a href="https://github.com/musikfed/achewiw/blob/feature/technical-epub-first/docs/USER-GUIDE-BOOK-EDITION-RU.md" target="_blank" rel="noopener noreferrer">Подробная инструкция</a></p>
   </details>
+  <section class="chat-conveyor-panel" aria-label="Печатная приёмка страницы и оглавления" id="printProofQA">
+   <h3>Проверка верстки и страниц · шаг 12</h3>
+   <p>После экспорта PDF измеряется фактическая пагинация, сверяются номера содержания и отмечаются пустые страницы и подозрительные пробелы. Проверка не меняет книгу.</p>
+   <div class="actions"><button type="button" data-print-check>Проверить готовую PDF-пробу</button></div>
+   <p class="chat-status" data-print-status role="status">Нажмите проверку, когда главы готовы.</p>
+   <pre class="print-qa-report" data-print-report hidden></pre>
+   <details class="book-edition-fields">
+    <summary>Смысловая подгонка: пробный абзац без записи в книгу</summary>
+    <p>Сначала исправляйте разрывы и межсловные интервалы версткой. При реальной нехватке текста подготовьте осмысленный фрагмент для выбранной главы (до 180 слов). Этот шаг не проверяет фактическую достоверность.</p>
+    <label>Глава<select data-print-scene aria-label="Глава для безопасного предпросмотра"></select></label>
+    <label>Предлагаемый дополнительный абзац<textarea data-print-insert rows="4" maxlength="1500" placeholder="Проверенное дополнительное объяснение или практический пример"></textarea></label>
+    <div class="actions"><button type="button" data-print-preview>Сравнить PDF до/после, не сохраняя</button></div>
+    <pre class="print-qa-report" data-print-preview-result hidden></pre>
+   </details>
+   <small>Нумерация DOCX формируется автоматически через поле содержания Word; после изменения текста откройте документ и обновите поля перед публикацией. Итоговый PDF требует повторной проверки. Печатная проба не заменяет PDF/X.</small>
+  </section>
   <div class="book-production" id="bookProduction">
     <h3>Полноценная книга по каркасу</h3>
     <strong id="bookGenerationStatus" role="status" aria-live="polite">Проверяем генерацию и целевой объём…</strong>
