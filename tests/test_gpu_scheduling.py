@@ -277,7 +277,18 @@ def test_browser_persistence_and_cache_scoping_markers():
                     "release_comfy_vram:el('illustrationReleaseComfy').checked"):
         assert marker in illustrations,marker
     assert "illustrationEnginePrepare" in illustrations and "illustrationEnginePrepare" in html
-    assert "20261105-editorial-v19" in html
+    # Verify a consistent live cache-busting generation, not a dated legacy marker.
+    import re
+    assets=("monitor.js","app.js","writing_blocks.js","illustrations.js")
+    versions=[]
+    for asset_name in assets:
+        matches=re.findall(
+            r'<script\\s+src="/static/'+re.escape(asset_name)+r'\\?v=([^"]+)"',
+            html)
+        assert len(matches)==1,(asset_name,matches)
+        versions.append(matches[0])
+    assert len(set(versions))==1,versions
+    assert re.fullmatch(r"[0-9]{8}-editorial-v[0-9]+",versions[0])
     assert "rebuild-fresh" in control
     assert "compose build --no-cache studio" in control
     assert "comfyui-control-agent.sh reload" in updater
