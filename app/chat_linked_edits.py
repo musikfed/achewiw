@@ -180,7 +180,7 @@ def pending_candidate(root: Path, *, project_id: str, thread_id: str,
             raise LinkedEditConflict("No saved editorial candidate")
         _,payload=editions._version(db,project_id,edit["base_version_id"])
         original=editions._scene(payload,edit["scene_id"])["text"]
-        diff="\\n".join(unified_diff(original.splitlines(),edit["candidate_text"].splitlines(),
+        diff="\n".join(unified_diff(original.splitlines(),edit["candidate_text"].splitlines(),
                    fromfile="before",tofile="proposed",lineterm=""))
         return {"chat_proposal_id":chat_proposal_id,"scene_id":edit["scene_id"],
                 "base_version_id":edit["base_version_id"],
