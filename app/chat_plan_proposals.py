@@ -85,12 +85,12 @@ def _validate_candidate(project, current_plan, candidate):
     for field,value in brief.items():
         setattr(clone,field,value)
     rows=[]
-    for index,(item,scene) in enumerate(zip(given,clone.scenes)):
+    for item,scene in zip(given,clone.scenes):
         fields={"scene_id",*SCENE_FIELDS,*PLAN_FIELDS}
         if not isinstance(item,dict) or set(item)!=fields or item["scene_id"]!=scene.id:
             raise ValueError("Chapter identifiers/order or field set changed")
         for key,max_length in [("title",200),("anchor",2000),("hook",2000)]:
-            if not isinstance(item[key],str) or not item[key].strip() and key=="title" or len(item[key])>max_length:
+            if (not isinstance(item[key],str) or (key=="title" and not item[key].strip())\n                or len(item[key])>max_length):
                 raise ValueError("Invalid chapter "+key)
             setattr(scene,key,item[key])
         rows.append({k:item[k] for k in ("scene_id",*PLAN_FIELDS)})
@@ -113,11 +113,13 @@ def snapshot(db,project_id,project_type):
             "existing_scene_ids":[s.id for s in project.scenes]}
 
 
-def create(db,*,project_id,thread_id,chat_proposal_id,candidate,project_type):
+def create(db,*,project_id,thread_id,chat_proposal_id,candidate,expected_digest,project_type):
     initialize(db)
     if not isinstance(chat_proposal_id,str) or len(chat_proposal_id)!=32:
         raise ValueError("Missing saved chat proposal")
     baseline=snapshot(db,project_id,project_type)
+    if baseline["base_digest"]!=expected_digest:
+        raise PlanConflict("Project changed while assistant prepared the plan")
     original_project,_=_load(db,project_id,project_type)
     _,validated=_validate_candidate(original_project,None,candidate)
     if candidate==baseline["candidate"]:
