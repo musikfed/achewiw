@@ -22,7 +22,7 @@ class AssetVerifierTests(unittest.TestCase):
         for asset in sorted(module.EXPECTED):
             file_name = asset.removeprefix("/static/")
             (static / file_name).write_text("/* test */", encoding="utf-8")
-            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else ("20261124-v1" if file_name == "author_dictation.js" else "20261124-editorial-v21"))
+            ver = overrides.get(asset, "20261105-conveyor-v1" if file_name == "conveyor.js" else ("20261124-v1" if file_name == "author_dictation.js" else ("20261125-chat-v1" if file_name == "chat_studio.js" else "20261124-editorial-v21")))
             src = asset + "?v=" + ver
             if file_name.endswith(".css"):
                 tags.append(f'<link rel="stylesheet" href="{src}">')
@@ -38,9 +38,10 @@ class AssetVerifierTests(unittest.TestCase):
             [sys.executable, str(SCRIPT)], cwd=ROOT, capture_output=True, text=True
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("7 CSS/JS", result.stdout)
+        self.assertIn("8 CSS/JS", result.stdout)
         self.assertIn("конвейер=", result.stdout)
         self.assertIn("диктовка=", result.stdout)
+        self.assertIn("чаты=", result.stdout)
 
     def test_different_conveyor_version_is_allowed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -63,10 +64,10 @@ class AssetVerifierTests(unittest.TestCase):
             index, static = self.make_fixture(Path(tmp))
             source = index.read_text(encoding="utf-8")
             index.write_text(source.replace('<script src="/static/conveyor.js?v=20261105-conveyor-v1"></script>', ""), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Ожидалось 7"):
+            with self.assertRaisesRegex(ValueError, "Ожидалось 8"):
                 module.check_assets(index, static)
             index.write_text(source + '<script src="/static/conveyor.js?v=extra"></script>', encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Ожидалось 7"):
+            with self.assertRaisesRegex(ValueError, "Ожидалось 8"):
                 module.check_assets(index, static)
 
 
