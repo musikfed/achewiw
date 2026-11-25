@@ -1,0 +1,31 @@
+name: ACHEWIW chat canonical book conveyor
+on:
+  pull_request:
+    paths:
+      - 'app/chat_api.py'
+      - 'app/chat_book_control.py'
+      - 'app/static/index.html'
+      - 'app/static/chat_studio.js'
+      - 'tests/test_chat_book_conveyor.py'
+      - '.github/workflows/chat-book-conveyor.yml'
+  workflow_dispatch:
+jobs:
+  canonical-chat-book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+      - name: Check script and asset integrity
+        run: |
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Test canonical job routing and author decisions
+        run: python -m unittest discover -s tests -p 'test_chat_book_conveyor.py' -v
+      - name: Regression check previous chat API and UI
+        run: |
+          python -m unittest discover -s tests -p 'test_chat_studio_ui.py' -v
+          python -m unittest discover -s tests -p 'test_chat_editorial_api.py' -v
