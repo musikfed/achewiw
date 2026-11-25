@@ -45,6 +45,8 @@ const reset=kind=>{
    $(panel,'[data-chat-version]').replaceChildren();
    $(panel,'[data-chat-scene]').replaceChildren();}
  $(panel,'[data-chat-log]').replaceChildren();
+ if(kind==='generation'){$(panel,'[data-chat-book-status]').textContent='Книга не выбрана.';
+  $(panel,'[data-chat-book-progress]').value=0;}
  $(panel,'[data-chat-message]').value='';
  status(kind,'Выберите работу в библиотеке и начните диалог.');
 };
@@ -156,12 +158,59 @@ async function recoverPreview(){
   $(ui('editorial'),'[data-chat-preview]').hidden=false;
  }catch{/* No candidate yet; instruction may still be awaiting model. */}
 }
+async function refreshBookJob(){
+ const pid=projectId(),st=state.generation,panel=ui('generation');
+ if(!pid||!st.threadId||st.projectId!==pid)return;
+ const data=await req(prefix(pid)+'/chats/'+st.threadId+'/book-job');
+ if(projectId()!==pid)return;
+ const job=data.job;
+ const label=$(panel,'[data-chat-book-status]');
+ const prog=$(panel,'[data-chat-book-progress]');
+ const start=$(panel,'[data-chat-book-start]');
+ const pause=$(panel,'[data-chat-book-pause]');
+ const resume=$(panel,'[data-chat-book-resume]');
+ const open=$(panel,'[data-chat-book-open]');
+ if(!job){
+  label.textContent='Активной или незавершённой книги нет. Запуск использует сохранённый план из этапа 02.';
+  prog.value=0;
+  start.hidden=false;pause.hidden=true;resume.hidden=true;open.disabled=true;
+ }else{
+  const book=job.book||{};
+  label.textContent=(job.stage||job.status)+' · '+(book.generated_words||0)+
+   ' / '+(book.target_words||0)+' слов · глав '+(book.chapters_complete||0)+
+   '/'+(book.chapters||0)+' · job '+job.id.slice(0,12);
+  prog.value=Math.max(0,Math.min(100,Number(book.percent_words)||0));
+  start.hidden=true;
+  pause.hidden=!['queued','running'].includes(job.status)||Boolean(job.pause_requested);
+  resume.hidden=!['interrupted','error'].includes(job.status);
+  open.disabled=false;
+ }
+ return data;
+}
+async function controlBook(action,pid){
+ const st=state.generation,model=document.querySelector('#model')?.value;
+ if(action==='start'&&!model)throw Error('Выберите установленную модель в панели мастерской.');
+ const labels={start:'Запустить написание книги по сохранённому каркасу?',
+   pause:'Запросить безопасную паузу после текущего фрагмента?',
+   resume:'Продолжить сохранённую книгу без удаления уже написанного?'};
+ if(!window.confirm(labels[action]+' Действие использует существующую очередь ACHEWIW.'))return;
+ status('generation','Выполняется действие над сохранённым заданием: '+action);
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/book-control',{
+   action,confirm:true,...(action==='start'?{model}:{})
+ });
+ if(projectId()!==pid)return;
+ await refreshBookJob();
+ status('generation',action==='pause'?'Пауза запрошена. Текущий фрагмент будет сохранён.':
+   'Действие выполнено. Книга остаётся в общей очереди ACHEWIW, job '+result.job.id.slice(0,12));
+}
 async function open(kind){
  if(!projectId())return;
  try{
   await thread(kind);
   if(kind==='editorial'){
    await versions();await head();await recoverPreview();
+  }else{
+   await refreshBookJob();
   }
   status(kind,'Диалог сохранён в SQLite. Изменения текста требуют отдельного принятия.');
  }catch(err){status(kind,'Ошибка загрузки: '+err.message)}
@@ -193,7 +242,7 @@ async function send(kind,pid,panel,st){
  }
  const history=await req(prefix(pid)+'/chats/'+st.threadId);
  renderConversation(kind,history);
- status(kind,kind==='generation'?'Поручение сохранено. План этапов показан в истории; генерация книги здесь пока не запускается.':
+ status(kind,kind==='generation'?'Поручение сохранено. План распределён по этапам 01–06. Для запуска используй отдельную кнопку после утверждения каркаса.':
   'Поручение сохранено. Можете запросить предложение Ollama.');
 }
 async function generate(pid,panel,st){
@@ -242,6 +291,16 @@ document.querySelectorAll('[data-chat-workspace]').forEach(panel=>{
   await open(kind);
  }));
  $(panel,'[data-chat-send]').addEventListener('click',()=>action(kind,(pid,p,st)=>send(kind,pid,p,st)));
+ if(kind==='generation'){
+  for(const control of ['start','pause','resume']){
+   $(panel,'[data-chat-book-'+control+']').addEventListener('click',()=>action(kind,
+    (pid)=>controlBook(control,pid)));
+  }
+  $(panel,'[data-chat-book-open]').addEventListener('click',()=>{
+   const b=document.querySelector('[data-tab="book"]');
+   if(b)b.click(); // Existing editor saves fields and opens canonical book pane.
+  });
+ }
  if(kind==='editorial'){
   $(panel,'[data-chat-load-versions]').addEventListener('click',()=>action(kind,versions));
   $(panel,'[data-chat-create-version]').addEventListener('click',()=>action(kind,async pid=>{
@@ -269,6 +328,12 @@ document.querySelectorAll('[data-chat-workspace]').forEach(panel=>{
   });
  }
 });
+// Display the same persistent job progress as 06; no second job worker.
+setInterval(()=>{
+ if(document.hidden||document.querySelector('#chat-generation')?.hidden||
+    !projectId()||state.generation.busy||!state.generation.threadId)return;
+ refreshBookJob().catch(error=>status('generation','Мониторинг: '+error.message));
+},5000);
 document.addEventListener('achewiw:tab-shown',event=>{
  const kind=event.detail?.name==='chat-generation'?'generation':
   event.detail?.name==='chat-editorial'?'editorial':null;
