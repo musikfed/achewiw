@@ -22,6 +22,8 @@ jobs:
           sudo apt-get install -y fonts-dejavu-core
           python -m pip install -r app/requirements.txt
       - name: Full synthetic book, real ReportLab and PyMuPDF, mocked Ollama
+        env:
+          ACHEWIW_E2E_ARTIFACT_DIR: e2e-output
         run: python -m unittest discover -s tests -p 'test_book_print_full_e2e.py' -v
       - name: Previous 11–14 core regression
         run: |
@@ -29,3 +31,11 @@ jobs:
           python -m unittest discover -s tests -p 'test_print_proof_step12.py' -v
           python -m unittest discover -s tests -p 'test_semantic_page_fit_step13.py' -v
           python -m unittest discover -s tests -p 'test_page_fit_acceptance_step14.py' -v
+      - name: Preserve synthetic PDF before/after/undo and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: achewiw-synthetic-e2e-book
+          path: e2e-output/
+          if-no-files-found: warn
+          retention-days: 7
