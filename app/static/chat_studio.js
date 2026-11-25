@@ -5,7 +5,7 @@
 'use strict';
 const workspaces=['generation','editorial'];
 const state={
- generation:{projectId:null,threadId:null,busy:false},
+ generation:{projectId:null,threadId:null,busy:false,lastProposal:null,outline:null},
  editorial:{projectId:null,threadId:null,busy:false,head:null,lastProposal:null,pending:null}
 };
 const $=(root,selector)=>root.querySelector(selector);
@@ -45,7 +45,10 @@ const reset=kind=>{
    $(panel,'[data-chat-version]').replaceChildren();
    $(panel,'[data-chat-scene]').replaceChildren();}
  $(panel,'[data-chat-log]').replaceChildren();
- if(kind==='generation'){$(panel,'[data-chat-book-status]').textContent='Книга не выбрана.';
+ if(kind==='generation'){st.lastProposal=null;st.outline=null;
+  $(panel,'[data-chat-outline-preview]').hidden=true;
+  $(panel,'[data-chat-outline-status]').textContent='Пока нет предложенного каркаса.';
+  $(panel,'[data-chat-book-status]').textContent='Книга не выбрана.';
   $(panel,'[data-chat-book-progress]').value=0;}
  $(panel,'[data-chat-message]').value='';
  status(kind,'Выберите работу в библиотеке и начните диалог.');
@@ -79,6 +82,9 @@ const renderConversation=(kind,data)=>{
   }
  }
  log.scrollTop=log.scrollHeight;
+ if(kind==='generation'){
+  state.generation.lastProposal=(data.proposals||[]).filter(p=>p.status==='proposed').at(-1)?.id||null;
+ }
  if(kind==='editorial'){
   const p=(data.proposals||[]).filter(p=>p.scope==='chapter'&&p.status==='proposed').at(-1);
   state.editorial.lastProposal=p?.id||null;
@@ -158,6 +164,77 @@ async function recoverPreview(){
   $(ui('editorial'),'[data-chat-preview]').hidden=false;
  }catch{/* No candidate yet; instruction may still be awaiting model. */}
 }
+const outlineChanges=(before,after)=>{
+ const rows=[];
+ for(const [label,base,next] of [
+  ['Замысел',before?.brief||{},after?.brief||{}]
+ ]){
+  for(const key of Object.keys(next)){
+   if(next[key]!==base[key])rows.push(label+' · '+key+'\n  было: '+(base[key]||'—')+'\n  станет: '+(next[key]||'—'));
+  }
+ }
+ (after?.chapters||[]).forEach((chapter,i)=>{
+  const current=before?.chapters?.[i]||{};
+  for(const key of ['title','anchor','hook','tension','reveal_level','editorial_goal']){
+   if(chapter[key]!==current[key]){
+    rows.push('Глава '+(i+1)+' · '+key+'\n  было: '+(current[key]??'—')+
+      '\n  станет: '+(chapter[key]??'—'));
+   }
+  }
+ });
+ return rows.length?rows.join('\n\n'):'Изменений нет';
+};
+async function refreshOutline(){
+ const pid=projectId(),st=state.generation,panel=ui('generation');
+ if(!pid||!st.threadId)return;
+ const data=await req(prefix(pid)+'/chats/'+st.threadId+'/outline');
+ if(projectId()!==pid)return;
+ st.outline=data.latest?.status==='proposed'?data.latest.id:null;
+ $(panel,'[data-chat-outline-preview]').hidden=!st.outline;
+ if(st.outline){
+  $(panel,'[data-chat-outline-diff]').textContent=outlineChanges(
+    data.latest.current,data.latest.after);
+  $(panel,'[data-chat-outline-status]').textContent=
+   data.latest.source_unchanged?'Изменения ожидают вашего решения.':
+   'Каркас изменился после предложения. Принятие заблокировано.';
+ }else $(panel,'[data-chat-outline-status]').textContent=data.latest?
+  'Последнее предложение: '+data.latest.status+'.':'Нет предложений. Сначала сохраните поручение.';
+ return data;
+}
+async function proposeOutline(pid){
+ const st=state.generation,panel=ui('generation');
+ if(!st.lastProposal)throw Error('Сначала отправьте новое поручение в чате генерации.');
+ const model=document.querySelector('#model')?.value;
+ if(!model)throw Error('Не выбрана модель Ollama.');
+ status('generation','Ollama готовит изменения каркаса. Никаких записей в книгу ещё нет.');
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/outline',{
+   chat_proposal_id:st.lastProposal,model});
+ if(projectId()!==pid)return;
+ st.outline=result.id;
+ $(panel,'[data-chat-outline-diff]').textContent=outlineChanges(result.before,result.after);
+ $(panel,'[data-chat-outline-preview]').hidden=false;
+ $(panel,'[data-chat-outline-status]').textContent='Предложение готово. Проверьте перед принятием.';
+}
+async function decideOutline(pid,approve){
+ const st=state.generation,panel=ui('generation');
+ if(!st.outline)throw Error('Нет предложенного каркаса.');
+ if(approve&&!window.confirm(
+  'Сохранить предложенные изменения в задании и плане? Несохранённые поля браузера нужно будет обновить из сервера. Текст глав не заменяется.'))return;
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/outline/'+st.outline+'/decision',
+  {approve});
+ if(projectId()!==pid)return;
+ st.outline=null;
+ $(panel,'[data-chat-outline-preview]').hidden=true;
+ $(panel,'[data-chat-outline-status]').textContent=approve?
+  'План сохранён. Перезагрузите рабочие поля для просмотра во вкладках 01–02.':
+  'Предложение отклонено, исходное задание не менялось.';
+ if(approve){
+  // Reload canonical data in the already-open editor, including chapter plan.
+  document.dispatchEvent(new CustomEvent('achewiw:chat-outline-approved',
+    {detail:{projectId:pid}}));
+ }
+ await refreshOutline();
+}
 async function refreshBookJob(){
  const pid=projectId(),st=state.generation,panel=ui('generation');
  if(!pid||!st.threadId||st.projectId!==pid)return;
@@ -210,7 +287,7 @@ async function open(kind){
   if(kind==='editorial'){
    await versions();await head();await recoverPreview();
   }else{
-   await refreshBookJob();
+   await refreshBookJob();await refreshOutline();
   }
   status(kind,'Диалог сохранён в SQLite. Изменения текста требуют отдельного принятия.');
  }catch(err){status(kind,'Ошибка загрузки: '+err.message)}
@@ -292,6 +369,14 @@ document.querySelectorAll('[data-chat-workspace]').forEach(panel=>{
  }));
  $(panel,'[data-chat-send]').addEventListener('click',()=>action(kind,(pid,p,st)=>send(kind,pid,p,st)));
  if(kind==='generation'){
+  $(panel,'[data-chat-outline-propose]').addEventListener('click',
+   ()=>action(kind,(pid)=>proposeOutline(pid)));
+  $(panel,'[data-chat-outline-refresh]').addEventListener('click',
+   ()=>action(kind,refreshOutline));
+  $(panel,'[data-chat-outline-approve]').addEventListener('click',
+   ()=>action(kind,(pid)=>decideOutline(pid,true)));
+  $(panel,'[data-chat-outline-reject]').addEventListener('click',
+   ()=>action(kind,(pid)=>decideOutline(pid,false)));
   for(const control of ['start','pause','resume']){
    $(panel,'[data-chat-book-'+control+']').addEventListener('click',()=>action(kind,
     (pid)=>controlBook(control,pid)));

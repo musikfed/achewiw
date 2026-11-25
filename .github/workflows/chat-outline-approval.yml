@@ -1,0 +1,35 @@
+name: ACHEWIW chat outline approval
+on:
+  pull_request:
+    paths:
+      - 'app/chat_api.py'
+      - 'app/chat_plan_proposals.py'
+      - 'app/chat_plan_ollama.py'
+      - 'app/static/chat_studio.js'
+      - 'app/static/index.html'
+      - 'app/static/app.js'
+      - 'tests/test_chat_plan_approval.py'
+      - '.github/workflows/chat-outline-approval.yml'
+  workflow_dispatch:
+jobs:
+  chat-outline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+      - name: Check Python JavaScript and asset integrity
+        run: |
+          python -m py_compile app/chat_plan_proposals.py app/chat_plan_ollama.py app/chat_api.py
+          node --check app/static/app.js
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Test canonical plan changes, stale conflicts and no prose loss
+        run: python -m unittest discover -s tests -p 'test_chat_plan_approval.py' -v
+      - name: Existing chat pipeline regression
+        run: |
+          python -m unittest discover -s tests -p 'test_chat_book_conveyor.py' -v
+          python -m unittest discover -s tests -p 'test_chat_studio_ui.py' -v
