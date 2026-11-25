@@ -5,7 +5,7 @@ import httpx
 from chat_outline_builder import OutlineConflict, BATCH_SIZE
 
 async def generate_batch(*,base_url,model,instruction,previous,offset,count,
-                         total_words,work_type="fiction"):
+                         total_words,total_chapters,work_type="fiction"):
     if not isinstance(model,str) or not model or len(model)>200 or any(x in model for x in "\r\n\x00"):
         raise ValueError("Invalid Ollama model")
     if not 1<=count<=BATCH_SIZE or len(previous)!=offset:
@@ -20,7 +20,7 @@ async def generate_batch(*,base_url,model,instruction,previous,offset,count,
         "{\"chapters\":[{\"title\":\"...\",\"anchor\":\"...\","
         "\"hook\":\"...\",\"editorial_goal\":\"...\"}]}."
         " Создай ровно "+str(count)+" ПОСЛЕДОВАТЕЛЬНЫХ глав, номера "+
-        str(offset+1)+"–"+str(offset+count)+". Всего глав: "+str(total_words)+
+        str(offset+1)+"–"+str(offset+count)+". Всего глав: "+str(total_chapters)+\n        ". Общий объём книги: "+str(total_words)+
         " слов на всю книгу; не пиши главу целиком, только каркас."
         " Каждая глава должна добавлять новую причинно-логическую информацию; "
         "никаких повторов, воды, ложных цитат и выдуманных источников. "
