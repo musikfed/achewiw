@@ -1452,7 +1452,7 @@ def print_proof_preview_fit(project_id: str,request: PrintFitPreviewRequest):
         raise HTTPException(409,"Предложенный текст уже содержится в главе")
     review=deepcopy(original)
     target=next(s for s in review.scenes if s.id==scene.id)
-    target.text=scene.text.rstrip()+"\\n\\n"+snippet
+    target.text=scene.text.rstrip()+"\n\n"+snippet
     # No writes to SQLite and no modification to author originals.
     try:
         artwork=illustrations_for_book(project_id)
