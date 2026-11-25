@@ -111,7 +111,7 @@ SWITCHED=1
 git switch --detach "$TARGET"
 python3 scripts/verify-versioned-assets.py
 bash -n scripts/achewiw-control.sh
-# Changes only owner-verified Studio; no docker prune, no other services.
+# Changes only owner-verified Studio; does not manage other projects.
 bash scripts/achewiw-control.sh rebuild
 ID="$(docker ps --no-trunc --filter label=com.docker.compose.project=achewiw --filter label=com.docker.compose.service=studio --format '{{.ID}}')"
 [[ "$(printf '%s\n' "$ID" | grep -c . || true)" -eq 1 ]] || die "Studio did not restart as a unique container"
