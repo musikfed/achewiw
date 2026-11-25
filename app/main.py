@@ -3138,5 +3138,7 @@ from chat_api import install as install_chat_api
 install_chat_api(api, globals())
 from semantic_page_fit_api import install as install_semantic_page_fit
 install_semantic_page_fit(api, globals())
+from page_fit_editorial_api import install as install_page_fit_review
+install_page_fit_review(api, globals())
 install_production_conveyor(api, globals())
 app.include_router(api)
