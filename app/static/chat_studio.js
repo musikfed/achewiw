@@ -569,6 +569,69 @@ if(printPanel){
   }catch(error){printStatus('Ошибка: '+error.message)}
   finally{printBusy(false)}
  });
+ const fitResult=printPanel.querySelector('[data-fit-result]');
+ const fitText=printPanel.querySelector('[data-fit-text]');
+ const fitStatus=printPanel.querySelector('[data-fit-status]');
+ let fitSuggestion=null;
+ const fitKey=pid=>'achewiw.page-fit.proposal.v1.'+pid;
+ const showFit=(data)=>{
+  fitSuggestion=data.status==='proposed'&&!data.stale?data.id:null;
+  fitResult.hidden=!fitSuggestion;
+  const evidence=(data.evidence||[]).map(e=>e.id+' · '+e.kind+
+    '\n'+e.excerpt).join('\n\n');
+  fitText.textContent='Предлагаемый абзац:\n'+data.paragraph+
+    '\n\nОпора на авторские материалы (НЕ независимая проверка фактов):\n'+evidence;
+  fitStatus.textContent=data.stale?
+    'Исходная книга изменилась. Нельзя использовать устаревший текст.':
+    'Предложение сохранено отдельно. Проверьте факты и сравните пагинацию.';
+ };
+ printPanel.querySelector('[data-fit-propose]').addEventListener('click',async()=>{
+  const pid=projectId();
+  if(!pid||active)return;
+  const scene=sceneEl.value;
+  const model=document.querySelector('#model')?.value;
+  const page_number=Number(printPanel.querySelector('[data-fit-page]').value);
+  if(!scene||!model||!Number.isInteger(page_number)){fitStatus.textContent='Выберите главу, модель и страницу PDF.';return}
+  printBusy(true);fitStatus.textContent='Получаем авторский контекст и готовим предложение…';
+  try{
+   const item=await printApi(prefix(pid)+'/print-proof/grounded-fit',{
+     scene_id:scene,model,page_number,
+     instruction:printPanel.querySelector('[data-fit-instruction]').value.trim()});
+   if(projectId()!==pid)return;
+   storageSet(fitKey(pid),item.id);
+   showFit(item);
+  }catch(error){fitStatus.textContent='Предложение отклонено: '+error.message}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-fit-reload]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||active)return;
+  const ident=storageGet(fitKey(pid));
+  if(!ident){fitStatus.textContent='Нет ранее сохранённого предложения.';return}
+  printBusy(true);
+  try{
+   const item=await printApi(prefix(pid)+'/print-proof/grounded-fit/'+ident);
+   if(projectId()!==pid)return;
+   showFit(item);
+  }catch(error){fitStatus.textContent=error.message}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-fit-reject]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||!fitSuggestion||active)return;
+  printBusy(true);
+  try{
+   await printApi(prefix(pid)+'/print-proof/grounded-fit/'+fitSuggestion+'/reject',{reject:true});
+   fitSuggestion=null;fitResult.hidden=true;
+   fitStatus.textContent='Предложение отклонено. Книга не изменена.';
+  }catch(error){fitStatus.textContent=error.message}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-fit-use]').addEventListener('click',()=>{
+  if(!fitSuggestion)return;
+  const paragraph=fitText.textContent.split('\n\nОпора на авторские материалы')[0]
+    .replace(/^Предлагаемый абзац:\n/,'');
+  printPanel.querySelector('[data-print-insert]').value=paragraph;
+  printPanel.querySelector('[data-print-preview]').click();
+ });
  document.addEventListener('achewiw:tab-shown',event=>{
   if(event.detail?.name==='book')refreshScenes();
  });
