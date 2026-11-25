@@ -81,7 +81,7 @@ class StudioUITests(unittest.TestCase):
             self.assertEqual(restored["status"],"proposed")
             self.assertIn("+Головка",restored["diff"])
             self.assertEqual(versions.current(root,project_id=project.id)["chapters"][0]["text"],first)
-            with self.assertRaises(linked.LinkedEditConflict):
+            with self.assertRaises(ValueError):
                 linked.pending_candidate(root,project_id="another",thread_id=thread["id"],
                                          chat_proposal_id=cmd["proposal_id"])
 
