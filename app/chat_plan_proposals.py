@@ -93,6 +93,8 @@ def _validate_candidate(project, current_plan, candidate):
             if (not isinstance(item[key],str) or (key=="title" and not item[key].strip())\n                or len(item[key])>max_length):
                 raise ValueError("Invalid chapter "+key)
             setattr(scene,key,item[key])
+        if item["target_words"]!=current_plan["chapters"][len(rows)]["target_words"]:
+            raise ValueError("Chapter word allocations cannot be silently changed by AI")
         rows.append({k:item[k] for k in ("scene_id",*PLAN_FIELDS)})
     clean=validate_plan(clone,rows)
     return clone,clean
@@ -121,7 +123,8 @@ def create(db,*,project_id,thread_id,chat_proposal_id,candidate,expected_digest,
     if baseline["base_digest"]!=expected_digest:
         raise PlanConflict("Project changed while assistant prepared the plan")
     original_project,_=_load(db,project_id,project_type)
-    _,validated=_validate_candidate(original_project,None,candidate)
+    current_plan=get_plan(db,original_project)
+    _,validated=_validate_candidate(original_project,current_plan,candidate)
     if candidate==baseline["candidate"]:
         raise ValueError("Proposed outline has no changes")
     old=db.execute("SELECT id FROM ai_chat_plan_proposals WHERE chat_proposal_id=?",
@@ -184,7 +187,8 @@ def decide(db,*,project_id,thread_id,proposal_id,approve,project_type,
     if digest!=row["base_digest"]:
         raise PlanConflict("Project or chapter plan changed; refresh the proposal")
     candidate=json.loads(row["candidate_json"])
-    edited,validated=_validate_candidate(project,None,candidate)
+    current_plan=get_plan(db,project)
+    edited,validated=_validate_candidate(project,current_plan,candidate)
     edited.updated_at=_now()
     db.execute("UPDATE projects SET data=?,updated_at=? WHERE id=?",
                (edited.model_dump_json(),edited.updated_at,project_id))
