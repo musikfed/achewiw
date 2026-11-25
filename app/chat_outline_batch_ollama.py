@@ -20,7 +20,8 @@ async def generate_batch(*,base_url,model,instruction,previous,offset,count,
         "{\"chapters\":[{\"title\":\"...\",\"anchor\":\"...\","
         "\"hook\":\"...\",\"editorial_goal\":\"...\"}]}."
         " Создай ровно "+str(count)+" ПОСЛЕДОВАТЕЛЬНЫХ глав, номера "+
-        str(offset+1)+"–"+str(offset+count)+". Всего глав: "+str(total_chapters)+\n        ". Общий объём книги: "+str(total_words)+
+        str(offset+1)+"–"+str(offset+count)+". Всего глав: "+str(total_chapters)+
+        ". Общий объём книги: "+str(total_words)+
         " слов на всю книгу; не пиши главу целиком, только каркас."
         " Каждая глава должна добавлять новую причинно-логическую информацию; "
         "никаких повторов, воды, ложных цитат и выдуманных источников. "
