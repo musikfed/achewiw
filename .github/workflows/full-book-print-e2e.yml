@@ -1,0 +1,31 @@
+name: ACHEWIW full synthetic book E2E 11-14
+on:
+  pull_request:
+    paths:
+      - 'tests/test_book_print_full_e2e.py'
+      - 'app/print_proof_preflight.py'
+      - 'app/publishing_exports.py'
+      - '.github/workflows/full-book-print-e2e.yml'
+  workflow_dispatch:
+jobs:
+  book-print-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies and DejaVu font
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-dejavu-core
+          python -m pip install -r app/requirements.txt
+      - name: Full synthetic book, real ReportLab and PyMuPDF, mocked Ollama
+        run: python -m unittest discover -s tests -p 'test_book_print_full_e2e.py' -v
+      - name: Previous 11–14 core regression
+        run: |
+          python -m unittest discover -s tests -p 'test_chat_outline_builder.py' -v
+          python -m unittest discover -s tests -p 'test_print_proof_step12.py' -v
+          python -m unittest discover -s tests -p 'test_semantic_page_fit_step13.py' -v
+          python -m unittest discover -s tests -p 'test_page_fit_acceptance_step14.py' -v
