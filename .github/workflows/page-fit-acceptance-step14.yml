@@ -1,0 +1,34 @@
+name: ACHEWIW editorial page-fit acceptance step 14
+on:
+  pull_request:
+    paths:
+      - 'app/page_fit_editorial_acceptance.py'
+      - 'app/page_fit_editorial_api.py'
+      - 'app/main.py'
+      - 'app/static/index.html'
+      - 'app/static/chat_studio.js'
+      - 'tests/test_page_fit_acceptance_step14.py'
+      - '.github/workflows/page-fit-acceptance-step14.yml'
+  workflow_dispatch:
+jobs:
+  editorial-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app dependencies
+        run: pip install -r app/requirements.txt
+      - name: Verify Python, JavaScript, static resource integrity
+        run: |
+          python -m py_compile app/page_fit_editorial_acceptance.py app/page_fit_editorial_api.py app/main.py
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Transactional review, real pagination hooks and conflict/undo tests
+        run: python -m unittest discover -s tests -p 'test_page_fit_acceptance_step14.py' -v
+      - name: Regression of source-bound proposal and print preflight
+        run: |
+          python -m unittest discover -s tests -p 'test_semantic_page_fit_step13.py' -v
+          python -m unittest discover -s tests -p 'test_print_proof_step12.py' -v
+          python -m unittest discover -s tests -p 'test_publishing_exports.py' -v
