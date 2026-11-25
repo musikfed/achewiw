@@ -33,7 +33,7 @@
     <p class="monitor-note">CPU/RAM/GPU собираются на Ubuntu, а не в Docker. Для запуска: <code>cd /1tbdisk/achewiw && bash scripts/monitor-v2.sh start</code>. При неисправности: <code>bash scripts/monitor-v2.sh status</code>. Если GPU недоступна, проверьте <code>nvidia-smi</code>. «Нет данных» не означает нулевую нагрузку.</p>
   </details>
 </section>
-<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button></nav>
+<div id="editor" hidden><nav class="tabs" aria-label="Этапы работы над книгой"><button type="button" data-tab="brief" class="selected">01 · Техническое задание</button><button data-tab="structure">02 · Story.prj</button><button data-tab="write">03 · Редактор</button><button type="button" data-tab="illustrations">04 · Иллюстрации</button><button type="button" data-tab="audit">05 · Проверка</button><button type="button" data-tab="book">06 · Типография</button><button type="button" data-tab="chat-generation">07 · Чат генерации</button><button type="button" data-tab="chat-editorial">08 · Чат редактуры</button></nav>
 <div id="bookLiveBar" class="book-live-bar" role="region" aria-label="Сохранённая генерация книги" hidden>
  <div class="book-live-heading"><strong id="bookLiveStatus">Проверяем состояние книги на сервере…</strong><small id="bookLiveJob">Задание хранится в SQLite</small></div>
  <progress id="bookLiveProgress" max="100" value="0" aria-label="Написано слов по сравнению с планом"></progress>
@@ -316,6 +316,43 @@
   <article id="bookPreview" class="book-reader" aria-live="polite"></article>
   <article id="bookDraftPreview" class="book-reader" aria-live="polite" hidden></article>
 </section>
+<section id="chat-generation" class="tabpane" hidden aria-label="07 · Чат генерации">
+ <div class="sectionhead"><h2>Чат генерации</h2><p>Помощник помогает распределить замысел по этапам 01–06. Здесь он пока строит план по запросу; текст книги автоматически не генерируется, а существующая мастерская остаётся главным редактором.</p></div>
+ <div class="chat-studio" data-chat-workspace="generation">
+  <div class="chat-toolbar"><label>Режим работы<select data-chat-mode><option value="clarify">Помощник · уточнять</option><option value="autonomous">Самостоятельно · составить план без вопросов</option></select></label><button type="button" data-chat-refresh>Обновить диалог</button></div>
+  <div class="chat-log" data-chat-log role="log" aria-live="polite"></div>
+  <label class="chat-command-label">Что нужно сделать<textarea data-chat-message rows="4" maxlength="10000" placeholder="Например: техническая книга о HDD; составь план, предложи главы и иллюстрации"></textarea></label>
+  <div class="actions"><button type="button" class="primary" data-chat-send>Сохранить поручение и разобрать по этапам</button></div>
+  <p data-chat-status class="chat-status" role="status">Выберите книгу, чтобы начать диалог.</p>
+ </div>
+</section>
+<section id="chat-editorial" class="tabpane" hidden aria-label="08 · Чат редактуры">
+ <div class="sectionhead"><h2>Чат редактуры</h2><p>Одна выбранная глава: поручение → предложение Ollama → сравнение → подтверждение. Исходный текст и соседние главы не заменяются автоматически. DOCWORK остаётся самостоятельной мастерской.</p></div>
+ <div class="chat-studio" data-chat-workspace="editorial">
+  <div class="chat-toolbar"><label>Режим работы<select data-chat-mode><option value="clarify">Помощник · уточнять</option><option value="autonomous">Самостоятельно · готовить предложения</option></select></label><button type="button" data-chat-refresh>Обновить диалог</button></div>
+  <div class="chat-edition-picker">
+   <label>Снимок книги из редакционной истории<select data-chat-version aria-label="Сохранённая редакция книги"></select></label>
+   <button type="button" data-chat-load-versions>Обновить список редакций</button>
+   <button type="button" data-chat-create-version>Создать снимок текущей авторской рукописи</button>
+   <button type="button" data-chat-attach>Выбрать снимок для работы</button>
+  </div>
+  <p class="chat-edition-note" data-chat-head>Рабочая редакция не выбрана.</p>
+  <label>Глава для правки<select data-chat-scene aria-label="Глава для редакторской правки"></select></label>
+  <div class="chat-log" data-chat-log role="log" aria-live="polite"></div>
+  <label class="chat-command-label">Поручение редактору<textarea data-chat-message rows="4" maxlength="1600" placeholder="Например: убери разговорные обороты, сохрани факты и техническую терминологию"></textarea></label>
+  <div class="actions">
+   <button type="button" class="primary" data-chat-send>Сохранить поручение</button>
+   <button type="button" data-chat-generate disabled>Предложить правку через Ollama</button>
+  </div>
+  <div class="chat-diff-pane" data-chat-preview hidden>
+   <h3>Предложение редактора · сравнение изменений</h3>
+   <p>Изменения пока не внесены в книгу. Просмотрите перед подтверждением.</p>
+   <pre data-chat-diff aria-label="Текстовый diff"></pre>
+   <div class="actions"><button type="button" class="primary" data-chat-approve>Принять новую редакцию</button><button type="button" data-chat-reject>Отклонить</button></div>
+  </div>
+  <p data-chat-status class="chat-status" role="status">Выберите существующую редакцию или создайте снимок книги.</p>
+ </div>
+</section>
 <div id="aiPanel" hidden><div class="aiHead"><strong id="aiHeading">✦ Задание StoryEngine · сохранено на сервере</strong><button id="closeAI">×</button></div>
 <div class="ai-progress" aria-live="polite">
   <div class="ai-stage"><strong id="aiStage">Ожидание задания</strong><span id="aiPercent">—</span></div>
@@ -349,4 +386,4 @@
 <button data-create-kind="speech"><strong>Выступления</strong><small>Сценарий, длительность, тезисы и речь</small></button>
 <button data-create-kind="nonfiction"><strong>Нонфикшн</strong><small>Исследование, объяснения и практические выводы</small></button>
 </div><button id="startProject" class="primary">+ Новая работа</button></div></div></main></div>
-<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261124-editorial-v21" defer></script><script src="/static/app.js?v=20261124-editorial-v21" defer></script><script src="/static/writing_blocks.js?v=20261124-editorial-v21" defer></script><script src="/static/illustrations.js?v=20261124-editorial-v21" defer></script><script src="/static/conveyor.js?v=20261105-conveyor-v1" defer></script><script src="/static/author_dictation.js?v=20261124-v1" defer></script></body></html>
+<div id="toast" role="status" aria-live="polite"></div><script src="/static/monitor.js?v=20261124-editorial-v21" defer></script><script src="/static/app.js?v=20261124-editorial-v21" defer></script><script src="/static/writing_blocks.js?v=20261124-editorial-v21" defer></script><script src="/static/illustrations.js?v=20261124-editorial-v21" defer></script><script src="/static/conveyor.js?v=20261105-conveyor-v1" defer></script><script src="/static/author_dictation.js?v=20261124-v1" defer></script><script src="/static/chat_studio.js?v=20261125-chat-v1" defer></script></body></html>

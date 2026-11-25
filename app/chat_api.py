@@ -204,6 +204,15 @@ def install(api: APIRouter, namespace: dict) -> None:
         except (ValueError,linked.LinkedEditConflict,editions.EditorialConflict) as exc:
             fail(exc)
 
+    @api.get("/projects/{project_id}/chats/{thread_id}/candidates/{proposal_id}")
+    def chat_candidate_read(project_id: str, thread_id: str, proposal_id: str):
+        root=context(project_id)
+        try:
+            return linked.pending_candidate(root,project_id=project_id,thread_id=thread_id,
+                                            chat_proposal_id=proposal_id)
+        except (ValueError,linked.LinkedEditConflict) as exc:
+            fail(exc)
+
     @api.post("/projects/{project_id}/chats/{thread_id}/candidates/{proposal_id}/decision")
     def chat_candidate_decision(project_id: str, thread_id: str, proposal_id: str,
                                 body: ChatDecisionRequest):

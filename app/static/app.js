@@ -127,7 +127,7 @@ function updateWorkCopy(){
 
  $('#structureHint').textContent=kind==='technical'?'Каждый раздел содержит задачу, понятия, аргументацию и проверяемые источники.':kind==='speech'?'Каждый блок речи имеет переходы, тайминг и ясную задачу.':'Создавайте разделы; текст публикуется только после сохранения.';
  $('#writingHint').textContent=kind==='speech'?'Речь сохраняется блоками; ИИ предлагает текст, но автор принимает каждую правку.':'Сохранённый текст является рукописью, а предложения ИИ не подменяют книгу.';
- const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',illustrations:'04 · Иллюстрации',audit:'05 · Проверка',book:'06 · Типография / Экспорт'};
+ const names={brief:'01 · Задание',structure:'02 · План',write:'03 · Редактор',illustrations:'04 · Иллюстрации',audit:'05 · Проверка',book:'06 · Типография / Экспорт','chat-generation':'07 · Чат генерации','chat-editorial':'08 · Чат редактуры'};
  document.querySelectorAll('[data-tab]').forEach(b=>{if(names[b.dataset.tab])b.textContent=names[b.dataset.tab]});
  document.querySelectorAll('[data-only-kind]').forEach(el=>el.hidden=!el.dataset.onlyKind.split(' ').includes(kind));
 }
@@ -209,7 +209,7 @@ function goHome(){
  render();
  window.scrollTo({top:0,behavior:'instant'});
 }
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
+async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book','chat-generation','chat-editorial'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
 async function createProject(kind){
  if(isBusy)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
