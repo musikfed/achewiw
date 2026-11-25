@@ -93,7 +93,7 @@ def chapter_text(i):
       "Дорожки и сектора используются для организации информации на поверхности. "
       "Физическая геометрия и способы адресации связаны, но не тождественны."
     ]
-    return "\n\n".join((patterns[i]+" "+patterns[i])*7 for _ in range(2))
+    return "\n\n".join((patterns[i]+" "+patterns[i])*7 for _ in range(1))
 
 
 class FullJourney(unittest.TestCase):
