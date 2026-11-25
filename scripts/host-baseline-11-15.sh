@@ -99,6 +99,21 @@ else warn "Ollama may be remote/container-only; inspect application configuratio
 if [[ -x /usr/bin/libreoffice ]] || command -v libreoffice >/dev/null;then
  pass "LibreOffice executable exists on host"
 else warn "LibreOffice not installed on host; office preflight cannot run here yet"; fi
+echo "--- Live Studio synthetic smoke (read-only) ---"
+if [[ -n "${ids:-}" && "${info:-}" == "achewiw|studio|$ROOT|$ROOT/data" ]]; then
+  if git cat-file -e refs/remotes/origin/feature/final-print-gate-step15-20261125:scripts/host-smoke-11-15.py 2>/dev/null; then
+    if git show refs/remotes/origin/feature/final-print-gate-step15-20261125:scripts/host-smoke-11-15.py |
+       docker exec -i -w /app "$ids" python -; then
+      pass "Full real-container synthetic smoke"
+    else
+      bad "Full real-container synthetic smoke failed: current running image may be older"
+    fi
+  else
+    warn "Origin branch not fetched; fetch origin/feature/final-print-gate-step15-20261125 to enable smoke"
+  fi
+else
+  warn "Studio ownership was not verified; no code injected into container"
+fi
 echo "=== HOST BASELINE FINISHED: $fail hard failure(s) ==="
 echo "Only report this summary; NEVER share .env, tokens, database or unrestricted logs."
 exit "$((fail>0))"
