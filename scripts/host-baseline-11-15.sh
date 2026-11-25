@@ -42,7 +42,7 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
       echo "Studio container image: $(docker inspect --format '{{.Image}}' "$ids" | cut -c1-18)"
       echo "Studio health: $(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "$ids")"
       docker exec "$ids" python -c "import fastapi,pydantic,fitz,reportlab; print('PASS Studio Python libraries') " || bad "Studio missing PDF dependencies"
-      docker exec "$ids" python - <<'PY' || bad "Container module import failed"
+      docker exec -i "$ids" python - <<'PY' || bad "Container module import failed"
 import sys
 sys.path.insert(0,"/app")
 names=["chat_api","chat_outline_builder","semantic_page_fit","page_fit_editorial_api","print_proof_preflight","print_release_gate"]
