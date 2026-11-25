@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 import chat_conversations as chats
 import chat_editorial_version_bridge as editions
 import chat_linked_edits as linked
+import chat_ollama_editor as ollama_editor
 
 
 class ChatThreadRequest(BaseModel):
@@ -41,6 +42,13 @@ class ChatCandidateRequest(BaseModel):
     base_version_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     scene_id: str = Field(min_length=1, max_length=200)
     candidate_text: str = Field(min_length=1, max_length=150000)
+
+
+class ChatOllamaRequest(BaseModel):
+    chat_proposal_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    base_version_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    scene_id: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=200)
 
 
 class ChatDecisionRequest(BaseModel):
@@ -134,6 +142,65 @@ def install(api: APIRouter, namespace: dict) -> None:
                     chat_proposal_id=body.chat_proposal_id,
                     base_version_id=body.base_version_id,scene_id=body.scene_id,
                     candidate_text=body.candidate_text)
+        except (ValueError,linked.LinkedEditConflict,editions.EditorialConflict) as exc:
+            fail(exc)
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/ollama-candidate",status_code=201)
+    async def chat_ollama_candidate(project_id: str, thread_id: str,
+                                    body: ChatOllamaRequest):
+        """One bounded, synchronous draft. Never changes the selected edition."""
+        root=context(project_id)
+        # First invocation must create link tables before read-only preflight.
+        linked.initialize(root)
+        from editor_workspace import _open
+        from gpu_scheduling import reserve_gpu, release_gpu, image_operation_active
+        from generation_core import active_job
+        import uuid
+        lease=uuid.uuid4().hex
+        try:
+            with _open(root/"work.sqlite3") as work:
+                row=linked._linked(work,project_id,thread_id,body.chat_proposal_id)
+                if (row["status"]!="proposed" or row["scope"]!="chapter"
+                    or row["source_ref"]!=body.scene_id or row["source_digest"] is None):
+                    raise linked.LinkedEditConflict("No matching chapter-bound author instruction")
+                instruction=work.execute("""SELECT content FROM work_chat_messages
+                    WHERE id=? AND thread_id=?""",
+                    (row["message_id"],thread_id)).fetchone()["content"]
+                head=work.execute("""SELECT version_id FROM work_chat_book_heads
+                    WHERE project_id=?""",(project_id,)).fetchone()
+                if head is None or head["version_id"]!=body.base_version_id:
+                    raise linked.LinkedEditConflict("Stale edition: refresh before editing")
+                _,payload=editions._version(work,project_id,body.base_version_id)
+                original=editions._scene(payload,body.scene_id)["text"]
+                if editions._hash(original)!=row["source_digest"]:
+                    raise linked.LinkedEditConflict("Source chapter no longer matches instruction")
+                existing=work.execute("""SELECT id FROM work_chat_edit_links
+                    WHERE chat_proposal_id=?""",(body.chat_proposal_id,)).fetchone()
+                if existing:
+                    raise linked.LinkedEditConflict("This instruction already has a candidate")
+            with namespace["db"]() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                if active_job(connection) or image_operation_active(connection):
+                    raise linked.LinkedEditConflict("Generation or image task is using the shared GPU")
+                if not reserve_gpu(connection,lease,"chat_editorial"):
+                    raise linked.LinkedEditConflict("The shared GPU is busy")
+            try:
+                draft=await ollama_editor.generate_candidate(
+                    base_url=namespace["OLLAMA_BASE_URL"],model=body.model,
+                    original=original,instruction=instruction)
+            finally:
+                with namespace["db"]() as connection:
+                    release_gpu(connection,lease)
+            result=linked.prepare(root,project_id=project_id,thread_id=thread_id,
+                chat_proposal_id=body.chat_proposal_id,
+                base_version_id=body.base_version_id,scene_id=body.scene_id,
+                candidate_text=draft["candidate_text"])
+            return {**result,"model":draft["model"],"engine":draft["engine"],
+                    "input_tokens":draft["input_tokens"],
+                    "output_tokens":draft["output_tokens"],
+                    "approval_required":True}
+        except ollama_editor.ModelEditorialError as exc:
+            raise HTTPException(502,str(exc)) from exc
         except (ValueError,linked.LinkedEditConflict,editions.EditorialConflict) as exc:
             fail(exc)
 

@@ -1,0 +1,23 @@
+name: ACHEWIW chat Ollama editorial
+on:
+  pull_request:
+    paths:
+      - 'app/chat_ollama_editor.py'
+      - 'app/chat_api.py'
+      - 'tests/test_chat_ollama_editor.py'
+      - '.github/workflows/chat-ollama-editorial.yml'
+  workflow_dispatch:
+jobs:
+  mock-editorial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app requirements
+        run: pip install -r app/requirements.txt
+      - name: Mock model and GPU; no Ollama server started
+        run: python -m unittest discover -s tests -p 'test_chat_ollama_editor.py' -v
+      - name: Previous API regression
+        run: python -m unittest discover -s tests -p 'test_chat_editorial_api.py' -v
