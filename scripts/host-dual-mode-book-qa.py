@@ -45,6 +45,15 @@ def sha(text):
 def words(text):
     return len(re.findall(r"[^\W_]+",text,re.UNICODE))
 
+def prose_metrics(text):
+    tokens=re.findall(r"[^\\W_]+",text.casefold(),re.UNICODE)
+    grams=[tuple(tokens[i:i+5]) for i in range(max(0,len(tokens)-4))]
+    repeated=max(0,len(grams)-len(set(grams)))
+    return {"words":len(tokens),
+            "unique_word_ratio":round(len(set(tokens))/max(1,len(tokens)),3),
+            "duplicate_5gram_ratio":round(repeated/max(1,len(grams)),3)}
+
+
 def check(condition,label):
     if not condition:
         raise RuntimeError("QA failed: "+label)
@@ -168,6 +177,7 @@ class Tester:
             "job_id":job["id"],
             "chapter_titles":[s["title"] for s in current["scenes"]],
             "chapter_words":[words(s["text"]) for s in current["scenes"]],
+            "chapter_prose_metrics":[prose_metrics(s["text"]) for s in current["scenes"]],
             "chapter_digests":[sha(s["text"]) for s in current["scenes"]]})
         self.event(kind+"_accepted",total_words=sum(words(s["text"]) for s in current["scenes"]))
         return current
@@ -235,8 +245,22 @@ class Tester:
         self.export("ordinary",normal)
         self.export("chat",chat)
         self.editorial_chat(chat)
+        n=self.items["projects"]["ordinary"]
+        c=self.items["projects"]["chat"]
+        self.items["comparison"]={
+            "ordinary_total_words":sum(n["chapter_words"]),
+            "chat_total_words":sum(c["chapter_words"]),
+            "ordinary_pdf_pages":n["export"]["pdf_pages"],
+            "chat_pdf_pages":c["export"]["pdf_pages"],
+            "ordinary_mean_duplicate_5gram_ratio":round(sum(
+                x["duplicate_5gram_ratio"] for x in n["chapter_prose_metrics"])/3,3),
+            "chat_mean_duplicate_5gram_ratio":round(sum(
+                x["duplicate_5gram_ratio"] for x in c["chapter_prose_metrics"])/3,3),
+            "scope":"objective statistics only; human evaluation of coherence still required"
+        }
         self.items["result"]="PASS"
-        self.event("completed",result="PASS",created_projects=2)
+        self.event("completed",result="PASS",created_projects=2,
+                   comparison=self.items["comparison"])
         print("QA COMPLETE:",str(self.report))
         return 0
 
