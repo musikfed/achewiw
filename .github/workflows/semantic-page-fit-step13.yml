@@ -1,0 +1,32 @@
+name: ACHEWIW RAG-grounded page-fit step 13
+on:
+  pull_request:
+    paths:
+      - 'app/semantic_page_fit.py'
+      - 'app/semantic_page_fit_api.py'
+      - 'app/main.py'
+      - 'app/static/chat_studio.js'
+      - 'app/static/index.html'
+      - 'tests/test_semantic_page_fit_step13.py'
+      - '.github/workflows/semantic-page-fit-step13.yml'
+  workflow_dispatch:
+jobs:
+  page-fit-grounded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install application dependencies
+        run: pip install -r app/requirements.txt
+      - name: Parse Python and JavaScript and verify static assets
+        run: |
+          python -m py_compile app/semantic_page_fit.py app/semantic_page_fit_api.py app/main.py
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Test evidence-bound proposal and regression of print-proof
+        run: |
+          python -m unittest discover -s tests -p 'test_semantic_page_fit_step13.py' -v
+          python -m unittest discover -s tests -p 'test_print_proof_step12.py' -v
+          python -m unittest discover -s tests -p 'test_publishing_exports.py' -v
