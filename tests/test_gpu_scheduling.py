@@ -283,7 +283,7 @@ def test_browser_persistence_and_cache_scoping_markers():
     versions=[]
     for asset_name in assets:
         matches=re.findall(
-            r'<script\\s+src="/static/'+re.escape(asset_name)+r'\\?v=([^"]+)"',
+            r'<script\s+src="/static/'+re.escape(asset_name)+r'\?v=([^"]+)"',
             html)
         assert len(matches)==1,(asset_name,matches)
         versions.append(matches[0])
