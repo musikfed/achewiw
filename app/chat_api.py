@@ -15,6 +15,7 @@ import chat_conversations as chats
 import chat_editorial_version_bridge as editions
 import chat_linked_edits as linked
 import chat_ollama_editor as ollama_editor
+import chat_book_control as book_control
 
 
 class ChatThreadRequest(BaseModel):
@@ -49,6 +50,12 @@ class ChatOllamaRequest(BaseModel):
     base_version_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     scene_id: str = Field(min_length=1, max_length=200)
     model: str = Field(min_length=1, max_length=200)
+
+
+class ChatBookControlRequest(BaseModel):
+    action: Literal["start", "pause", "resume"]
+    confirm: Literal[True]
+    model: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class ChatDecisionRequest(BaseModel):
@@ -117,6 +124,64 @@ def install(api: APIRouter, namespace: dict) -> None:
                                 source_ref=scene,source_text=text)
         except ValueError as exc:
             fail(exc)
+
+    @api.get("/projects/{project_id}/chats/{thread_id}/book-job")
+    def chat_book_status(project_id: str, thread_id: str):
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+        except (ValueError,book_control.BookControlConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+        with namespace["db"]() as db:
+            job_id=namespace["_current_book_job_id"](db,project_id)
+            job=namespace["_book_record"](db,job_id) if job_id else None
+        return {"job":job,"events":book_control.history(root,project_id=project_id,
+                    thread_id=thread_id),"source":"canonical_ai_jobs",
+                "independent_generator":False}
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/book-control",status_code=202)
+    async def chat_book_control(project_id: str, thread_id: str,
+                                body: ChatBookControlRequest):
+        """Explicit author action forwarded to the exact existing book workflow."""
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(
+                root,project_id,thread_id,has_instruction=body.action=="start")
+        except (ValueError,book_control.BookControlConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+        with namespace["db"]() as db:
+            current_id=namespace["_current_book_job_id"](db,project_id)
+            current=namespace["_book_record"](db,current_id) if current_id else None
+
+        if body.action=="start":
+            # The existing starter is idempotent and validates the saved chapter
+            # plan, current GPU jobs and the manuscript hashes.
+            selected_model=body.model or namespace["DEFAULT_MODEL"]
+            job=await namespace["start_full_book"](
+                namespace["BookRequest"](project_id=project_id,model=selected_model))
+        else:
+            if not current or current["project_id"]!=project_id:
+                raise HTTPException(409,"No resumable book job for this project")
+            if body.action=="pause":
+                if current["status"] not in ("queued","running"):
+                    raise HTTPException(409,"Only a running book can be paused")
+                await_or_result=namespace["pause_full_book"](current["id"])
+                # Pause returns acknowledgement, not the full job record.
+                if hasattr(await_or_result,"__await__"):
+                    await await_or_result
+            else:
+                if current["status"] not in ("interrupted","error"):
+                    raise HTTPException(409,"Only an interrupted book can resume")
+                await namespace["resume_full_book"](current["id"])
+            with namespace["db"]() as db:
+                job=namespace["_book_record"](db,current["id"])
+
+        if not isinstance(job,dict) or job.get("project_id")!=project_id:
+            raise HTTPException(409,"Canonical job was not scoped to the selected project")
+        book_control.record(root,project_id=project_id,thread_id=thread_id,
+                            action=body.action,job=job)
+        return {"job":job,"action":body.action,"source":"canonical_ai_jobs",
+                "independent_generator":False,"author_confirmed":True}
 
     @api.post("/projects/{project_id}/chat-edition",status_code=201)
     def chat_attach_edition(project_id: str, body: ChatEditionAttach):
