@@ -84,8 +84,8 @@ class Tester:
         return resp.json()
 
     def new(self,kind):
-        title="QA 11–15 · "+("Обычный режим" if kind=="ordinary" else "Чат")+
-              " · "+uuid.uuid4().hex[:6]
+        title=("QA 11–15 · "+("Обычный режим" if kind=="ordinary" else "Чат")+
+               " · "+uuid.uuid4().hex[:6])
         p=self.req("POST","/projects",{"title":title,"work_type":"technical"})
         p.update({"genre":"Популярная техническая миниатюра",
              "premise":BRIEF,"audience":"Начинающий читатель",
