@@ -5,7 +5,7 @@
 'use strict';
 const workspaces=['generation','editorial'];
 const state={
- generation:{projectId:null,threadId:null,busy:false,lastProposal:null,outline:null},
+ generation:{projectId:null,threadId:null,busy:false,lastProposal:null,outline:null,newOutline:null},
  editorial:{projectId:null,threadId:null,busy:false,head:null,lastProposal:null,pending:null}
 };
 const $=(root,selector)=>root.querySelector(selector);
@@ -45,8 +45,9 @@ const reset=kind=>{
    $(panel,'[data-chat-version]').replaceChildren();
    $(panel,'[data-chat-scene]').replaceChildren();}
  $(panel,'[data-chat-log]').replaceChildren();
- if(kind==='generation'){st.lastProposal=null;st.outline=null;
+ if(kind==='generation'){st.lastProposal=null;st.outline=null;st.newOutline=null;
   $(panel,'[data-chat-outline-preview]').hidden=true;
+  $(panel,'[data-chat-new-preview]').hidden=true;
   $(panel,'[data-chat-outline-status]').textContent='Пока нет предложенного каркаса.';
   $(panel,'[data-chat-book-status]').textContent='Книга не выбрана.';
   $(panel,'[data-chat-book-progress]').value=0;}
@@ -163,6 +164,66 @@ async function recoverPreview(){
   $(ui('editorial'),'[data-chat-diff]').textContent=candidate.diff;
   $(ui('editorial'),'[data-chat-preview]').hidden=false;
  }catch{/* No candidate yet; instruction may still be awaiting model. */}
+}
+const newOutlineKey=pid=>'achewiw.chat.new-outline.v1.'+pid;
+const newOutlineShow=(data)=>{
+ const p=ui('generation'),st=state.generation;
+ st.newOutline=data.status==='draft'||data.status==='ready'?data.id:null;
+ $(p,'[data-chat-new-preview]').hidden=!(data.chapters?.length);
+ const display=(data.chapters||[]).map((ch,i)=>[
+  String(i+1)+'. '+ch.title,
+  'Задача: '+ch.editorial_goal,
+  ch.anchor?'Опора: '+ch.anchor:'',
+  ch.hook?'Переход: '+ch.hook:''
+ ].filter(Boolean).join('\n')).join('\n\n');
+ $(p,'[data-chat-new-chapters]').textContent=display;
+ $(p,'[data-chat-new-status]').textContent=
+  'Каркас '+data.created+'/'+data.count+' глав · '+data.status+
+  (data.status==='ready'?' · ожидает подтверждения':' · можно продолжить следующую порцию');
+};
+async function newOutlineRestore(){
+ const pid=projectId(),st=state.generation;
+ if(!pid||!st.threadId)return;
+ const id=st.newOutline||storageGet(newOutlineKey(pid));
+ if(!id)return;
+ const data=await req(prefix(pid)+'/chats/'+st.threadId+'/new-outline/'+id);
+ if(projectId()!==pid)return;
+ newOutlineShow(data);
+ if(data.status==='accepted'||data.status==='rejected')st.newOutline=null;
+}
+async function newOutlineBegin(pid){
+ const st=state.generation,p=ui('generation');
+ if(!st.lastProposal)throw Error('Сначала сохраните описание книги в чате.');
+ const count=Number($(p,'[data-chat-new-count]').value);
+ const total_words=Number($(p,'[data-chat-new-words]').value);
+ if(!Number.isInteger(count)||!Number.isInteger(total_words))throw Error('Нужны целые значения.');
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/new-outline',{
+  chat_proposal_id:st.lastProposal,count,total_words});
+ if(projectId()!==pid)return;
+ storageSet(newOutlineKey(pid),result.id);newOutlineShow(result);
+}
+async function newOutlineBatch(pid){
+ const st=state.generation;
+ if(!st.newOutline)throw Error('Сначала создайте каркас из пустого проекта.');
+ const model=document.querySelector('#model')?.value;
+ if(!model)throw Error('Выберите Ollama-модель.');
+ status('generation','Генерируется следующая порция названий и задач глав.');
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/new-outline/'+st.newOutline+'/batch',{model});
+ if(projectId()!==pid)return;
+ newOutlineShow(result);
+ status('generation','Пакет глав сохранён, продолжайте либо подтвердите весь каркас.');
+}
+async function newOutlineDecide(pid,approve){
+ const st=state.generation;
+ if(!st.newOutline)throw Error('Нет сохранённого каркаса.');
+ if(approve&&!window.confirm('Принять всю структуру книги в 01–02? Исходный проект пуст, текст не удаляется.'))return;
+ const result=await post(prefix(pid)+'/chats/'+st.threadId+'/new-outline/'+st.newOutline+'/decision',{approve});
+ if(projectId()!==pid)return;
+ st.newOutline=null;
+ $(ui('generation'),'[data-chat-new-preview]').hidden=true;
+ $(ui('generation'),'[data-chat-new-status]').textContent=
+  approve?'Каркас утверждён · '+result.count+' глав. Задание обновлено.':'Предложение отклонено.';
+ if(approve)document.dispatchEvent(new CustomEvent('achewiw:chat-outline-approved',{detail:{projectId:pid}}));
 }
 const outlineChanges=(before,after)=>{
  const rows=[];
@@ -287,7 +348,9 @@ async function open(kind){
   if(kind==='editorial'){
    await versions();await head();await recoverPreview();
   }else{
-   await refreshBookJob();await refreshOutline();
+   await refreshBookJob();
+   try{await refreshOutline()}catch(error){status('generation','Каркас 01–02: '+error.message)}
+   try{await newOutlineRestore()}catch(error){$(ui('generation'),'[data-chat-new-status]').textContent='Восстановление: '+error.message}
   }
   status(kind,'Диалог сохранён в SQLite. Изменения текста требуют отдельного принятия.');
  }catch(err){status(kind,'Ошибка загрузки: '+err.message)}
@@ -369,6 +432,11 @@ document.querySelectorAll('[data-chat-workspace]').forEach(panel=>{
  }));
  $(panel,'[data-chat-send]').addEventListener('click',()=>action(kind,(pid,p,st)=>send(kind,pid,p,st)));
  if(kind==='generation'){
+  $(panel,'[data-chat-new-start]').addEventListener('click',()=>action(kind,newOutlineBegin));
+  $(panel,'[data-chat-new-batch]').addEventListener('click',()=>action(kind,newOutlineBatch));
+  $(panel,'[data-chat-new-refresh]').addEventListener('click',()=>action(kind,newOutlineRestore));
+  $(panel,'[data-chat-new-approve]').addEventListener('click',()=>action(kind,pid=>newOutlineDecide(pid,true)));
+  $(panel,'[data-chat-new-reject]').addEventListener('click',()=>action(kind,pid=>newOutlineDecide(pid,false)));
   $(panel,'[data-chat-outline-propose]').addEventListener('click',
    ()=>action(kind,(pid)=>proposeOutline(pid)));
   $(panel,'[data-chat-outline-refresh]').addEventListener('click',
