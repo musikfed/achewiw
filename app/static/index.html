@@ -267,7 +267,16 @@
       <div class="chat-diff-pane" data-fit-result hidden>
         <h4>Кандидат, опоры и проверка страницы</h4>
         <pre data-fit-text></pre>
-        <div class="actions"><button type="button" data-fit-reject>Отклонить</button><button type="button" data-fit-use>Передать текст в безопасный PDF-предпросмотр</button></div>
+        <div class="actions"><button type="button" data-fit-reject>Отклонить</button><button type="button" data-fit-use>Передать текст в безопасный PDF-предпросмотр</button><button type="button" data-fit-prepare>Подготовить редакторскую приёмку</button></div>
+      </div>
+      <div class="chat-diff-pane" data-fit-review hidden>
+        <h4>Редакторская приёмка · новая версия книги</h4>
+        <p>Ниже отображены добавляемый текст, источники автора и сдвиги страниц. Подтверждение изменяет общую рукопись только после двух отдельных проверок.</p>
+        <pre data-fit-review-diff></pre>
+        <label><input type="checkbox" data-fit-review-sources> Я проверил(а) смысл, повторы, даты, цифры, источники и ссылки; авторский RAG не является независимой проверкой фактов.</label>
+        <label><input type="checkbox" data-fit-review-pages> Я проверил(а) изменение страниц, оглавления и согласен(на) на повторную печатную проверку.</label>
+        <div class="actions"><button type="button" class="primary" data-fit-review-accept>Принять в рукопись</button><button type="button" data-fit-review-undo hidden>Откатить последнюю принятую вставку</button></div>
+        <p data-fit-review-status role="status">До подтверждения исходная книга не меняется.</p>
       </div>
     </div>
     <pre class="print-qa-report" data-print-preview-result hidden></pre>
