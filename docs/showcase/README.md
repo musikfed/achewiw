@@ -1,6 +1,10 @@
 # achewiw · Visual project showcase
 
-![Исходный интерфейс студии](../media/achewiw-home.svg)
+![Реальный интерфейс ACHEWIW Studio](../screenshots/02-studio-home-20261125.png)
+
+![ACHEWIW: история произведения, снимки и альтернативные редакции](../screenshots/01-publication-history-20261125.png)
+
+**Реальные снимки от 25.11.2026.** Главная и история произведения зафиксированы с работающей локальной Studio; публичные изображения не являются доступом к серверу. [Чат генерации](../screenshots/05-generation-chat-20261125.png) · [Чат редактуры](../screenshots/03-editorial-chat-20261125.png) · [Редакционное задание](../screenshots/06-book-brief-20261125.png).
 
 **Локальная издательская студия · Local book publishing studio**
 
