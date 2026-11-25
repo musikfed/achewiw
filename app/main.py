@@ -3141,4 +3141,6 @@ install_semantic_page_fit(api, globals())
 from page_fit_editorial_api import install as install_page_fit_review
 install_page_fit_review(api, globals())
 install_production_conveyor(api, globals())
+# FastAPI 0.165+ uses a lazy _IncludedRouter. Verify registered
+# endpoints via the router/OpenAPI, not by flattening app.routes.
 app.include_router(api)

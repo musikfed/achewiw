@@ -1,0 +1,63 @@
+name: ACHEWIW final print gate step 15
+on:
+  pull_request:
+    paths:
+      - 'app/print_release_gate.py'
+      - 'scripts/refresh_docx_toc_office.py'
+      - 'tests/test_print_release_gate_step15.py'
+      - '.github/workflows/final-print-gate-step15.yml'
+  workflow_dispatch:
+jobs:
+  final-pdf-word-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Office and fonts for ephemeral test only
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libreoffice-writer python3-uno fonts-dejavu-core
+          python -m pip install -r app/requirements.txt
+      - name: Unit release gate (never trust unrefreshed DOCX)
+        run: python -m unittest discover -s tests -p 'test_print_release_gate_step15.py' -v
+      - name: Create independent real 9-page synthetic book and DOCX
+        env:
+          ACHEWIW_E2E_ARTIFACT_DIR: e2e-output
+        run: python -m unittest discover -s tests -p 'test_book_print_full_e2e.py' -v
+      - name: Refresh Word TOC using isolated LibreOffice Writer/UNO
+        run: |
+          /usr/bin/python3 -c 'import uno; print("system UNO available")'
+          /usr/bin/python3 scripts/refresh_docx_toc_office.py \
+            e2e-output/synthetic-hdd-before.docx office-proof
+      - name: Check final office PDF and Word TOC fail-closed
+        run: |
+          PYTHONPATH=app python - <<'PY'
+          import json
+          from pathlib import Path
+          from print_release_gate import release_preflight
+          result=release_preflight(
+            docx=Path("office-proof/synthetic-hdd-before-toc-refreshed.docx").read_bytes(),
+            final_pdf=Path("office-proof/synthetic-hdd-before-toc-refreshed.pdf").read_bytes(),
+            chapter_titles=["Магнитная запись","Позиционирование головки","Дорожки и сектора"],
+            office_refreshed=True)
+          Path("office-proof/release-gate-report.json").write_text(
+            json.dumps(result,indent=2,ensure_ascii=False),encoding="utf-8")
+          print(json.dumps({"status":result["status"],
+            "pages":result["pdf_pages"],"blocking":result["blocking"],
+            "headings":result["headings"],"toc_links":result["toc_links"]},
+            ensure_ascii=False))
+          if not result["publication_allowed"]:raise SystemExit(1)
+          PY
+      - name: Preserve synthetic DOCX and reflowed PDF / gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: achewiw-synthetic-office-print-gate
+          path: |
+            office-proof/
+            e2e-output/e2e-report.json
+          if-no-files-found: warn
+          retention-days: 7
