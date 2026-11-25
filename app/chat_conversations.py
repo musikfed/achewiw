@@ -70,7 +70,7 @@ def initialize(data_dir: Path) -> None:
             scope TEXT,
             plan_json TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'proposed'
-                CHECK(status IN ('proposed','rejected')),
+                CHECK(status IN ('proposed','accepted','rejected')),
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             CHECK(source_digest IS NULL OR length(source_digest)=64)
@@ -78,6 +78,27 @@ def initialize(data_dir: Path) -> None:
         CREATE INDEX IF NOT EXISTS idx_work_chat_proposals_thread
             ON work_chat_proposals(thread_id,status,created_at);
         """)
+        # Existing installations may have the older two-state CHECK constraint.
+        # SQLite cannot ALTER CHECK in place; rebuild only this working table.
+        ddl=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='work_chat_proposals'").fetchone()[0]
+        if "'accepted'" not in ddl:
+            db.execute("""CREATE TABLE work_chat_proposals_new (
+                id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL REFERENCES work_chat_threads(id),
+                message_id TEXT NOT NULL REFERENCES work_chat_messages(id),
+                source_ref TEXT, source_digest TEXT, scope TEXT,
+                plan_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'proposed'
+                    CHECK(status IN ('proposed','accepted','rejected')),
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                CHECK(source_digest IS NULL OR length(source_digest)=64)
+            )""")
+            db.execute("""INSERT INTO work_chat_proposals_new
+                SELECT * FROM work_chat_proposals""")
+            db.execute("DROP TABLE work_chat_proposals")
+            db.execute("ALTER TABLE work_chat_proposals_new RENAME TO work_chat_proposals")
+            db.execute("""CREATE INDEX IF NOT EXISTS idx_work_chat_proposals_thread
+                ON work_chat_proposals(thread_id,status,created_at)""")
 
 
 def create_thread(data_dir: Path, *, project_id: str, workspace: str,
@@ -203,7 +224,16 @@ def reject(data_dir: Path, *, project_id: str, thread_id: str,
                          (proposal_id,thread_id)).fetchone()
         if row is None:
             raise ValueError("Proposal is not part of this conversation")
+        if row["status"] == "accepted":
+            raise ValueError("Accepted editorial changes must be restored through a new revision")
         if row["status"] == "proposed":
+            # Linked candidates must be decided atomically with their edition
+            # using chat_linked_edits.decide, not this plan-only rejection API.
+            link_table = db.execute("""SELECT name FROM sqlite_master
+                WHERE type='table' AND name='work_chat_edit_links'""").fetchone()
+            if link_table and db.execute("""SELECT 1 FROM work_chat_edit_links
+                WHERE chat_proposal_id=?""",(proposal_id,)).fetchone():
+                raise ValueError("Linked editorial proposal requires joint decision")
             db.execute("""UPDATE work_chat_proposals SET status='rejected',updated_at=?
                 WHERE id=? AND thread_id=? AND status='proposed'""",
                 (_stamp(),proposal_id,thread_id))
