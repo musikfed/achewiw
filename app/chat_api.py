@@ -197,10 +197,10 @@ def install(api: APIRouter, namespace: dict) -> None:
                     "input_tokens":draft["input_tokens"],
                     "output_tokens":draft["output_tokens"],
                     "approval_required":True}
-        except (ValueError,linked.LinkedEditConflict,editions.EditorialConflict) as exc:
-            fail(exc)
         except ollama_editor.ModelEditorialError as exc:
             raise HTTPException(502,str(exc)) from exc
+        except (ValueError,linked.LinkedEditConflict,editions.EditorialConflict) as exc:
+            fail(exc)
 
     @api.post("/projects/{project_id}/chats/{thread_id}/candidates/{proposal_id}/decision")
     def chat_candidate_decision(project_id: str, thread_id: str, proposal_id: str,
