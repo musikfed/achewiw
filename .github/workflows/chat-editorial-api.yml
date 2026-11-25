@@ -1,0 +1,21 @@
+name: ACHEWIW chat API synthetic chapter
+on:
+  pull_request:
+    paths:
+      - 'app/chat_api.py'
+      - 'app/main.py'
+      - 'tests/test_chat_editorial_api.py'
+      - '.github/workflows/chat-editorial-api.yml'
+  workflow_dispatch:
+jobs:
+  chat-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install application dependencies
+        run: pip install -r app/requirements.txt
+      - name: Test API against temporary SQLite and in-process FastAPI
+        run: python -m unittest discover -s tests -p test_chat_editorial_api.py -v

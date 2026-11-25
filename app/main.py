@@ -3063,5 +3063,7 @@ async def document_workshop_export(
     })
 
 
+from chat_api import install as install_chat_api
+install_chat_api(api, globals())
 install_production_conveyor(api, globals())
 app.include_router(api)
