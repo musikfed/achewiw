@@ -1,0 +1,20 @@
+name: ACHEWIW chat edition bridge
+on:
+  pull_request:
+    paths:
+      - 'app/chat_editorial_version_bridge.py'
+      - 'tests/test_chat_editorial_version_bridge.py'
+      - '.github/workflows/chat-edition-bridge.yml'
+  workflow_dispatch:
+jobs:
+  editorial-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install application dependencies
+        run: pip install -r app/requirements.txt
+      - name: Verify synthetic book through existing edition storage
+        run: python -m unittest discover -s tests -p test_chat_editorial_version_bridge.py -v
