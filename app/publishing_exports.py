@@ -114,7 +114,7 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     begin.set(qn("w:fldCharType"),"begin")
     instr=OxmlElement("w:instrText")
     instr.set(qn("xml:space"),"preserve")
-    instr.text=r' TOC \\o "1-2" \\h \\z \\u '
+    instr.text=r' TOC \o "1-2" \h \z \u '
     sep=OxmlElement("w:fldChar")
     sep.set(qn("w:fldCharType"),"separate")
     placeholder=OxmlElement("w:t")
