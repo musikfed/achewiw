@@ -678,6 +678,20 @@ if(printPanel){
   }catch(error){reviewStatus.textContent='Приёмка не создана: '+error.message}
   finally{printBusy(false)}
  });
+ const restoreReview=async()=>{
+  const pid=projectId();
+  const id=pid?storageGet(reviewKey(pid)):null;
+  if(!id){reviewStatus.textContent='Для выбранной книги нет сохранённой приёмки.';return}
+  const stored=await printApi(prefix(pid)+'/print-proof/fit-reviews/'+id);
+  if(projectId()!==pid)return;
+  reviewDisplay(stored);
+ };
+ printPanel.querySelector('[data-fit-review-reload]').addEventListener('click',async()=>{
+  if(active)return;
+  printBusy(true);
+  try{await restoreReview()}catch(error){reviewStatus.textContent='Не удалось восстановить: '+error.message}
+  finally{printBusy(false)}
+ });
  printPanel.querySelector('[data-fit-review-accept]').addEventListener('click',async()=>{
   const pid=projectId();if(!pid||!activeReview||active)return;
   if(!confirmSources.checked||!confirmPages.checked){
@@ -715,7 +729,13 @@ if(printPanel){
   finally{printBusy(false)}
  });
  document.addEventListener('achewiw:tab-shown',event=>{
-  if(event.detail?.name==='book')refreshScenes();
+  if(event.detail?.name!=='book')return;
+  refreshScenes();
+  reviewPanel.hidden=true;
+  activeReview=null;reviewedDigest=null;
+  if(projectId()&&storageGet(reviewKey(projectId()))){
+   restoreReview().catch(error=>{reviewStatus.textContent='Приёмка: '+error.message});
+  }
  });
 }
 document.addEventListener('achewiw:tab-shown',event=>{
