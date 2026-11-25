@@ -3141,7 +3141,9 @@ install_semantic_page_fit(api, globals())
 from page_fit_editorial_api import install as install_page_fit_review
 install_page_fit_review(api, globals())
 install_production_conveyor(api, globals())
+print("DIAG router pre-mount:",len(api.routes),"app:",len(app.routes),"app-type:",type(app).__name__)
 app.include_router(api)
+print("DIAG router post-mount:",len(api.routes),"app:",len(app.routes))
 # Fail at startup if the published application lacks the API router.
 # A successful health-only response is not sufficient for a book service.
 _required_book_route="/api/projects/{project_id}/print-proof/preflight"
