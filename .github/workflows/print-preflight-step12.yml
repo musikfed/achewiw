@@ -1,0 +1,31 @@
+name: ACHEWIW print preflight step 12
+on:
+  pull_request:
+    paths:
+      - 'app/print_proof_preflight.py'
+      - 'app/publishing_exports.py'
+      - 'app/main.py'
+      - 'app/static/index.html'
+      - 'app/static/chat_studio.js'
+      - 'tests/test_print_proof_step12.py'
+      - '.github/workflows/print-preflight-step12.yml'
+  workflow_dispatch:
+jobs:
+  measured-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+      - name: Python and JavaScript syntax
+        run: |
+          python -m py_compile app/main.py app/print_proof_preflight.py app/publishing_exports.py
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Test pagination and editable Word TOC
+        run: python -m unittest discover -s tests -p 'test_print_proof_step12.py' -v
+      - name: Existing book export regression
+        run: python -m unittest discover -s tests -p 'test_publishing_exports.py' -v
