@@ -78,6 +78,9 @@ class FitApiTests(unittest.TestCase):
         self.current.model_dump_json=lambda:'{"id":"test-hdd","scene":"'+self.current.scenes[0].text+'"}'
         with sqlite3.connect(self.path) as conn:
             conn.execute("CREATE TABLE ai_jobs(id TEXT,status TEXT)")
+            conn.execute("CREATE TABLE projects(id TEXT PRIMARY KEY,data TEXT NOT NULL)")
+            conn.execute("INSERT INTO projects VALUES(?,?)",
+                         ("test-hdd",self.current.model_dump_json()))
             init_gpu_leases(conn)
         @contextmanager
         def db():
@@ -139,6 +142,19 @@ class FitApiTests(unittest.TestCase):
             ident=self.request().json()["id"]
         self.current.scenes[0].text+=" Автор изменил главу."
         self.assertTrue(self.client.get(self.url+"/"+ident).json()["stale"])
+
+    def test_immutable_storage_rechecks_canonical_version(self):
+        async def model(**kwargs):
+            # A concurrent writer updates the real SQLite project after the
+            # initial API read and before the generated proposal is saved.
+            with self.db() as conn:
+                conn.execute("UPDATE projects SET data=? WHERE id=?",
+                             ('{"id":"test-hdd","scene":"updated by other request"}',"test-hdd"))
+            return {"paragraph":ADDITION,"evidence_ids":["excerpt-1"]}
+        with patch.object(api,"propose_with_ollama",new=model):
+            rejected=self.request()
+        self.assertEqual(rejected.status_code,409,rejected.text)
+        self.assertEqual(self.current.scenes[0].text,ORIGINAL)
 
     def test_busy_gpu_prevents_model_call(self):
         with self.db() as conn:
