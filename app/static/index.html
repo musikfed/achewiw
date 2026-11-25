@@ -257,6 +257,19 @@
     <label>Глава<select data-print-scene aria-label="Глава для безопасного предпросмотра"></select></label>
     <label>Предлагаемый дополнительный абзац<textarea data-print-insert rows="4" maxlength="1500" placeholder="Проверенное дополнительное объяснение или практический пример"></textarea></label>
     <div class="actions"><button type="button" data-print-preview>Сравнить PDF до/после, не сохраняя</button></div>
+    <div class="chat-conveyor-panel" aria-label="Предложение Ollama на основе памяти книги">
+      <h4>Смысловое дополнение через Ollama · только по материалам RAG/Graph</h4>
+      <p>Сначала проверьте PDF-пробу и выбранную страницу. Модель предложит один абзац, если найден подходящий авторский контекст и эта страница действительно недозаполнена. Источники требуют проверки автором.</p>
+      <label>Страница PDF<input data-fit-page type="number" min="1" max="1200" value="1"></label>
+      <label>Поручение редактору<input data-fit-instruction maxlength="1200" placeholder="Какой переход или механизм раскрыть подробнее?"></label>
+      <div class="actions"><button type="button" data-fit-propose>✦ Предложить абзац через Ollama</button><button type="button" data-fit-reload>Восстановить предложение</button></div>
+      <p data-fit-status role="status">Новые факты не добавляются без авторской проверки.</p>
+      <div class="chat-diff-pane" data-fit-result hidden>
+        <h4>Кандидат, опоры и проверка страницы</h4>
+        <pre data-fit-text></pre>
+        <div class="actions"><button type="button" data-fit-reject>Отклонить</button><button type="button" data-fit-use>Передать текст в безопасный PDF-предпросмотр</button></div>
+      </div>
+    </div>
     <pre class="print-qa-report" data-print-preview-result hidden></pre>
    </details>
    <small>Нумерация DOCX формируется автоматически через поле содержания Word; после изменения текста откройте документ и обновите поля перед публикацией. Итоговый PDF требует повторной проверки. Печатная проба не заменяет PDF/X.</small>
