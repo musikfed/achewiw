@@ -22,7 +22,7 @@ def dummy_pdf(*,claimed=3,include_final_blank=False):
     pdf.setTitle("Synthetic ACHEWIW HDD")
     pdf.drawString(40,480,"Synthetic HDD Title")
     pdf.showPage()
-    pdf.drawString(40,480,"Содержание")
+    pdf.drawString(40,480,"Contents")
     # Use Latin titles in this portable fixture, with standard dotted leader.
     pdf.drawString(40,440,f"Chapter One ............................................. {claimed}")
     pdf.showPage()
