@@ -1169,3 +1169,15 @@ header .paper-choice select:focus-visible{outline:2px solid #9b764a;outline-offs
 .chat-diff-pane pre{max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;background:#f9f7f2;padding:16px;border-radius:8px;border:1px solid #efe9dc}
 .chat-diff-pane[hidden]{display:none}
 @media(max-width:650px){.chat-entry{max-width:100%}.chat-toolbar,.chat-edition-picker{padding:12px}.chat-studio .actions button{flex:1 1 100%}}
+
+.project-create-dialog {
+  width: min(30rem, calc(100% - 2rem));
+  border: 1px solid #e7ddd0;
+  border-radius: 12px;
+  background: #fff;
+  color: #282c35;
+  padding: 24px;
+}
+.project-create-dialog::backdrop { background: #27232a66; }
+.project-create-dialog label { display: block; margin: 18px 0 6px; }
+.project-create-dialog .actions { margin: 18px 0 0; }

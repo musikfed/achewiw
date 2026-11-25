@@ -12,6 +12,17 @@ SCRIPT=ROOT/"scripts/host-dual-mode-book-qa.py"
 class HostDualModeHarness(unittest.TestCase):
     def test_script_parses(self):
         ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    def test_actual_cyrillic_five_word_repeats(self):
+        script=ast.parse(SCRIPT.read_text(encoding="utf-8"))
+        function=next(node for node in script.body
+                      if isinstance(node,ast.FunctionDef) and node.name=="prose_metrics")
+        namespace={"re":__import__("re")}
+        exec(compile(ast.Module(body=[function],type_ignores=[]),str(SCRIPT),"exec"),namespace)
+        result=namespace["prose_metrics"]("Мира нашла запись в журнале. Мира нашла запись в журнале.")
+        self.assertEqual(result["words"],10)
+        self.assertEqual(result["unique_word_ratio"],0.5)
+        self.assertEqual(result["duplicate_5gram_ratio"],0.167)
+
     def test_distinct_ordinary_and_chat_paths(self):
         text=SCRIPT.read_text(encoding="utf-8")
         for marker in (

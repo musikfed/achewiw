@@ -165,6 +165,7 @@ def decide(root: Path, *, project_id: str, proposal_id: str, approve: bool):
 
 
 def current(root: Path, *, project_id: str):
+    initialize(root)
     with _open(Path(root)/"work.sqlite3") as db:
         head=db.execute("SELECT version_id FROM work_chat_book_heads WHERE project_id=?",
                         (project_id,)).fetchone()

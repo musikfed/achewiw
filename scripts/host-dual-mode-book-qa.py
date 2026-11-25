@@ -46,7 +46,7 @@ def words(text):
     return len(re.findall(r"[^\W_]+",text,re.UNICODE))
 
 def prose_metrics(text):
-    tokens=re.findall(r"[^\\W_]+",text.casefold(),re.UNICODE)
+    tokens=re.findall(r"[^\W_]+",text.casefold(),re.UNICODE)
     grams=[tuple(tokens[i:i+5]) for i in range(max(0,len(tokens)-4))]
     repeated=max(0,len(grams)-len(set(grams)))
     return {"words":len(tokens),
@@ -81,7 +81,8 @@ class Tester:
         self.report.write_text(json.dumps(self.items,ensure_ascii=False,indent=2),encoding="utf-8")
 
     def req(self,method,path,payload=None,timeout=None):
-        resp=self.client.request(method,"/api"+path,json=payload,timeout=timeout)
+        options={} if timeout is None else {"timeout":timeout}
+        resp=self.client.request(method,"/api"+path,json=payload,**options)
         if resp.status_code>=400:
             try:reason=str(resp.json().get("detail",""))[:300]
             except (ValueError,AttributeError):reason=resp.text[:120]
@@ -164,7 +165,7 @@ class Tester:
             self.event(kind+"_timeout",job_id=job["id"],last_status=prev)
             raise RuntimeError(kind+" generation exceeded time budget; job remains in SQLite")
         self.event(kind+"_finished",job_id=job["id"],status=status,stage=stage,
-                   actual_words=state.get("book",{}).get("total_words"))
+                   actual_words=state.get("book",{}).get("generated_words"))
         check(status=="ready",f"{kind} generation status={status}")
         draft=self.req("GET",f"/books/jobs/{job['id']}/draft")
         check(len(draft["chapters"])==3 and all(c["text"].strip() for c in draft["chapters"]),

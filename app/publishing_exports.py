@@ -96,19 +96,20 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     if cover and cover.get("path"):
         p=doc.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
         p.add_run().add_picture(str(cover["path"]),width=Cm(10.7))
-        doc.add_page_break()
     h=doc.add_paragraph(book["title"],"Title");h.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    if cover and cover.get("path"):
+        h.paragraph_format.page_break_before=True
     for label in (meta["author"],meta["edition"],meta["publisher"],
                   str(meta["year"]) if meta["year"] is not None else ""):
         if label:
             p=doc.add_paragraph(label);p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    doc.add_page_break()
     # Word field: actual page numbers cannot be inferred before layout.
     # MS Word/compatible editor updates this dynamic TOC on open/field refresh.
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     toc_heading=doc.add_paragraph("Содержание",style="Title")
     toc_heading.paragraph_format.keep_with_next=True
+    toc_heading.paragraph_format.page_break_before=True
     p=doc.add_paragraph()
     begin=OxmlElement("w:fldChar")
     begin.set(qn("w:fldCharType"),"begin")
@@ -135,7 +136,6 @@ def manuscript_docx(project, illustrations=None) -> bytes:
         update.set(qn("w:val"),"true")
     except (AttributeError,TypeError):
         raise RuntimeError("Cannot set updateFields for DOCX TOC")
-    doc.add_page_break()
     def put_art(art):
         # Word: image paragraph must stay with its caption on the same page.
         # Cap the image height so portrait artwork can fit beside a caption.
@@ -150,9 +150,10 @@ def manuscript_docx(project, illustrations=None) -> bytes:
         if art.get("caption"):
             caption=doc.add_paragraph(art["caption"],style="Caption")
             caption.paragraph_format.keep_together=True
-    for i,ch in enumerate(book["chapters"]):
-        if i:doc.add_page_break()
-        doc.add_heading(ch["title"],level=1)
+    for ch in book["chapters"]:
+        # A break-only paragraph can spill onto an otherwise empty Word page.
+        heading=doc.add_heading(ch["title"],level=1)
+        heading.paragraph_format.page_break_before=True
         arts=group_images(illustrations,ch["scene_id"])
         for a in before_images(arts):put_art(a)
         parts=paragraphs(ch["text"])
@@ -160,8 +161,8 @@ def manuscript_docx(project, illustrations=None) -> bytes:
             doc.add_paragraph(part)
             for a in after_images(arts,n):put_art(a)
         for a in end_images(arts,len(parts)):put_art(a)
-    doc.add_page_break()
-    doc.add_heading("Выходные сведения",level=1)
+    colophon_heading=doc.add_heading("Выходные сведения",level=1)
+    colophon_heading.paragraph_format.page_break_before=True
     for line in colophon(meta):doc.add_paragraph(line)
     out=BytesIO();doc.save(out)
     return out.getvalue()

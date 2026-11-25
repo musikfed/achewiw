@@ -2,6 +2,7 @@ const $=s=>document.querySelector(s);
 let project=null, projects=[], pending=null, model='qwen3:8b', isBusy=false, previousSceneId=null;
 let activeGenerationJobId=null, refreshGenerationBusy=false, shownAuditJobId=null;
 let draftSaveTimer=null;
+let projectLoad=0, creatingProject=false;
 let bookJobId=null, bookPollBusy=false;
 let chapterPlan=null,storyMemory=null;
 let bookDraftMode=false, bookDraftBusy=false, bookDraftWords=-1, bookDraftFetchedAt=0;
@@ -202,6 +203,7 @@ function goHome(){
    stashUnsavedProject();
  }
  // The model job remains running on the server; only UI context changes.
+ ++projectLoad;
  project=null;
  pending=null;
  $('#aiPanel').hidden=true;
@@ -209,16 +211,84 @@ function goHome(){
  render();
  window.scrollTo({top:0,behavior:'instant'});
 }
-async function loadProject(id){if(isBusy)return;clearTimeout(draftSaveTimer);draftSaveTimer=null;if(project)stashUnsavedProject();const saved=await api('/projects/'+id);project=recoverUnsavedProject(saved);safeSet(localStorage,'achewiw.activeProjectId',id);pending=null;bookJobId=null;bookDraftMode=false;bookDraftWords=-1;bookDraftFetchedAt=0;render();recommendModel(false);const tab=safeGet(localStorage,uiKey('tab',id));if(['brief','structure','write','illustrations','audit','book','chat-generation','chat-editorial'].includes(tab))showTab(tab);await restoreLatestGeneration();await restoreLatestBook();await loadChapterPlan();await loadStoryMemory();const scroll=safeGet(sessionStorage,uiKey('scroll',id));if(scroll!==null&&Number.isFinite(Number(scroll))){requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'})))}}
-async function createProject(kind){
+async function loadProject(id){
  if(isBusy)return;
+ const load=++projectLoad;
+ clearTimeout(draftSaveTimer);
+ draftSaveTimer=null;
+ if(project)stashUnsavedProject();
+ try{
+   const saved=await api('/projects/'+id);
+   if(load!==projectLoad)return;
+   project=recoverUnsavedProject(saved);
+   safeSet(localStorage,'achewiw.activeProjectId',id);
+   pending=null;
+   activeGenerationJobId=null;
+   $('#aiPanel').hidden=true;
+   resetBookView();
+   render();
+   recommendModel(false);
+   const tab=safeGet(localStorage,uiKey('tab',id));
+   const tabs=['brief','structure','write','illustrations','audit','book','chat-generation','chat-editorial'];
+   showTab(tabs.includes(tab)?tab:'brief');
+   await restoreLatestGeneration();
+   if(load!==projectLoad)return;
+   await restoreLatestBook();
+   if(load!==projectLoad)return;
+   await loadChapterPlan();
+   if(load!==projectLoad)return;
+   await loadStoryMemory();
+   if(load!==projectLoad)return;
+   const scroll=safeGet(sessionStorage,uiKey('scroll',id));
+   if(scroll!==null&&Number.isFinite(Number(scroll))){
+     requestAnimationFrame(()=>requestAnimationFrame(()=>{
+       if(load===projectLoad)window.scrollTo({top:Math.max(0,Number(scroll)),behavior:'instant'});
+     }));
+   }
+ }catch(error){
+   if(load===projectLoad)toast('Не удалось открыть работу: '+error.message);
+ }
+}
+async function createProject(kind){
+ if(isBusy||creatingProject)return;
  const selected=workModes[kind]?kind:(activeKind==='all'?'fiction':activeKind);
- const title=prompt('Название: '+workModes[selected].name,'Новая работа');
- if(title===null||!title.trim())return;
- project=await api('/projects',{method:'POST',body:JSON.stringify({title:title.trim(),work_type:selected})});
- activeKind=selected;document.querySelectorAll('[data-kind-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.kindFilter===selected));
- pending=null;activeGenerationJobId=null;$('#aiPanel').hidden=true;
- await refreshProjects();render();showTab('brief');
+ const dialog=$('#projectCreateDialog'), input=$('#projectCreateTitle');
+ creatingProject=true;
+ try{
+   $('#projectCreateHeading').textContent='Новая работа · '+workModes[selected].name;
+   dialog.returnValue='';
+   input.value='Новая работа';
+   const decision=new Promise(resolve=>{
+     dialog.addEventListener('close',()=>{
+       resolve(dialog.returnValue==='create'?input.value.trim():'');
+     },{once:true});
+   });
+   dialog.showModal();
+   input.select();
+   const title=await decision;
+   if(!title)return;
+   const created=await api('/projects',{method:'POST',body:JSON.stringify({title,work_type:selected})});
+   ++projectLoad;
+   clearTimeout(draftSaveTimer);
+   draftSaveTimer=null;
+   if(project)stashUnsavedProject();
+   project=created;
+   safeSet(localStorage,'achewiw.activeProjectId',created.id);
+   activeKind=selected;
+   document.querySelectorAll('[data-kind-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.kindFilter===selected));
+   pending=null;
+   activeGenerationJobId=null;
+   $('#aiPanel').hidden=true;
+   resetBookView();
+   render();
+   showTab('brief');
+   await restoreLatestBook();
+   await refreshProjects();
+ }catch(error){
+   toast('Не удалось создать работу: '+error.message);
+ }finally{
+   creatingProject=false;
+ }
 }
 function clearDeletedProjectBrowserState(id){
  clearTimeout(draftSaveTimer);draftSaveTimer=null;
@@ -299,13 +369,17 @@ async function renderAuditHistory(){
 }
 async function renderBook(){
   if(!project)return;
+  const projectId=project.id;
   const container=$('#bookPreview');
   container.replaceChildren();
   $('#bookSummary').textContent='Читаем сохранённую рукопись…';
   for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=true;
   try{
-    const data=await api('/projects/'+project.id+'/manuscript',{cache:'no-store'});
-    const artwork=await api('/projects/'+project.id+'/illustrations',{cache:'no-store'});
+    const [data,artwork]=await Promise.all([
+      api('/projects/'+projectId+'/manuscript',{cache:'no-store'}),
+      api('/projects/'+projectId+'/illustrations',{cache:'no-store'})
+    ]);
+    if(project?.id!==projectId)return;
     $('#bookSummary').textContent=data.written_scenes+' из '+data.total_scenes+
       ' частей написано · '+data.total_words+' слов';
     const missing=data.unwritten.map(ch=>ch.index+'. '+ch.title);
@@ -393,6 +467,7 @@ async function renderBook(){
     container.append(credits);
     for(const id of ['bookMarkdown','bookEpub','bookFb2','bookPdf','bookPrint','bookDocx'])$('#'+id).hidden=false;
   }catch(e){
+    if(project?.id!==projectId)return;
     $('#bookSummary').textContent='Не удалось загрузить рукопись';
     $('#bookWarning').textContent=e.message;
   }
@@ -558,8 +633,10 @@ async function refreshGeneration(){
 }
 async function restoreLatestGeneration(){
   if(!project)return;
+  const projectId=project.id;
   try{
-    const jobs=await api('/projects/'+project.id+'/ai/jobs',{cache:'no-store'});
+    const jobs=await api('/projects/'+projectId+'/ai/jobs',{cache:'no-store'});
+    if(project?.id!==projectId)return;
     const latest=jobs.find(j=>j.mode!=='book');
     if(latest){
       activeGenerationJobId=['queued','running'].includes(latest.status)?latest.id:null;
@@ -569,7 +646,9 @@ async function restoreLatestGeneration(){
       activeGenerationJobId=null;
       setBusy(false);
     }
-  }catch(e){toast('Не удалось восстановить журнал генерации: '+e.message)}
+  }catch(e){
+    if(project?.id===projectId)toast('Не удалось восстановить журнал генерации: '+e.message);
+  }
 }
 
 function setBookReaderMode(draft, forceRefresh=true){
@@ -629,12 +708,13 @@ async function refreshBookDraft(force=false){
    }
    bookDraftWords=data.book.generated_words;
  }catch(e){
-   $('#bookDraftPreview').textContent='Ошибка чтения глав: '+e.message;
+   if(project?.id===projectId&&bookJobId===jobId){
+     $('#bookDraftPreview').textContent='Ошибка чтения глав: '+e.message;
+   }
  }finally{bookDraftBusy=false}
 }
-function updateBookProduction(job){
- const summary=job.book||{}, chapters=job.book_chapters||[];
- const accepted=chapters.length>0 && chapters.every(c=>c.accepted_at);
+function updateBookProduction(job,accepted,stage){
+ const summary=job.book||{};
  const active=['queued','running'].includes(job.status);
  $('#bookGenerate').hidden=active || (!accepted&&['ready','interrupted','error'].includes(job.status));
  $('#bookResume').hidden=!['interrupted','error'].includes(job.status);
@@ -646,7 +726,7 @@ function updateBookProduction(job){
    '⏸ После фрагмента — пауза';
  $('#bookAccept').hidden=job.status!=='ready'||accepted;
  $('#bookGenerationProgress').value=Math.min(100,summary.percent_words||0);
- $('#bookGenerationStatus').textContent=(job.stage||job.status)+' · написано '+
+ $('#bookGenerationStatus').textContent=stage+' · написано '+
    (summary.generated_words||0).toLocaleString('ru-RU')+' / '+
    (summary.target_words||0).toLocaleString('ru-RU')+
    ' слов ('+(summary.percent_words||0)+'%) · глав '+(summary.chapters_complete||0)+
@@ -660,15 +740,17 @@ function updateBookProduction(job){
 
 function renderFullBookJob(job){
  if(!project||job.project_id!==project.id)return;
- const written=job.book?.generated_words||0,target=job.book?.target_words||0;
+ const b=job.book||{}, chapters=job.book_chapters||[];
+ const active=['queued','running'].includes(job.status);
+ const accepted=chapters.length>0 && chapters.every(c=>c.accepted_at);
+ const stage=accepted?'Главы приняты в рукопись':(job.stage||job.status);
+ const written=b.generated_words||0,target=b.target_words||0;
  $('#bookLiveBar').hidden=false;
  $('#bookLiveProgress').value=Math.min(100,job.book?.percent_words||0);
- $('#bookLiveStatus').textContent=(job.stage||job.status)+
+ $('#bookLiveStatus').textContent=stage+
    ' · '+written.toLocaleString('ru-RU')+' / '+target.toLocaleString('ru-RU')+
-   ' слов ('+(job.book?.percent_words||0)+'%) · '+
-   (['queued','running'].includes(job.status)?
-      'ГЕНЕРАЦИЯ ИДЁТ НА СЕРВЕРЕ'+(job.stream_words?' · ещё '+job.stream_words+' слов в буфере':''):
-    job.status==='ready'?'Ожидает решения автора':'Можно продолжить с сохранённого текста');
+   ' слов ('+(b.percent_words||0)+'%)'+
+   (active?' · ГЕНЕРАЦИЯ ИДЁТ НА СЕРВЕРЕ'+(job.stream_words?' · ещё '+job.stream_words+' слов в буфере':''):'');
  $('#bookLiveJob').textContent='Задание '+job.id.slice(0,12)+
    ' · '+job.model+' · '+(job.book?.chapters_complete||0)+'/'+(job.book?.chapters||0)+' глав';
  $('#bookLiveResume').hidden=!['error','interrupted'].includes(job.status);
@@ -681,9 +763,6 @@ function renderFullBookJob(job){
  bookJobId=job.id;
  if(changedJob){bookDraftWords=-1;bookDraftMode=true;}
  safeSet(localStorage,uiKey('bookJob'),job.id);
- const b=job.book||{}, chapters=job.book_chapters||[];
- const active=['queued','running'].includes(job.status);
- const accepted=chapters.length&&chapters.every(c=>c.accepted_at);
  $('#generateFullBook').disabled=isBusy;
  $('#generateFullBook').textContent=active?'▶ Вернуться к генерации книги':
    accepted?'✦ Написать новую редакцию книги':'▶ Открыть сохранённую генерацию';
@@ -694,13 +773,13 @@ function renderFullBookJob(job){
  const progress=$('#fullBookProgress');
  progress.hidden=false;progress.value=Math.min(100,b.percent_words||0);
  $('#fullBookStatus').textContent=
-   (job.stage||job.status)+' · '+(b.generated_words||0).toLocaleString('ru-RU')+
+   stage+' · '+(b.generated_words||0).toLocaleString('ru-RU')+
    ' / '+(b.target_words||0).toLocaleString('ru-RU')+
    ' слов ('+(b.percent_words||0)+'%); глав: '+(b.chapters_complete||0)+'/'+(b.chapters||0)+
    (job.error?' · '+job.error:'')+
    (job.stream_words?' · ещё '+job.stream_words+' слов в устойчивом буфере Ollama':'')+
    (accepted?' · Принято в рукопись.':' · Черновики отдельно от рукописи.');
- updateBookProduction(job);
+ updateBookProduction(job,accepted,stage);
  if(bookDraftMode && (changedJob||bookDraftWords!==b.generated_words))refreshBookDraft();
  $('#fullBookChapters').replaceChildren(...chapters.map(c=>{
    const item=document.createElement('div');
@@ -771,42 +850,50 @@ async function refreshFullBook(){
    }
  }finally{bookPollBusy=false}
 }
+function resetBookView(){
+ bookJobId=null;
+ bookDraftWords=-1;
+ bookDraftFetchedAt=0;
+ const checking='Проверяем сохранённую генерацию книги…';
+ $('#fullBookStatus').textContent=checking;
+ $('#bookGenerationStatus').textContent=checking;
+ $('#bookProductionHint').textContent='';
+ $('#fullBookChapters').replaceChildren();
+ $('#bookDraftPreview').replaceChildren();
+ $('#bookGenerationProgress').value=0;
+ for(const id of ['bookLiveBar','fullBookProgress','resumeFullBook','acceptFullBook',
+                 'bookResume','bookAccept','bookPause','bookGenerate',
+                 'bookLivePdf','bookPartialPdf','bookPartialPdfPlan']){
+   $('#'+id).hidden=true;
+ }
+ const generate=$('#generateFullBook');
+ generate.disabled=true;
+ generate.textContent='✦ Написать всю книгу';
+ setBookReaderMode(false,false);
+}
 async function restoreLatestBook(){
  if(!project)return;
  const projectId=project.id;
- bookJobId=null;
- $('#bookLiveBar').hidden=true;
- $('#fullBookStatus').textContent='Проверяем сохранённую генерацию книги…';
- const current=await api('/projects/'+projectId+'/books/current',{cache:'no-store'});
- if(!project||project.id!==projectId)return;
- if(current.job){
-   bookDraftMode=true;
-   bookDraftWords=-1;
-   bookDraftFetchedAt=0;
-   renderFullBookJob(current.job);
- }else{
-   const jobs=await api('/projects/'+projectId+'/ai/jobs?mode=book',{cache:'no-store'});
-   if(!project||project.id!==projectId)return;
-   if(jobs.length){
-     bookDraftMode=false;
-     renderFullBookJob(jobs[0]);
+ try{
+   const current=await api('/projects/'+projectId+'/books/current',{cache:'no-store'});
+   if(project?.id!==projectId)return;
+   if(current.job){
+     renderFullBookJob(current.job);
      return;
    }
-   $('#bookLiveBar').hidden=true;
-   $('#fullBookStatus').textContent='Укажи целевой объём, утверди каркас и нажми «Написать всю книгу».';
-   $('#fullBookChapters').textContent='';
-   $('#fullBookProgress').hidden=true;
-   $('#resumeFullBook').hidden=true;
-   $('#acceptFullBook').hidden=true;
-   $('#generateFullBook').disabled=false;
-   $('#bookGenerate').hidden=false;
-   $('#bookResume').hidden=true;
-   $('#bookAccept').hidden=true;
-   $('#bookGenerationProgress').value=0;
-   $('#bookGenerationStatus').textContent='Генерация не запускалась. Цель: '+(project.target_length||'не указана')+
-     '. Сохранённые краткие описания глав — это ещё не книга.';
-   $('#bookProductionHint').textContent='Начни новую книгу — главы будут сохранены в SQLite.';
-   setBookReaderMode(false);
+   $('#fullBookStatus').textContent='Нет незавершённой генерации. Утверди каркас и нажми «Написать всю книгу».';
+   $('#bookGenerationStatus').textContent='Нет незавершённой генерации. Цель: '+(project.target_length||'не указана')+'.';
+   $('#bookProductionHint').textContent='Главы нового задания будут сохранены в SQLite.';
+ }catch(error){
+   if(project?.id!==projectId)return;
+   const message='Не удалось прочитать статус книги: '+error.message;
+   $('#fullBookStatus').textContent=message;
+   $('#bookGenerationStatus').textContent=message;
+ }finally{
+   if(project?.id===projectId&&!bookJobId){
+     $('#generateFullBook').disabled=isBusy;
+     $('#bookGenerate').hidden=false;
+   }
  }
 }
 

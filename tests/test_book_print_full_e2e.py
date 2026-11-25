@@ -5,7 +5,7 @@ or author files. PDF pagination/TOC are measured from actual ReportLab output.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -102,7 +102,7 @@ class FullJourney(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.path=Path(self.temp.name)/"achewiw.sqlite3"
         self.original=Project(id="synthetic-hdd")
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("""CREATE TABLE projects(
                 id TEXT PRIMARY KEY,data TEXT NOT NULL,updated_at TEXT NOT NULL)""")
             conn.execute("INSERT INTO projects VALUES(?,?,?)",
@@ -193,6 +193,16 @@ class FullJourney(unittest.TestCase):
                 evidence_ids=proposed["evidence_ids"],model="qwen3:8b",
                 instruction="Уточни процесс")
         return saved
+
+
+    def test_docx_page_starts_are_bound_to_headings(self):
+        from docx import Document
+
+        project=self.make_book()
+        document=Document(BytesIO(manuscript_docx(project)))
+        starts=[p.text for p in document.paragraphs if p.paragraph_format.page_break_before]
+        self.assertEqual(starts,["Содержание",*(s.title for s in project.scenes),"Выходные сведения"])
+        self.assertFalse(document.element.xpath(".//w:br[@w:type='page']"))
 
     def test_book_real_pdf_toc_llm_approve_and_undo(self):
         p=self.make_book()

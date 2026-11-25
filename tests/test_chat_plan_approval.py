@@ -1,5 +1,5 @@
 """Step 10: shared Studio outline/brief approval and safe chat LLM proposal."""
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -53,7 +53,7 @@ class OutlineIntegrationTests(unittest.TestCase):
             Scene(id="s1",title="Магнитная головка"),
             Scene(id="s2",title="Дорожки и сектора"),
         ])
-        with sqlite3.connect(self.dbpath) as connection:
+        with closing(sqlite3.connect(self.dbpath)) as connection, connection:
             connection.execute("CREATE TABLE projects(id TEXT PRIMARY KEY,data TEXT NOT NULL,updated_at TEXT NOT NULL)")
             connection.execute("INSERT INTO projects VALUES(?,?,?)",
                 (self.project.id,self.project.model_dump_json(),""))
