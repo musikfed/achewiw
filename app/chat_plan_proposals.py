@@ -90,7 +90,8 @@ def _validate_candidate(project, current_plan, candidate):
         if not isinstance(item,dict) or set(item)!=fields or item["scene_id"]!=scene.id:
             raise ValueError("Chapter identifiers/order or field set changed")
         for key,max_length in [("title",200),("anchor",2000),("hook",2000)]:
-            if (not isinstance(item[key],str) or (key=="title" and not item[key].strip())\n                or len(item[key])>max_length):
+            if (not isinstance(item[key],str) or (key=="title" and not item[key].strip())
+                or len(item[key])>max_length):
                 raise ValueError("Invalid chapter "+key)
             setattr(scene,key,item[key])
         if item["target_words"]!=current_plan["chapters"][len(rows)]["target_words"]:
