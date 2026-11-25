@@ -150,6 +150,8 @@ def install(api: APIRouter, namespace: dict) -> None:
                                     body: ChatOllamaRequest):
         """One bounded, synchronous draft. Never changes the selected edition."""
         root=context(project_id)
+        # First invocation must create link tables before read-only preflight.
+        linked.initialize(root)
         from editor_workspace import _open
         from gpu_scheduling import reserve_gpu, release_gpu, image_operation_active
         from generation_core import active_job
