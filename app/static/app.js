@@ -1490,6 +1490,24 @@ async function applyAI(){
  toast('Предложение принято. Нажмите «Сохранить» для записи в базу.');
 }
 async function detectModels(){try{const data=await api('/models');const select=$('#model');select.innerHTML='';for(const m of data.models){const o=document.createElement('option');o.value=m;o.textContent=m;select.append(o)}const saved=safeGet(localStorage,'achewiw.v8.selectedModel');if(saved&&data.models.includes(saved))model=saved;else if(!data.models.includes(model))model=(data.models.includes(modelPicks[project?.work_type||'fiction']?.name)?modelPicks[project?.work_type||'fiction'].name:data.models[0]);if(model)select.value=model;recommendModel(false);$('#unloadModel').disabled=!data.models.length||isBusy;$('#ollamaStatus').textContent='● Ollama на хосте · '+data.models.length+' моделей';$('#ollamaStatus').style.color='#34865b'}catch(e){$('#ollamaStatus').textContent='⚠ '+e.message;$('#ollamaStatus').style.color='#bd6651'}}
+// Chat outline acceptance updates the SAME canonical project and book-plan.
+document.addEventListener('achewiw:chat-outline-approved',async event=>{
+  const id=event.detail?.projectId;
+  if(!id||!project||project.id!==id)return;
+  clearTimeout(draftSaveTimer);draftSaveTimer=null;
+  // Keep a recovery copy of any unsaved local edits instead of silently
+  // replaying a stale browser draft over the approved canonical plan.
+  const oldDraft=safeGet(sessionStorage,uiKey('manuscriptDraft',id));
+  if(oldDraft)safeSet(sessionStorage,uiKey('preChatOutlineBackup',id),oldDraft);
+  try{sessionStorage.removeItem(uiKey('manuscriptDraft',id))}catch{}
+  try{
+    const refreshed=await api('/projects/'+id,{cache:'no-store'});
+    if(!project||project.id!==id)return;
+    project=refreshed;render();
+    await loadChapterPlan();await loadStoryMemory();
+    toast('Принятый каркас доступен в 01 · Задание и 02 · План. Текст глав сохранён.');
+  }catch(error){toast('План принят, но обновление интерфейса не удалось: '+error.message)}
+});
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(!project)return;updateBrief();collectScenes();collectText();showTab(b.dataset.tab)});
 $('#goHome').onclick=goHome;
 $('#newProject').onclick=$('#startProject').onclick=()=>createProject();
