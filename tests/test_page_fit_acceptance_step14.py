@@ -124,6 +124,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(accepted.json()["status"],"accepted")
         self.assertEqual(accepted.json()["final_pdf_preflight"]["pages"],4)
         self.assertTrue(accepted.json()["docx_toc_update_required"])
+        self.assertTrue(accepted.json()["pdf_proof_ready"])
+        self.assertFalse(accepted.json()["release_ready"])
         self.assertIn(PARAGRAPH,self.text())
         with self.database() as db:
             self.assertEqual(db.execute("SELECT status FROM ai_page_fit_reviews").fetchone()[0],
