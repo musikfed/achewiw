@@ -2705,7 +2705,7 @@ def download_audit_report(job_id: str):
 
 @api.get("/projects/{project_id}/ai/jobs")
 def project_generation_history(project_id: str,
-                               mode: Literal["outline", "scene", "audit", "block", "continuity", "polish"] | None = None,
+                               mode: Literal["outline", "scene", "audit", "block", "continuity", "polish", "book"] | None = None,
                                summary: bool = False):
     get_project(project_id)
     with db() as connection:

@@ -41,6 +41,28 @@ class StudioUITests(unittest.TestCase):
         self.assertEqual(parser.ids.get("editor"),1)
         self.assertIn("['brief','structure','write','illustrations','audit','book','chat-generation','chat-editorial']",self.appjs)
 
+    def test_new_project_has_an_in_page_title_form(self):
+        parser=NodeCollector();parser.feed(self.html)
+        for element in ("projectCreateDialog","projectCreateForm","projectCreateTitle"):
+            self.assertEqual(parser.ids.get(element),1)
+        self.assertIn('method="dialog"',self.html)
+        create=self.appjs.split("async function createProject(kind){",1)[1].split(
+            "function clearDeletedProjectBrowserState",1)[0]
+        self.assertIn("dialog.showModal()",create)
+        self.assertNotIn("prompt(",create)
+
+    def test_project_switch_clears_book_controls_before_restoring_job(self):
+        opening=self.appjs.split("async function loadProject(id){",1)[1].split(
+            "async function createProject",1)[0]
+        reset=self.appjs.split("function resetBookView(){",1)[1].split(
+            "async function restoreLatestBook",1)[0]
+        self.assertLess(opening.index("resetBookView()"),opening.index("showTab("))
+        self.assertLess(opening.index("resetBookView()"),opening.index("await restoreLatestBook()"))
+        self.assertIn("bookJobId=null",reset)
+        for item in ("bookPause","bookAccept","bookDraftPdfIds"):
+            self.assertIn(item,reset)
+        self.assertNotIn("/ai/jobs?mode=book",self.appjs)
+
     def test_assets_and_no_dynamic_html_from_model(self):
         parser=NodeCollector();parser.feed(self.html)
         self.assertEqual(len([s for s in parser.scripts if s and "chat_studio.js" in s]),1)

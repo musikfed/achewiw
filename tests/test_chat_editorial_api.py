@@ -60,6 +60,13 @@ class ChatApiTests(unittest.TestCase):
             json={"message":"Убери вводную фразу","scope":"chapter",
                   "scene_id":"chapter-1","base_version_id":self.edition["id"]})
 
+    def test_unattached_project_returns_not_found_before_first_edit(self):
+        result=self.client.get(self.url+"/chat-edition")
+        self.assertEqual(result.status_code,404,result.text)
+        self.attach()
+        self.assertEqual(self.client.get(self.url+"/chat-edition").json()["version_id"],
+                         self.edition["id"])
+
     def test_full_api_proposal_decision_and_read(self):
         self.attach()
         tid=self.setup_thread()

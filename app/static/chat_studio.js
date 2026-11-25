@@ -20,7 +20,9 @@ const req=async(path,options={})=>{
  if(!res.ok){
   let message='HTTP '+res.status;
   try{const data=await res.json();message=String(data.detail||message)}catch{}
-  throw Error(message);
+  const error=new Error(message);
+  error.status=res.status;
+  throw error;
  }
  return res.json();
 };
@@ -150,8 +152,10 @@ async function head(){
   }
   if(result.chapters.some(c=>c.scene_id===old))scene.value=old;
  }catch(err){
+  if(projectId()!==pid)return;
   state.editorial.head=null;$(panel,'[data-chat-scene]').replaceChildren();
-  $(panel,'[data-chat-head]').textContent='Нет выбранной редакции. '+err.message;
+  $(panel,'[data-chat-head]').textContent=err.status===404?
+   'Рабочая редакция не выбрана.':'Не удалось загрузить рабочую редакцию. '+err.message;
  }
 }
 async function recoverPreview(){

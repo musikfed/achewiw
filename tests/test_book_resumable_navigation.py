@@ -38,6 +38,19 @@ def _new_book(client):
     return project,result.json()
 
 
+def test_book_job_history_filter_stays_within_open_project(tmp_path,monkeypatch):
+    with _api(tmp_path,monkeypatch) as client:
+        project,job=_new_book(client)
+        empty=client.post("/api/projects",json={"title":"Другая книга"}).json()
+        first=client.get(f"/api/projects/{project['id']}/ai/jobs?mode=book")
+        assert first.status_code==200,first.text
+        assert [item["id"] for item in first.json()]==[job["id"]]
+        second=client.get(f"/api/projects/{empty['id']}/ai/jobs?mode=book")
+        assert second.status_code==200,second.text
+        assert second.json()==[]
+        assert client.get(f"/api/projects/{empty['id']}/books/current").json()=={"job":None}
+
+
 def test_get_current_and_duplicate_start_are_server_idempotent(tmp_path,monkeypatch):
     with _api(tmp_path,monkeypatch) as client:
         p,job=_new_book(client)

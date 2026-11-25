@@ -1,7 +1,7 @@
 """Short-fragment local Ollama candidate: isolated HTTP mocks and real work SQLite."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -85,7 +85,7 @@ class OllamaApiTests(unittest.TestCase):
             {"scene_id":"chapter-1","text":BEFORE,"title":"Глава","complete":True}
         ],source_kind="manuscript")
         dbpath=self.root/"achewiw.sqlite3"
-        with sqlite3.connect(dbpath) as conn:
+        with closing(sqlite3.connect(dbpath)) as conn, conn:
             conn.execute("CREATE TABLE ai_jobs(id TEXT,status TEXT)")
             init_gpu_leases(conn)
         @contextmanager
