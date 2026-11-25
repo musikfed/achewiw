@@ -2,6 +2,8 @@
 from pathlib import Path
 import sys
 import unittest
+from io import BytesIO
+from zipfile import ZipFile,ZIP_DEFLATED
 from pydantic import BaseModel,Field
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"app"))
@@ -55,6 +57,31 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result["status"],"PASS",result["blocking"])
         self.assertTrue(all(x["match"] is True for x in result["headings"]))
         self.assertGreaterEqual(result["toc_links"]["total_links"],2)
+
+    def test_office_resave_clears_update_flag_but_real_refreshed_toc_can_pass(self):
+        # Office sometimes removes the Word-specific update-on-open preference
+        # after it actually refreshed the table. This must not falsify the
+        # measured PDF / author-approved publication gate.
+        original=manuscript_docx(book())
+        stream=BytesIO()
+        with ZipFile(BytesIO(original)) as source, ZipFile(stream,"w",ZIP_DEFLATED) as target:
+            for member in source.namelist():
+                data=source.read(member)
+                if member=="word/settings.xml":
+                    data=data.replace(b'updateFields w:val="true"',b'updateFields w:val="false"')
+                    data=data.replace(b'updateFields w:val="1"',b'updateFields w:val="false"')
+                target.writestr(member,data)
+        refreshed=stream.getvalue()
+        self.assertFalse(inspect_docx_toc(refreshed)["update_on_open"])
+        pdf=manuscript_pdf(book(),print_proof=True)
+        allowed=release_preflight(docx=refreshed,final_pdf=pdf,
+            chapter_titles=[x.title for x in book().scenes],office_refreshed=True)
+        self.assertEqual(allowed["status"],"PASS",allowed["blocking"])
+        self.assertTrue(any(x["code"]=="UPDATE_FLAG_CLEARED_BY_OFFICE"
+                            for x in allowed["warnings"]))
+        forbidden=release_preflight(docx=refreshed,final_pdf=pdf,
+            chapter_titles=[x.title for x in book().scenes],office_refreshed=False)
+        self.assertEqual(forbidden["status"],"BLOCKED")
 
     def test_missing_chapter_prevents_publication(self):
         p=book()
