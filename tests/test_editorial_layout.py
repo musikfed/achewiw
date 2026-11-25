@@ -63,14 +63,14 @@ class EditorialLayoutTests(unittest.TestCase):
         parser.feed(HTML)
         urls = parser.stylesheet_urls + parser.script_urls
         expected = {
-            "/static/style.css?v=20261124-editorial-v21",
-            "/static/monitor.js?v=20261124-editorial-v21",
-            "/static/app.js?v=20261124-editorial-v21",
-            "/static/writing_blocks.js?v=20261124-editorial-v21",
-            "/static/illustrations.js?v=20261124-editorial-v21",
+            "/static/style.css?v=20261125-editorial-v22",
+            "/static/monitor.js?v=20261125-editorial-v22",
+            "/static/app.js?v=20261125-editorial-v22",
+            "/static/writing_blocks.js?v=20261125-editorial-v22",
+            "/static/illustrations.js?v=20261125-editorial-v22",
             "/static/conveyor.js?v=20261105-conveyor-v1",
             "/static/author_dictation.js?v=20261124-v1",
-            "/static/chat_studio.js?v=20261125-chat-v1",
+            "/static/chat_studio.js?v=20261125-chat-v2",
         }
         # Guard the exact release inventory: reject duplicates, missing or
         # unexpected scripts rather than simply raising the expected count.
