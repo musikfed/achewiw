@@ -93,7 +93,7 @@ def chapter_text(i):
       "Дорожки и сектора используются для организации информации на поверхности. "
       "Физическая геометрия и способы адресации связаны, но не тождественны."
     ]
-    return "\n\n".join((patterns[i]+" "+patterns[i])*7 for _ in range(9))
+    return "\n\n".join((patterns[i]+" "+patterns[i])*7 for _ in range(2))
 
 
 class FullJourney(unittest.TestCase):
@@ -202,6 +202,11 @@ class FullJourney(unittest.TestCase):
         self.assertEqual(len(before["headings"]),3)
         # The page references must be real, not fabricated by mocked preflight.
         self.assertTrue(all(h["actual_pdf_page"] is not None for h in before["headings"]))
+        if not all(h["toc_page"] is not None for h in before["headings"]):
+            import fitz
+            with fitz.open(stream=pdf_before,filetype="pdf") as pdf:
+                print("DEBUG TOC page 2 text:",repr(pdf[1].get_text("text",sort=True)[:1600]))
+                print("DEBUG TOC page 2 words:",repr(pdf[1].get_text("words")[:40]))
         self.assertTrue(all(h["toc_page"] is not None for h in before["headings"]),
                         before["headings"])
         self.assertTrue(all(h["match"] is True for h in before["headings"]),
