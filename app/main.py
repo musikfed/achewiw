@@ -1410,6 +1410,77 @@ def download_manuscript_pdf(project_id: str):
                              "Cache-Control": "no-store"})
 
 
+class PrintFitPreviewRequest(BaseModel):
+    scene_id: str = Field(min_length=1,max_length=160)
+    proposed_text: str = Field(min_length=50,max_length=1500)
+
+
+@api.get("/projects/{project_id}/print-proof/preflight")
+def print_proof_preflight(project_id: str):
+    """Read-only proof after real pagination; never alters the stored manuscript."""
+    from manuscript_core import chapter_listing
+    from print_proof_preflight import inspect_pdf
+    project=get_project(project_id)
+    book=chapter_listing(project)
+    if not book["chapters"]:
+        raise HTTPException(409,"Нет сохранённых глав для печатной проверки")
+    try:
+        payload=manuscript_pdf(project,print_proof=True,
+            illustrations=illustrations_for_book(project_id))
+        return inspect_pdf(payload,
+            chapter_titles=[ch["title"] for ch in book["chapters"]],
+            edition_label=getattr(project,"edition_label","") or None)
+    except (ValueError,RuntimeError) as exc:
+        raise HTTPException(422,str(exc)) from exc
+
+
+@api.post("/projects/{project_id}/print-proof/preview-fit")
+def print_proof_preview_fit(project_id: str,request: PrintFitPreviewRequest):
+    """Author-supplied, not fact-checked insert; proof both layouts without committing."""
+    from manuscript_core import chapter_listing
+    from print_proof_preflight import inspect_pdf
+    from copy import deepcopy
+    from hashlib import sha256
+    original=get_project(project_id)
+    scene=next((s for s in original.scenes if s.id==request.scene_id),None)
+    if scene is None or not scene.text.strip():
+        raise HTTPException(409,"Выберите существующую написанную главу")
+    snippet=request.proposed_text.strip()
+    if len(snippet.split())>180:
+        raise HTTPException(422,"Ограничение пробной смысловой вставки: 180 слов")
+    if snippet in scene.text:
+        raise HTTPException(409,"Предложенный текст уже содержится в главе")
+    review=deepcopy(original)
+    target=next(s for s in review.scenes if s.id==scene.id)
+    target.text=scene.text.rstrip()+"\\n\\n"+snippet
+    # No writes to SQLite and no modification to author originals.
+    try:
+        artwork=illustrations_for_book(project_id)
+        before=manuscript_pdf(original,print_proof=True,illustrations=artwork)
+        after=manuscript_pdf(review,print_proof=True,illustrations=artwork)
+        titles=[c["title"] for c in chapter_listing(original)["chapters"]]
+        a=inspect_pdf(before,chapter_titles=titles)
+        b=inspect_pdf(after,chapter_titles=titles)
+    except (ValueError,RuntimeError) as exc:
+        raise HTTPException(422,str(exc)) from exc
+    affected=[]
+    previous={x["title"]:x for x in a["headings"]}
+    for heading in b["headings"]:
+        p=previous.get(heading["title"])
+        if p and p["actual_pdf_page"]!=heading["actual_pdf_page"]:
+            affected.append({"title":heading["title"],"before":p["actual_pdf_page"],
+                             "after":heading["actual_pdf_page"]})
+    return {"source_project_id":original.id,
+        "source_hash":sha256(original.model_dump_json().encode()).hexdigest(),
+        "scene_id":scene.id,"preview_only":True,"saved":False,
+        "fact_check":"not_verified","editor_review_required":True,
+        "before":{"pages":a["page_count"],"findings":a["findings"]},
+        "after":{"pages":b["page_count"],"findings":b["findings"]},
+        "page_delta":b["page_count"]-a["page_count"],
+        "moved_headings":affected,
+        "instructions":"Проверить факты, повторы и смысл. Для утверждения правки использовать существующий редактор с сохранением новой версии."}
+
+
 @api.get("/projects/{project_id}/manuscript.print.pdf")
 def download_print_proof_pdf(project_id: str):
     try:
