@@ -281,7 +281,7 @@ def install(api: APIRouter, namespace: dict) -> None:
                     base_url=namespace["OLLAMA_BASE_URL"],model=body.model,
                     instruction=text,previous=baseline["chapters"],
                     offset=baseline["created"],count=baseline["next_batch_size"],
-                    total_words=baseline["total_words"],work_type=project.work_type)
+                    total_words=baseline["total_words"],total_chapters=baseline["count"],work_type=project.work_type)
             finally:
                 with namespace["db"]() as db:
                     release_gpu(db,lease)
