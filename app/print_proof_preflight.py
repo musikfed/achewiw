@@ -18,7 +18,7 @@ from page_fit_advisor import PageEvidence, recommend
 
 PAGE_LIMIT = 1200
 MAX_PDF_BYTES = 65 * 1024 * 1024
-NUM_RE = re.compile(r"(?:\.{2,}|…{2,})\s*(\d{1,5})\s*$")
+NUM_RE = re.compile(r"(?:\.{2,}|…{2,}|[ \t]{2,})\s*(\d{1,5})\s*$")
 SPACE_RE = re.compile(r"(?<!\S)[ \t]{3,}|\S {5,}\S")
 ROMAN_RE = re.compile(r"^(?:[IVXLCDM]+)\.\s+", re.I)
 
