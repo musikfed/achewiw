@@ -16,6 +16,8 @@ import chat_editorial_version_bridge as editions
 import chat_linked_edits as linked
 import chat_ollama_editor as ollama_editor
 import chat_book_control as book_control
+import chat_plan_proposals as plan_proposals
+import chat_plan_ollama as plan_ollama
 
 
 class ChatThreadRequest(BaseModel):
@@ -56,6 +58,15 @@ class ChatBookControlRequest(BaseModel):
     action: Literal["start", "pause", "resume"]
     confirm: Literal[True]
     model: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class ChatOutlineRequest(BaseModel):
+    chat_proposal_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    model: str = Field(min_length=1,max_length=200)
+
+
+class ChatOutlineDecision(BaseModel):
+    approve: bool
 
 
 class ChatDecisionRequest(BaseModel):
@@ -182,6 +193,91 @@ def install(api: APIRouter, namespace: dict) -> None:
                             action=body.action,job=job)
         return {"job":job,"action":body.action,"source":"canonical_ai_jobs",
                 "independent_generator":False,"author_confirmed":True}
+
+    @api.get("/projects/{project_id}/chats/{thread_id}/outline")
+    def chat_outline_read(project_id: str, thread_id: str):
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+        except (ValueError,book_control.BookControlConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+        with namespace["db"]() as db:
+            plan_proposals.initialize(db)
+            baseline=plan_proposals.snapshot(db,project_id,namespace["Project"])
+            latest=plan_proposals.latest(db,project_id=project_id,thread_id=thread_id,
+                                          project_type=namespace["Project"])
+        return {"baseline":baseline,"latest":latest}
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/outline",status_code=201)
+    async def chat_outline_prepare(project_id: str, thread_id: str,
+                                   body: ChatOutlineRequest):
+        """Generate a reviewable outline, no canonical mutation before acceptance."""
+        root=context(project_id)
+        from editor_workspace import _open
+        from gpu_scheduling import reserve_gpu,release_gpu,image_operation_active
+        from generation_core import active_job
+        import uuid
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with _open(root/"work.sqlite3") as work:
+                proposal=work.execute("""SELECT p.status,m.content,m.role
+                    FROM work_chat_proposals p
+                    JOIN work_chat_messages m ON m.id=p.message_id AND m.thread_id=p.thread_id
+                    WHERE p.id=? AND p.thread_id=?""",
+                    (body.chat_proposal_id,thread_id)).fetchone()
+                if not proposal or proposal["status"]!="proposed" or proposal["role"]!="author":
+                    raise plan_proposals.PlanConflict("Select an existing author instruction")
+                instruction=proposal["content"]
+            with namespace["db"]() as db:
+                if namespace["_current_book_job_id"](db,project_id):
+                    raise plan_proposals.PlanConflict("Existing unfinished book job blocks outline changes")
+                baseline=plan_proposals.snapshot(db,project_id,namespace["Project"])
+                token=uuid.uuid4().hex
+                db.execute("BEGIN IMMEDIATE")
+                if active_job(db) or image_operation_active(db) or not reserve_gpu(db,token,"chat_outline"):
+                    raise plan_proposals.PlanConflict("GPU is occupied by an existing job")
+            try:
+                generated=await plan_ollama.propose(
+                    base_url=namespace["OLLAMA_BASE_URL"],model=body.model,
+                    instruction=instruction,snapshot=baseline)
+            finally:
+                with namespace["db"]() as db:
+                    release_gpu(db,token)
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if namespace["_current_book_job_id"](db,project_id):
+                    raise plan_proposals.PlanConflict("Book job started while outline was prepared")
+                result=plan_proposals.create(db,project_id=project_id,thread_id=thread_id,
+                    chat_proposal_id=body.chat_proposal_id,
+                    candidate=generated["candidate"],
+                    expected_digest=baseline["base_digest"],
+                    project_type=namespace["Project"])
+            return {**result,"model":generated["model"],
+                    "input_tokens":generated["input_tokens"],
+                    "output_tokens":generated["output_tokens"],
+                    "requires_approval":True}
+        except (plan_proposals.PlanConflict,book_control.BookControlConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/outline/{proposal_id}/decision")
+    def chat_outline_decision(project_id: str, thread_id: str,
+                              proposal_id: str, body: ChatOutlineDecision):
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                result=plan_proposals.decide(db,project_id=project_id,
+                    thread_id=thread_id,proposal_id=proposal_id,approve=body.approve,
+                    project_type=namespace["Project"],
+                    has_pending_book=namespace["_current_book_job_id"])
+            return result
+        except (plan_proposals.PlanConflict,book_control.BookControlConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
 
     @api.post("/projects/{project_id}/chat-edition",status_code=201)
     def chat_attach_edition(project_id: str, body: ChatEditionAttach):
