@@ -1,0 +1,48 @@
+name: Import ACHEWIW real Studio screenshots (one-time)
+on:
+  push:
+    paths:
+      - .github/workflows/import-studio-screenshots-20261125.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download uploaded real Studio screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/screenshots
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/9OfYuc0je0SBd7b0' -o docs/screenshots/01-publication-history-20261125.png
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/dpkr9MblRzaJPhHp' -o docs/screenshots/02-studio-home-20261125.png
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/XRcpEWN2exZzG2UG' -o docs/screenshots/03-editorial-chat-20261125.png
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/47ZsZCxO4DQR9hB7' -o docs/screenshots/04-editorial-chat-detail-20261125.png
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/CtzwxkmZ4IN4X4xf' -o docs/screenshots/05-generation-chat-20261125.png
+          curl --fail --location --retry 3 --silent --show-error 'https://at.adobe.com/dCu0RgrdYgrCv8CA' -o docs/screenshots/06-book-brief-20261125.png
+          python - <<'PY'
+          from pathlib import Path
+          files = sorted(Path('docs/screenshots').glob('*-20261125.png'))
+          assert len(files) == 6, f'Expected 6 screenshots, got {len(files)}'
+          for p in files:
+              data = p.read_bytes()
+              assert data.startswith(b'\x89PNG\r\n\x1a\n'), f'{p}: invalid PNG signature'
+              assert len(data) > 10000, f'{p}: unexpectedly small ({len(data)})'
+              print(f'{p}: valid PNG, {len(data)} bytes')
+          PY
+      - name: Commit screenshots only
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/*-20261125.png
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs: add six real Studio screenshots for public showcase'
+            git push origin HEAD:main
+          fi
