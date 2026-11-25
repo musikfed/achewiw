@@ -323,6 +323,18 @@
   <div class="chat-log" data-chat-log role="log" aria-live="polite"></div>
   <label class="chat-command-label">Что нужно сделать<textarea data-chat-message rows="4" maxlength="10000" placeholder="Например: техническая книга о HDD; составь план, предложи главы и иллюстрации"></textarea></label>
   <div class="actions"><button type="button" class="primary" data-chat-send>Сохранить поручение и разобрать по этапам</button></div>
+  <section class="chat-conveyor-panel" aria-label="Предложение изменений задания и каркаса">
+   <h3>Предлагаемые изменения книги · задание и каркас</h3>
+   <p>Опишите нужную структуру в чате и сохраните поручение. ИИ подготовит предложение для этапов 01–02, но не изменит главы без подтверждения. Уже написанный текст остаётся нетронутым.</p>
+   <div class="actions"><button type="button" data-chat-outline-propose>✦ Предложить изменения через Ollama</button><button type="button" data-chat-outline-refresh>Проверить предложение</button></div>
+   <div data-chat-outline-preview class="chat-diff-pane" hidden>
+    <h3>Сравнение задания и каркаса</h3>
+    <p>Сначала проверьте изменения: ID глав, порядок, объём и исходный текст сохраняются.</p>
+    <pre data-chat-outline-diff aria-label="Предложение каркаса"></pre>
+    <div class="actions"><button type="button" class="primary" data-chat-outline-approve>Принять изменения 01–02</button><button type="button" data-chat-outline-reject>Отклонить предложение</button></div>
+   </div>
+   <p data-chat-outline-status class="chat-status" role="status">Пока нет предложенного каркаса.</p>
+  </section>
   <section class="chat-conveyor-panel" aria-label="Управление существующим заданием книги">
    <h3>Создание книги · действующий конвейер</h3>
    <p>Используется тот же план глав, RAG/Graph, SQLite и Ollama, что в разделе «06 · Типография». Книга не запускается автоматически по тексту сообщения.</p>
