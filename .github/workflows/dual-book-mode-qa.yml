@@ -1,0 +1,20 @@
+name: ACHEWIW dual book-mode host QA preparation
+on:
+  pull_request:
+    paths:
+      - 'scripts/host-dual-mode-book-qa.py'
+      - 'tests/test_dual_book_mode_host_script.py'
+      - '.github/workflows/dual-book-mode-qa.yml'
+  workflow_dispatch:
+jobs:
+  verify-dual-mode-host-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate real-host test syntax
+        run: python -m py_compile scripts/host-dual-mode-book-qa.py
+      - name: Validate mode coverage and test-only guardrails
+        run: python -m unittest discover -s tests -p 'test_dual_book_mode_host_script.py' -v
