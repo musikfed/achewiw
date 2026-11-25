@@ -1,0 +1,26 @@
+name: ACHEWIW host trial scripts verification
+on:
+  pull_request:
+    paths:
+      - 'scripts/host-baseline-11-15.sh'
+      - 'scripts/host-trial-11-15.sh'
+      - 'scripts/host-smoke-11-15.py'
+      - '.github/workflows/host-trial-11-15.yml'
+  workflow_dispatch:
+jobs:
+  validate-host-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify scripts can parse, without touching a host
+        run: |
+          bash -n scripts/host-baseline-11-15.sh
+          bash -n scripts/host-trial-11-15.sh
+          python -m py_compile scripts/host-smoke-11-15.py
+          python scripts/verify-versioned-assets.py
+      - name: Confirm no privileged/unsafe Docker cleanup is introduced
+        run: |
+          ! grep -E 'docker (system )?prune|docker compose down -v|git reset --hard|git clean -[a-z]*f' scripts/host-baseline-11-15.sh scripts/host-trial-11-15.sh
