@@ -1,0 +1,21 @@
+name: ACHEWIW chat linked editions
+on:
+  pull_request:
+    paths:
+      - 'app/chat_conversations.py'
+      - 'app/chat_linked_edits.py'
+      - 'tests/test_chat_linked_edits.py'
+      - '.github/workflows/chat-linked-edits.yml'
+  workflow_dispatch:
+jobs:
+  linked-edits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app dependencies
+        run: pip install -r app/requirements.txt
+      - name: Test atomic editor integration without host
+        run: python -m unittest discover -s tests -p test_chat_linked_edits.py -v
