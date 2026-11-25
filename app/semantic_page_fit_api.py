@@ -12,6 +12,7 @@ from semantic_page_fit import (collect_evidence,propose_with_ollama,
                                save,digest,get,reject,FitProposalConflict)
 from publishing_exports import manuscript_pdf
 import uuid
+import json
 
 
 class GroundedRequest(BaseModel):
@@ -90,6 +91,11 @@ def install(api: APIRouter, namespace:dict):
             raise HTTPException(409,"The source project changed during inference")
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
+            # Verify the source project *inside* the transaction that stores
+            # the candidate, closing the final cross-request race.
+            row=db.execute("SELECT data FROM projects WHERE id=?",(project_id,)).fetchone()
+            if row is None or json.loads(row["data"])!=json.loads(current.model_dump_json()):
+                raise HTTPException(409,"Canonical project changed before candidate was stored")
             saved=save(db,project_id=project_id,scene_id=scene.id,
                 source_digest=digest(scene.text),
                 project_digest=digest(current.model_dump_json()),
