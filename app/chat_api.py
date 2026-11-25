@@ -18,6 +18,8 @@ import chat_ollama_editor as ollama_editor
 import chat_book_control as book_control
 import chat_plan_proposals as plan_proposals
 import chat_plan_ollama as plan_ollama
+import chat_outline_builder as outline_builder
+import chat_outline_batch_ollama as outline_batch
 
 
 class ChatThreadRequest(BaseModel):
@@ -62,6 +64,16 @@ class ChatBookControlRequest(BaseModel):
 
 class ChatOutlineRequest(BaseModel):
     chat_proposal_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    model: str = Field(min_length=1,max_length=200)
+
+
+class ChatNewOutlineRequest(BaseModel):
+    chat_proposal_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    count: int = Field(ge=1,le=100)
+    total_words: int = Field(ge=500,le=60000)
+
+
+class ChatNewOutlineBatchRequest(BaseModel):
     model: str = Field(min_length=1,max_length=200)
 
 
@@ -193,6 +205,121 @@ def install(api: APIRouter, namespace: dict) -> None:
                             action=body.action,job=job)
         return {"job":job,"action":body.action,"source":"canonical_ai_jobs",
                 "independent_generator":False,"author_confirmed":True}
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/new-outline",status_code=201)
+    def new_outline_begin(project_id: str,thread_id: str,body: ChatNewOutlineRequest):
+        root=context(project_id)
+        from editor_workspace import _open
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with _open(root/"work.sqlite3") as work:
+                message=work.execute("""SELECT p.message_id,m.role,p.status
+                  FROM work_chat_proposals p JOIN work_chat_messages m
+                  ON m.id=p.message_id AND m.thread_id=p.thread_id
+                  WHERE p.id=? AND p.thread_id=?""",
+                  (body.chat_proposal_id,thread_id)).fetchone()
+                if message is None or message["status"]!="proposed" or message["role"]!="author":
+                    raise outline_builder.OutlineConflict("Select a saved author instruction")
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if namespace["_current_book_job_id"](db,project_id):
+                    raise outline_builder.OutlineConflict("Unfinished book job blocks outline changes")
+                result=outline_builder.begin(db,project_id=project_id,
+                    thread_id=thread_id,message_id=message["message_id"],
+                    total_words=body.total_words,count=body.count,
+                    Project=namespace["Project"])
+            return result
+        except outline_builder.OutlineConflict as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+    @api.get("/projects/{project_id}/chats/{thread_id}/new-outline/{build_id}")
+    def new_outline_status(project_id: str,thread_id: str,build_id: str):
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with namespace["db"]() as db:
+                return outline_builder.state(db,project_id=project_id,
+                    thread_id=thread_id,build_id=build_id)
+        except (ValueError,outline_builder.OutlineConflict) as exc:
+            raise HTTPException(409,str(exc)) from exc
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/new-outline/{build_id}/batch")
+    async def new_outline_batch(project_id: str,thread_id: str,build_id: str,
+                                body: ChatNewOutlineBatchRequest):
+        root=context(project_id)
+        from editor_workspace import _open
+        from gpu_scheduling import reserve_gpu,release_gpu,image_operation_active
+        from generation_core import active_job
+        import uuid
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with namespace["db"]() as db:
+                baseline=outline_builder.state(db,project_id=project_id,
+                    thread_id=thread_id,build_id=build_id)
+                row=outline_builder._row(db,project_id,thread_id,build_id)
+                project,raw=outline_builder._project(db,project_id,namespace["Project"])
+                if baseline["status"]!="draft" or project.scenes or outline_builder._digest(raw)!=row["base_sha256"]:
+                    raise outline_builder.OutlineConflict("Outline is stale or complete")
+                if namespace["_current_book_job_id"](db,project_id):
+                    raise outline_builder.OutlineConflict("Unfinished book job blocks outline changes")
+            with _open(root/"work.sqlite3") as work:
+                instruction=work.execute("""SELECT content FROM work_chat_messages
+                   WHERE id=? AND thread_id=? AND role='author'""",
+                    (row["message_id"],thread_id)).fetchone()
+                if instruction is None:
+                    raise outline_builder.OutlineConflict("Missing author instruction")
+                text=instruction["content"]
+            lease=uuid.uuid4().hex
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if active_job(db) or image_operation_active(db) or not reserve_gpu(db,lease,"outline_build"):
+                    raise outline_builder.OutlineConflict("Shared GPU is occupied")
+            try:
+                generated=await outline_batch.generate_batch(
+                    base_url=namespace["OLLAMA_BASE_URL"],model=body.model,
+                    instruction=text,previous=baseline["chapters"],
+                    offset=baseline["created"],count=baseline["next_batch_size"],
+                    total_words=baseline["total_words"],total_chapters=baseline["count"],work_type=project.work_type)
+            finally:
+                with namespace["db"]() as db:
+                    release_gpu(db,lease)
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if namespace["_current_book_job_id"](db,project_id):
+                    raise outline_builder.OutlineConflict("Book job started during proposal")
+                refreshed=outline_builder.state(db,project_id=project_id,
+                    thread_id=thread_id,build_id=build_id)
+                if refreshed["created"]!=baseline["created"]:
+                    raise outline_builder.OutlineConflict("Another batch was saved first")
+                result=outline_builder.append(db,project_id=project_id,
+                    thread_id=thread_id,build_id=build_id,
+                    items=generated["chapters"],Project=namespace["Project"])
+            return {**result,"model":generated["model"],
+                    "input_tokens":generated["input_tokens"],
+                    "output_tokens":generated["output_tokens"]}
+        except outline_builder.OutlineConflict as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+
+    @api.post("/projects/{project_id}/chats/{thread_id}/new-outline/{build_id}/decision")
+    def new_outline_decide(project_id: str,thread_id: str,build_id: str,
+                           body: ChatOutlineDecision):
+        root=context(project_id)
+        try:
+            book_control.require_generation_thread(root,project_id,thread_id)
+            with namespace["db"]() as db:
+                db.execute("BEGIN IMMEDIATE")
+                return outline_builder.decide(db,project_id=project_id,
+                    thread_id=thread_id,build_id=build_id,approve=body.approve,
+                    Project=namespace["Project"],Scene=namespace["Scene"],
+                    has_pending_book=namespace["_current_book_job_id"])
+        except outline_builder.OutlineConflict as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
 
     @api.get("/projects/{project_id}/chats/{thread_id}/outline")
     def chat_outline_read(project_id: str, thread_id: str):

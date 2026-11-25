@@ -323,6 +323,25 @@
   <div class="chat-log" data-chat-log role="log" aria-live="polite"></div>
   <label class="chat-command-label">Что нужно сделать<textarea data-chat-message rows="4" maxlength="10000" placeholder="Например: техническая книга о HDD; составь план, предложи главы и иллюстрации"></textarea></label>
   <div class="actions"><button type="button" class="primary" data-chat-send>Сохранить поручение и разобрать по этапам</button></div>
+  <section class="chat-conveyor-panel" aria-label="Каркас новой книги из пустого проекта">
+   <h3>Новая книга · каркас с нуля</h3>
+   <p>Если в проекте ещё нет глав, помощник создаст каркас пакетами до 12 глав. Промежуточный результат хранится в SQLite; исходное задание не изменяется до принятия.</p>
+   <div class="chat-toolbar">
+    <label>Глав в книге<input type="number" min="1" max="100" value="12" data-chat-new-count></label>
+    <label>Объём книги, слов<input type="number" min="500" max="60000" value="12000" data-chat-new-words></label>
+   </div>
+   <div class="actions">
+    <button type="button" data-chat-new-start>Создать проект каркаса</button>
+    <button type="button" data-chat-new-batch>Предложить следующие главы через Ollama</button>
+    <button type="button" data-chat-new-refresh>Восстановить каркас</button>
+   </div>
+   <p data-chat-new-status class="chat-status" role="status">Сначала сохраните в чате описание книги.</p>
+   <div class="chat-diff-pane" data-chat-new-preview hidden>
+    <h3>Предлагаемые главы · до принятия</h3>
+    <pre data-chat-new-chapters></pre>
+    <div class="actions"><button type="button" class="primary" data-chat-new-approve>Принять весь каркас в проект</button><button type="button" data-chat-new-reject>Отклонить</button></div>
+   </div>
+  </section>
   <section class="chat-conveyor-panel" aria-label="Предложение изменений задания и каркаса">
    <h3>Предлагаемые изменения книги · задание и каркас</h3>
    <p>Опишите нужную структуру в чате и сохраните поручение. ИИ подготовит предложение для этапов 01–02, но не изменит главы без подтверждения. Уже написанный текст остаётся нетронутым.</p>
