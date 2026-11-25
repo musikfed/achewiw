@@ -323,6 +323,19 @@
   <div class="chat-log" data-chat-log role="log" aria-live="polite"></div>
   <label class="chat-command-label">Что нужно сделать<textarea data-chat-message rows="4" maxlength="10000" placeholder="Например: техническая книга о HDD; составь план, предложи главы и иллюстрации"></textarea></label>
   <div class="actions"><button type="button" class="primary" data-chat-send>Сохранить поручение и разобрать по этапам</button></div>
+  <section class="chat-conveyor-panel" aria-label="Управление существующим заданием книги">
+   <h3>Создание книги · действующий конвейер</h3>
+   <p>Используется тот же план глав, RAG/Graph, SQLite и Ollama, что в разделе «06 · Типография». Книга не запускается автоматически по тексту сообщения.</p>
+   <div class="chat-conveyor-status" data-chat-book-status role="status">Проверяем сохранённое задание…</div>
+   <progress data-chat-book-progress max="100" value="0" aria-label="Прогресс сохранённой книги"></progress>
+   <div class="actions">
+    <button type="button" class="primary" data-chat-book-start>Запустить по утверждённому каркасу</button>
+    <button type="button" data-chat-book-pause hidden>Пауза после фрагмента</button>
+    <button type="button" data-chat-book-resume hidden>Продолжить книгу</button>
+    <button type="button" data-chat-book-open>Открыть в типографии</button>
+   </div>
+   <small>Запуск и продолжение требуют явного действия автора. Рабочая рукопись не заменяется до существующего подтверждения в типографии.</small>
+  </section>
   <p data-chat-status class="chat-status" role="status">Выберите книгу, чтобы начать диалог.</p>
  </div>
 </section>
