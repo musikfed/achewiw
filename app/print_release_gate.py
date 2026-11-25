@@ -63,7 +63,11 @@ def release_preflight(*,docx:bytes,final_pdf:bytes,chapter_titles:list[str],
     if not toc["toc_field"]:
         block("DOCX_TOC_FIELD_MISSING","DOCX does not contain a dynamic Word TOC field")
     if not toc["update_on_open"]:
-        block("DOCX_FIELDS_NOT_MARKED","DOCX fields are not marked for recalculation")
+        if office_refreshed:
+            notes.append({"code":"UPDATE_FLAG_CLEARED_BY_OFFICE",
+                          "message":"Office refreshed TOC; update-on-open flag is no longer set in refreshed copy"})
+        else:
+            block("DOCX_FIELDS_NOT_MARKED","DOCX fields are not marked for recalculation")
     if not office_refreshed:
         block("OFFICE_REFRESH_NOT_VERIFIED",
               "Word/LibreOffice refresh has not been performed and verified")
