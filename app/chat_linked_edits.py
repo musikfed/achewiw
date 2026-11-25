@@ -161,3 +161,28 @@ def decide(root: Path, *, project_id: str, thread_id: str,
         return {"status":"accepted","manuscript_changed":False,
                 "new_immutable_version":version_id,"previous_version":base["id"],
                 "editorial_work_head_changed":True}
+
+
+def pending_candidate(root: Path, *, project_id: str, thread_id: str,
+                      chat_proposal_id: str) -> dict:
+    """Read back exact linked diff after browser refresh, scoped to the chat."""
+    from difflib import unified_diff
+    with _open(Path(root)/"work.sqlite3") as db:
+        proposal=_linked(db,project_id,thread_id,chat_proposal_id)
+        link=db.execute("""SELECT * FROM work_chat_edit_links
+            WHERE project_id=? AND thread_id=? AND chat_proposal_id=?""",
+            (project_id,thread_id,chat_proposal_id)).fetchone()
+        if link is None:
+            raise LinkedEditConflict("No editorial candidate for this instruction")
+        edit=db.execute("""SELECT * FROM work_chat_book_edits
+            WHERE id=? AND project_id=?""",(link["edition_edit_id"],project_id)).fetchone()
+        if edit is None:
+            raise LinkedEditConflict("No saved editorial candidate")
+        _,payload=editions._version(db,project_id,edit["base_version_id"])
+        original=editions._scene(payload,edit["scene_id"])["text"]
+        diff="\\n".join(unified_diff(original.splitlines(),edit["candidate_text"].splitlines(),
+                   fromfile="before",tofile="proposed",lineterm=""))
+        return {"chat_proposal_id":chat_proposal_id,"scene_id":edit["scene_id"],
+                "base_version_id":edit["base_version_id"],
+                "status":edit["status"],"instruction_status":proposal["status"],
+                "diff":diff,"applied":edit["status"]=="accepted"}
