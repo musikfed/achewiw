@@ -632,8 +632,110 @@ if(printPanel){
   printPanel.querySelector('[data-print-insert]').value=paragraph;
   printPanel.querySelector('[data-print-preview]').click();
  });
+ const reviewPanel=printPanel.querySelector('[data-fit-review]');
+ const reviewDiff=printPanel.querySelector('[data-fit-review-diff]');
+ const reviewStatus=printPanel.querySelector('[data-fit-review-status]');
+ const confirmSources=printPanel.querySelector('[data-fit-review-sources]');
+ const confirmPages=printPanel.querySelector('[data-fit-review-pages]');
+ const undoButton=printPanel.querySelector('[data-fit-review-undo]');
+ const acceptButton=printPanel.querySelector('[data-fit-review-accept]');
+ const reviewKey=pid=>'achewiw.page-fit.review.v1.'+pid;
+ let activeReview=null;
+ let reviewedDigest=null;
+ const reviewDisplay=(item)=>{
+  activeReview=item.review_id;
+  reviewedDigest=item.preview_digest;
+  reviewPanel.hidden=false;
+  undoButton.hidden=item.status!=='accepted';
+  acceptButton.hidden=item.status!=='prepared';
+  confirmSources.checked=false;
+  confirmPages.checked=false;
+  const diffText=item.before_text?(
+    'Исходная глава:\n'+item.before_text+
+    '\n\n--- ПРЕДЛАГАЕМАЯ ГЛАВА ---\n'+item.candidate_text+
+    '\n\nСдвиги глав:\n'+(item.moved_headings||[]).map(
+     x=>x.title+': '+x.before+' → '+x.after).join('\n')+
+    '\n\nСтраниц: '+item.before_pages+' → '+item.after_pages
+   ):('Сохранённая редакторская приёмка:\n'+item.candidate_text+
+    '\nСтатус: '+item.status+
+    '\nИзмерения: '+JSON.stringify(item.preview));
+  reviewDiff.textContent=diffText;
+  reviewStatus.textContent=item.status==='accepted'?
+   'Вставка принята. Сохранён журнал отката. Поля DOCX и PDF следует пересчитать.':
+   item.status==='undone'?'Изменение отменено.':'Перед записью проверьте и отметьте оба подтверждения.';
+ };
+ printPanel.querySelector('[data-fit-prepare]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||active||!fitSuggestion)return;
+  printBusy(true);
+  reviewStatus.textContent='Создаются две реальные PDF-пробы для редакторского решения…';
+  try{
+   const result=await printApi(prefix(pid)+'/print-proof/fit-reviews',{suggestion_id:fitSuggestion});
+   if(projectId()!==pid)return;
+   const stored=await printApi(prefix(pid)+'/print-proof/fit-reviews/'+result.review_id);
+   storageSet(reviewKey(pid),result.review_id);
+   reviewDisplay({...stored,...result});
+   reviewedDigest=result.preview_digest;
+  }catch(error){reviewStatus.textContent='Приёмка не создана: '+error.message}
+  finally{printBusy(false)}
+ });
+ const restoreReview=async()=>{
+  const pid=projectId();
+  const id=pid?storageGet(reviewKey(pid)):null;
+  if(!id){reviewStatus.textContent='Для выбранной книги нет сохранённой приёмки.';return}
+  const stored=await printApi(prefix(pid)+'/print-proof/fit-reviews/'+id);
+  if(projectId()!==pid)return;
+  reviewDisplay(stored);
+ };
+ printPanel.querySelector('[data-fit-review-reload]').addEventListener('click',async()=>{
+  if(active)return;
+  printBusy(true);
+  try{await restoreReview()}catch(error){reviewStatus.textContent='Не удалось восстановить: '+error.message}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-fit-review-accept]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||!activeReview||active)return;
+  if(!confirmSources.checked||!confirmPages.checked){
+   reviewStatus.textContent='Необходимо отдельно подтвердить источники и пагинацию.';
+   return;
+  }
+  if(!window.confirm('Записать проверенную вставку в общую рукопись? Создаётся откат, PDF и оглавление потребуют новой проверки.'))return;
+  printBusy(true);reviewStatus.textContent='Применяется редакторская версия…';
+  try{
+   const result=await printApi(prefix(pid)+'/print-proof/fit-reviews/'+activeReview+'/accept',{
+    confirm_sources:true,confirm_pagination:true,expected_preview_digest:reviewedDigest});
+   if(projectId()!==pid)return;
+   undoButton.hidden=false;acceptButton.hidden=true;
+   const preflight=result.final_pdf_preflight||{};
+   reviewStatus.textContent='Принято. Страниц PDF: '+(preflight.pages??'неизвестно')+
+     '. Замечаний: '+(preflight.findings?.length??'требуется проверка')+
+     '. Обновите TOC DOCX и проверьте PDF до выпуска.';
+   document.dispatchEvent(new CustomEvent('achewiw:chat-outline-approved',
+    {detail:{projectId:pid}}));
+  }catch(error){reviewStatus.textContent='Принятие отклонено: '+error.message}
+  finally{printBusy(false)}
+ });
+ printPanel.querySelector('[data-fit-review-undo]').addEventListener('click',async()=>{
+  const pid=projectId();if(!pid||!activeReview||active)return;
+  if(!window.confirm('Откатить именно эту принятую вставку? Другие последующие правки запрещают автоматический откат.'))return;
+  printBusy(true);
+  try{
+   await printApi(prefix(pid)+'/print-proof/fit-reviews/'+activeReview+'/undo',{confirm:true});
+   if(projectId()!==pid)return;
+   undoButton.hidden=true;acceptButton.hidden=true;
+   reviewStatus.textContent='Вставка откатена; перепроверьте пагинацию и обновите DOCX TOC.';
+   document.dispatchEvent(new CustomEvent('achewiw:chat-outline-approved',
+    {detail:{projectId:pid}}));
+  }catch(error){reviewStatus.textContent='Откат не выполнен: '+error.message}
+  finally{printBusy(false)}
+ });
  document.addEventListener('achewiw:tab-shown',event=>{
-  if(event.detail?.name==='book')refreshScenes();
+  if(event.detail?.name!=='book')return;
+  refreshScenes();
+  reviewPanel.hidden=true;
+  activeReview=null;reviewedDigest=null;
+  if(projectId()&&storageGet(reviewKey(projectId()))){
+   restoreReview().catch(error=>{reviewStatus.textContent='Приёмка: '+error.message});
+  }
  });
 }
 document.addEventListener('achewiw:tab-shown',event=>{
