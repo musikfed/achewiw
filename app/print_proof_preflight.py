@@ -102,7 +102,7 @@ def inspect_pdf(pdf: bytes, *, chapter_titles: list[str] | None=None,
                 "content_span_pt":height,"wide_spaces_detected":gaps,
                 "media_box_pt":[round(pg.rect.width,2),round(pg.rect.height,2)]})
         contents_indices=[i for i,t in enumerate(source_text[:min(count,25)])
-                          if "содержание" in _compact(t) or "оглавление" in _compact(t)]
+                          if "содержание" in _compact(t) or "оглавление" in _compact(t) or "contents" in _compact(t)]
         toc_lines=[]
         if contents_indices:
             # One or more adjacent TOC pages; do not mistake later chapters for TOC.
@@ -117,7 +117,7 @@ def inspect_pdf(pdf: bytes, *, chapter_titles: list[str] | None=None,
             if not title:continue
             observed=None
             for i,t in enumerate(source_text):
-                if i in contents_indices or (contents_indices and i<=contents_indices[0]+1):
+                if i in contents_indices:
                     continue
                 compact=_compact(t)
                 if _heading_matches(compact,title):
