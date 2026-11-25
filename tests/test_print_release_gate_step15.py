@@ -1,0 +1,69 @@
+"""Step 15: publication remains blocked until real office refresh and TOC match."""
+from pathlib import Path
+import sys
+import unittest
+from pydantic import BaseModel,Field
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"app"))
+from print_release_gate import release_preflight,inspect_docx_toc
+from publishing_exports import manuscript_pdf,manuscript_docx
+
+class Scene(BaseModel):
+    id:str
+    title:str
+    text:str
+
+class Book(BaseModel):
+    id:str="release-check"
+    title:str="Тестовый справочник HDD"
+    author_name:str="Тестовый автор"
+    publisher_name:str=""
+    publication_year:int=2026
+    edition_label:str="r04"
+    scenes:list[Scene]=Field(default_factory=list)
+
+def book():
+    return Book(scenes=[Scene(id="s1",title="Магнитная запись",
+                text=("Запись на магнитном диске требует намагниченной поверхности. "
+                      "Головка управляет чтением дорожки. ")*20),
+             Scene(id="s2",title="Позиционирование",
+                text=("Перемещение головки и ожидание сектора относятся к различным этапам. "
+                      "Контроллер определяет порядок команд чтения. ")*20)])
+
+class GateTests(unittest.TestCase):
+    def test_docx_contains_dynamic_toc(self):
+        result=inspect_docx_toc(manuscript_docx(book()))
+        self.assertTrue(result["toc_field"],result)
+        self.assertTrue(result["update_on_open"])
+
+    def test_true_pdf_is_blocked_without_office_refresh(self):
+        p=book()
+        result=release_preflight(docx=manuscript_docx(p),
+            final_pdf=manuscript_pdf(p,print_proof=True),
+            chapter_titles=[x.title for x in p.scenes],office_refreshed=False)
+        self.assertEqual(result["status"],"BLOCKED")
+        self.assertIn("OFFICE_REFRESH_NOT_VERIFIED",
+                      [x["code"] for x in result["blocking"]])
+
+    def test_full_automated_reportlab_proof_check(self):
+        # In-process control: ReportLab's own generated PDF carries a real TOC;
+        # office_refreshed=True here is *only an attested test fixture*.
+        p=book()
+        result=release_preflight(docx=manuscript_docx(p),
+            final_pdf=manuscript_pdf(p,print_proof=True),
+            chapter_titles=[x.title for x in p.scenes],office_refreshed=True)
+        self.assertEqual(result["status"],"PASS",result["blocking"])
+        self.assertTrue(all(x["match"] is True for x in result["headings"]))
+        self.assertGreaterEqual(result["toc_links"]["total_links"],2)
+
+    def test_missing_chapter_prevents_publication(self):
+        p=book()
+        result=release_preflight(docx=manuscript_docx(p),
+            final_pdf=manuscript_pdf(p,print_proof=True),
+            chapter_titles=["Несуществующая глава"],office_refreshed=True)
+        self.assertFalse(result["publication_allowed"])
+        self.assertIn("TOC_MISMATCH_OR_UNKNOWN",
+                      [x["code"] for x in result["blocking"]])
+
+if __name__=="__main__":
+    unittest.main()
