@@ -110,7 +110,7 @@ def install(api: APIRouter, namespace: dict) -> None:
         except ValueError as exc:
             fail(exc)
 
-    @api.post("/projects/{project_id}/chats/edition",status_code=201)
+    @api.post("/projects/{project_id}/chat-edition",status_code=201)
     def chat_attach_edition(project_id: str, body: ChatEditionAttach):
         root=context(project_id)
         try:
@@ -118,7 +118,7 @@ def install(api: APIRouter, namespace: dict) -> None:
         except ValueError as exc:
             fail(exc)
 
-    @api.get("/projects/{project_id}/chats/edition")
+    @api.get("/projects/{project_id}/chat-edition")
     def chat_current_edition(project_id: str):
         root=context(project_id)
         try:
