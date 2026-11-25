@@ -170,19 +170,19 @@ const outlineChanges=(before,after)=>{
   ['Замысел',before?.brief||{},after?.brief||{}]
  ]){
   for(const key of Object.keys(next)){
-   if(next[key]!==base[key])rows.push(label+' · '+key+'\\n  было: '+(base[key]||'—')+'\\n  станет: '+(next[key]||'—'));
+   if(next[key]!==base[key])rows.push(label+' · '+key+'\n  было: '+(base[key]||'—')+'\n  станет: '+(next[key]||'—'));
   }
  }
  (after?.chapters||[]).forEach((chapter,i)=>{
   const current=before?.chapters?.[i]||{};
   for(const key of ['title','anchor','hook','tension','reveal_level','editorial_goal']){
    if(chapter[key]!==current[key]){
-    rows.push('Глава '+(i+1)+' · '+key+'\\n  было: '+(current[key]??'—')+
-      '\\n  станет: '+(chapter[key]??'—'));
+    rows.push('Глава '+(i+1)+' · '+key+'\n  было: '+(current[key]??'—')+
+      '\n  станет: '+(chapter[key]??'—'));
    }
   }
  });
- return rows.length?rows.join('\\n\\n'):'Изменений нет';
+ return rows.length?rows.join('\n\n'):'Изменений нет';
 };
 async function refreshOutline(){
  const pid=projectId(),st=state.generation,panel=ui('generation');
