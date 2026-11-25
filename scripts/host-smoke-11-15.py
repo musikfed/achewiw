@@ -53,6 +53,8 @@ def main():
     try:
         from main import app
         paths={getattr(route,"path","") for route in app.routes}
+        print("DEBUG registered print routes:",sorted(path for path in paths if "print" in path or "fit" in path))
+        print("DEBUG total registered routes:",len(paths))
         for key in (
             "/api/health",
             "/api/projects/{project_id}/print-proof/preflight",
