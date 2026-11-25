@@ -122,7 +122,10 @@ def install(api:APIRouter,namespace:dict):
                 "pages":proof["page_count"],"pdf_sha256":proof["pdf_sha256"],
                 "ready":proof["ready"],"requires_editor_review":proof["requires_editor_review"],
                 "findings":proof["findings"]}
-            result["release_ready"]=bool(proof["ready"] and not proof["requires_editor_review"])
+            result["pdf_proof_ready"]=bool(proof["ready"] and not proof["requires_editor_review"])
+            # Final publication additionally requires the Word TOC field refresh
+            # and source/editorial review; this API does not perform either.
+            result["release_ready"]=False
         except (ValueError,RuntimeError) as exc:
             result["final_pdf_preflight"]={"error":str(exc)}
             result["release_ready"]=False
