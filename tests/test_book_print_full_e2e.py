@@ -12,6 +12,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 import asyncio
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -199,6 +200,7 @@ class FullJourney(unittest.TestCase):
         pdf_before=manuscript_pdf(p,print_proof=True)
         before=inspect_pdf(pdf_before,chapter_titles=[s.title for s in p.scenes])
         self.assertGreaterEqual(before["page_count"],8)
+        self.assertLessEqual(before["page_count"],12)
         self.assertEqual(len(before["headings"]),3)
         # The page references must be real, not fabricated by mocked preflight.
         self.assertTrue(all(h["actual_pdf_page"] is not None for h in before["headings"]))
@@ -258,6 +260,34 @@ class FullJourney(unittest.TestCase):
         self.assertTrue(all(h["match"] is True for h in final["headings"]))
         with self.db() as db:
             self.assertEqual(db.execute("SELECT status FROM ai_page_fit_reviews").fetchone()[0],"undone")
+        print("E2E REAL PAGE METRICS:",json.dumps({
+            "before_pages":before["page_count"],"after_pages":after["page_count"],
+            "restored_pages":final["page_count"],
+            "before_toc":before["headings"],"after_toc":after["headings"],
+            "accepted":True,"undone":True
+        },ensure_ascii=False))
+        artifact_dir=os.environ.get("ACHEWIW_E2E_ARTIFACT_DIR")
+        if artifact_dir:
+            output=Path(artifact_dir)
+            output.mkdir(parents=True,exist_ok=True)
+            (output/"synthetic-hdd-before.pdf").write_bytes(pdf_before)
+            (output/"synthetic-hdd-after.pdf").write_bytes(
+                manuscript_pdf(changed,print_proof=True))
+            (output/"synthetic-hdd-restored.pdf").write_bytes(
+                manuscript_pdf(restored,print_proof=True))
+            (output/"synthetic-hdd-before.docx").write_bytes(docx)
+            report={"book":"synthetic HDD only",
+                    "real_pdf_pages":{"before":before["page_count"],
+                                      "after":after["page_count"],
+                                      "restored":final["page_count"]},
+                    "real_toc_before":before["headings"],
+                    "real_toc_after":after["headings"],
+                    "author_approval_simulated":True,
+                    "ollama_http_transport":"mock, no local model used",
+                    "canonical_accept_and_undo_passed":True,
+                    "server_7080_or_user_manuscript_modified":False}
+            (output/"e2e-report.json").write_text(
+                json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
 
     def test_bad_toc_and_layout_are_not_padded_with_filler(self):
         self.assertEqual(recommend(PageEvidence(223,0.12,next_page_starts_part=True))["action"],
