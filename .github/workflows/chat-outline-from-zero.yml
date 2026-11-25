@@ -1,0 +1,35 @@
+name: ACHEWIW chat first outline and page fit
+on:
+  pull_request:
+    paths:
+      - 'app/chat_outline_builder.py'
+      - 'app/chat_outline_batch_ollama.py'
+      - 'app/page_fit_advisor.py'
+      - 'app/chat_api.py'
+      - 'app/static/chat_studio.js'
+      - 'app/static/index.html'
+      - 'tests/test_chat_outline_builder.py'
+      - '.github/workflows/chat-outline-from-zero.yml'
+  workflow_dispatch:
+jobs:
+  synthetic-first-outline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app dependencies
+        run: pip install -r app/requirements.txt
+      - name: Syntax and asset check
+        run: |
+          python -m py_compile app/chat_outline_builder.py app/chat_outline_batch_ollama.py app/page_fit_advisor.py app/chat_api.py
+          node --check app/static/chat_studio.js
+          python scripts/verify-versioned-assets.py
+      - name: Empty book batch approval and page-fit triage
+        run: python -m unittest discover -s tests -p 'test_chat_outline_builder.py' -v
+      - name: Previous outline and generator regression
+        run: |
+          python -m unittest discover -s tests -p 'test_chat_plan_approval.py' -v
+          python -m unittest discover -s tests -p 'test_chat_book_conveyor.py' -v
+          python -m unittest discover -s tests -p 'test_chat_studio_ui.py' -v
