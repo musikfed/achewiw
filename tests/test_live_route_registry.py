@@ -10,6 +10,8 @@ class RouteRegistry(unittest.TestCase):
         routes=sorted({getattr(route,"path","") for route in app.routes})
         raw=sorted({getattr(route,"path","") for route in api.routes})
         print("APP PRINT ROUTES:",[x for x in routes if "print" in x or "fit" in x])
+        print("APP ALL first+last:",routes[:15],routes[-15:],"LEN",len(routes))
+        print("API routes LEN:",len(raw))
         print("API PRINT ROUTES:",[x for x in raw if "print" in x or "fit" in x])
         expected=[
           "/api/projects/{project_id}/print-proof/preflight",
