@@ -87,7 +87,10 @@ def manuscript_docx(project, illustrations=None) -> bytes:
     sec.left_margin,sec.right_margin=Cm(2.1),Cm(1.8)
     sec.top_margin,sec.bottom_margin=Cm(2),Cm(2)
     normal=doc.styles["Normal"]
-    normal.font.name="DejaVu Serif";normal.font.size=Pt(11)
+    # Author-approved A5 book body typography; Word may substitute this font on hosts without it.
+    normal.font.name="Times New Roman";normal.font.size=Pt(12)
+    normal.paragraph_format.line_spacing=1.3
+    normal.paragraph_format.alignment=WD_ALIGN_PARAGRAPH.JUSTIFY
     normal.paragraph_format.space_after=Pt(6)
     doc.core_properties.title=book["title"]
     doc.core_properties.author=meta["author"]
