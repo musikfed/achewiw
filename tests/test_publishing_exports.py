@@ -37,6 +37,24 @@ class ExportTests(unittest.TestCase):
             self.assertIn("Глава 1", xml)
             self.assertIn("кириллицей", xml)
 
+    def test_docx_uses_author_approved_a5_body_typography(self):
+        blob = manuscript_docx(self.example())
+        with ZipFile(BytesIO(blob)) as archive:
+            styles = ET.fromstring(archive.read("word/styles.xml"))
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            normal = next(style for style in styles.findall("w:style", ns)
+                          if style.get("{%s}styleId" % ns["w"]) == "Normal")
+            run = normal.find("w:rPr", ns)
+            fonts = run.find("w:rFonts", ns)
+            assert fonts.get("{%s}ascii" % ns["w"]) == "Times New Roman"
+            size = run.find("w:sz", ns)
+            assert size.get("{%s}val" % ns["w"]) == "24"
+            props = normal.find("w:pPr", ns)
+            assert props.find("w:jc", ns).get("{%s}val" % ns["w"]) == "both"
+            spacing = props.find("w:spacing", ns)
+            assert spacing.get("{%s}line" % ns["w"]) == "312"
+            assert spacing.get("{%s}lineRule" % ns["w"]) == "auto"
+
     def test_reading_pdf_is_real_pdf(self):
         blob = manuscript_pdf(self.example())
         self.assertTrue(blob.startswith(b"%PDF"))
