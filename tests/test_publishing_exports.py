@@ -14,6 +14,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from publishing_exports import manuscript_pdf, manuscript_fb2, manuscript_docx
+from manuscript_core import manuscript_epub
 
 
 class ExportTests(unittest.TestCase):
@@ -63,6 +64,42 @@ class ExportTests(unittest.TestCase):
     def test_print_pdf_is_real_pdf(self):
         blob = manuscript_pdf(self.example(), print_proof=True)
         self.assertTrue(blob.startswith(b"%PDF"))
+
+    def test_three_chapter_artifacts_keep_order_and_epub_navigation(self):
+        titles = ["Глава 1: Устройство", "Глава 2: Развитие", "Глава 3: Практика"]
+        project = SimpleNamespace(
+            id="1" * 32, title="Проверка книжного выпуска", work_type="technical",
+            scenes=[SimpleNamespace(
+                id=f"{n}" * 32, title=title,
+                text=(f"Раздел {n}. Подробное объяснение устройства. " * 18))
+                for n, title in enumerate(titles, 1)],
+        )
+        docx = manuscript_docx(project)
+        with ZipFile(BytesIO(docx)) as archive:
+            document = archive.read("word/document.xml").decode("utf-8")
+            positions = [document.index(title) for title in titles]
+            self.assertEqual(positions, sorted(positions))
+        epub = manuscript_epub(project)
+        with ZipFile(BytesIO(epub)) as archive:
+            nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+            paths = [f"chapter-{n:03}.xhtml" for n in range(1, 4)]
+            self.assertEqual([path in nav for path in paths], [True] * 3)
+            self.assertEqual([nav.index(path) for path in paths],
+                             sorted(nav.index(path) for path in paths))
+            for n, title in enumerate(titles, 1):
+                chapter = archive.read(f"EPUB/chapter-{n:03}.xhtml").decode("utf-8")
+                self.assertIn(title, chapter)
+        pdf = manuscript_pdf(project)
+        import fitz
+        with fitz.open(stream=pdf, filetype="pdf") as document:
+            self.assertGreaterEqual(len(document), 4)
+            pages = [page.get_text() for page in document]
+            for title in titles:
+                self.assertTrue(any(title in text for text in pages),
+                                f"PDF is missing chapter title: {title}")
+            contents = next((text for text in pages if "Содержание" in text), "")
+            for title in titles:
+                self.assertIn(title, contents)
 
     def test_no_fabricated_empty_book(self):
         for fn in (manuscript_pdf, manuscript_fb2, manuscript_docx):
