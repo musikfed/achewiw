@@ -37,6 +37,28 @@ class ExportTests(unittest.TestCase):
             self.assertIn("Глава 1", xml)
             self.assertIn("кириллицей", xml)
 
+    def test_docx_a5_author_typography_and_dynamic_toc(self):
+        blob = manuscript_docx(self.example())
+        with ZipFile(BytesIO(blob)) as archive:
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            styles = ET.fromstring(archive.read("word/styles.xml"))
+            normal = next(style for style in styles.findall("w:style", ns)
+                          if style.get("{%s}styleId" % ns["w"]) == "Normal")
+            run = normal.find("w:rPr", ns)
+            fonts = run.find("w:rFonts", ns)
+            self.assertEqual(fonts.get("{%s}ascii" % ns["w"]), "Times New Roman")
+            size = run.find("w:sz", ns)
+            self.assertEqual(size.get("{%s}val" % ns["w"]), "24")
+            props = normal.find("w:pPr", ns)
+            self.assertEqual(props.find("w:jc", ns).get("{%s}val" % ns["w"]), "both")
+            spacing = props.find("w:spacing", ns)
+            self.assertEqual(spacing.get("{%s}line" % ns["w"]), "312")
+            self.assertEqual(spacing.get("{%s}lineRule" % ns["w"]), "auto")
+            content = archive.read("word/document.xml").decode("utf-8")
+            self.assertIn("TOC ", content)
+            settings = archive.read("word/settings.xml").decode("utf-8")
+            self.assertIn("updateFields", settings)
+
     def test_reading_pdf_is_real_pdf(self):
         blob = manuscript_pdf(self.example())
         self.assertTrue(blob.startswith(b"%PDF"))
